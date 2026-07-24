@@ -27,6 +27,16 @@ jobs:
       - name: ติดตั้ง dependencies
         run: pip install feedparser requests
 
+      - name: กู้คืน cache ข่าว/ราคาย้อนหลัง
+        uses: actions/cache@v4
+        with:
+          path: |
+            cache.json
+            market_history.json
+          key: state-${{ github.run_id }}
+          restore-keys: |
+            state-
+
       - name: สร้างหน้า dashboard
         run: python build.py
 

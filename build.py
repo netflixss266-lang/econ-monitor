@@ -7,20 +7,27 @@ Econ/Politics Monitor — dashboard ข่าวเศรษฐกิจ+กา�
 รัน:      python3 build.py
 """
 
+import os
 import re
 import html
 import json
 import time
+import socket
 from datetime import datetime, timezone, timedelta
 from difflib import SequenceMatcher
 
 import feedparser
 import requests
 
+socket.setdefaulttimeout(15)   # กัน feedparser ค้างถ้าเว็บข่าวไม่ตอบสนอง
+
 TZ = timezone(timedelta(hours=7))          # Asia/Bangkok
 NOW = datetime.now(TZ)
 MAX_AGE_HOURS = 24
 PER_CATEGORY = 18
+CACHE_FILE = "cache.json"
+HISTORY_FILE = "market_history.json"
+HISTORY_POINTS = 60     # 60 รอบ x 3 ชม. ≈ 7.5 วัน
 
 # ─────────────────────────────────────────────────────────────
 # แหล่งข่าว — เพิ่ม/ลบได้ตามใจ ไม่ต้องใช้ API key
@@ -37,6 +44,8 @@ FEEDS = [
     ("CNBC",            "https://www.cnbc.com/id/100727362/device/rss/rss.html",      "en"),
     ("Google News",     "https://news.google.com/rss/search?q=เศรษฐกิจไทย&hl=th&gl=TH&ceid=TH:th", "th"),
     ("Google News",     "https://news.google.com/rss/search?q=การเมืองไทย&hl=th&gl=TH&ceid=TH:th", "th"),
+    ("Reuters",         "https://news.google.com/rss/search?q=site:reuters.com+when:1d&hl=en&gl=US&ceid=US:en", "en"),
+    ("Investing.com",   "https://www.investing.com/rss/news.rss",                     "en"),
 ]
 
 TICKERS = [
@@ -172,7 +181,7 @@ def clean(s):
 
 
 def age_label(dt):
-    mins = int((NOW - dt).total_seconds() // 60)
+    mins = max(0, int((NOW - dt).total_seconds() // 60))
     if mins < 1:
         return "เมื่อครู่"
     if mins < 60:
@@ -181,6 +190,26 @@ def age_label(dt):
     if hrs < 24:
         return f"{hrs} ชม.ที่แล้ว"
     return f"{hrs // 24} วันที่แล้ว"
+
+
+def extract_image(e):
+    """ดึงรูปประกอบข่าวจาก media:thumbnail / media:content / enclosure / <img> แรกใน summary"""
+    thumbs = e.get("media_thumbnail") or []
+    if thumbs and thumbs[0].get("url"):
+        return thumbs[0]["url"]
+
+    for m in e.get("media_content") or []:
+        if m.get("url") and ("image" in (m.get("type") or "") or m.get("medium") == "image"):
+            return m["url"]
+
+    for lk in e.get("links") or []:
+        if lk.get("rel") == "enclosure" and "image" in (lk.get("type") or ""):
+            return lk.get("href")
+
+    m = re.search(r'<img[^>]+src="([^"]+)"', e.get("summary", "") or "")
+    if m:
+        return m.group(1)
+    return None
 
 
 def fetch_news():
@@ -193,31 +222,35 @@ def fetch_news():
             continue
 
         for e in d.entries[:40]:
-            title = clean(e.get("title", ""))
-            if not title:
-                continue
+            try:
+                title = clean(e.get("title", ""))
+                if not title:
+                    continue
 
-            tp = e.get("published_parsed") or e.get("updated_parsed")
-            dt = (datetime.fromtimestamp(time.mktime(tp), tz=timezone.utc).astimezone(TZ)
-                  if tp else NOW)
-            if (NOW - dt).total_seconds() > MAX_AGE_HOURS * 3600:
-                continue
+                tp = e.get("published_parsed") or e.get("updated_parsed")
+                dt = (datetime.fromtimestamp(time.mktime(tp), tz=timezone.utc).astimezone(TZ)
+                      if tp else NOW)
+                if (NOW - dt).total_seconds() > MAX_AGE_HOURS * 3600:
+                    continue
 
-            summary = clean(e.get("summary", ""))[:220]
-            blob = title + " " + summary
-            cat = classify(blob)
-            if not cat:
-                continue
+                raw_summary = e.get("summary", "") or ""
+                summary = clean(raw_summary)[:320]
+                blob = title + " " + summary
+                cat = classify(blob)
+                if not cat:
+                    continue
 
-            geo = geolocate(blob)
-            items.append({
-                "title": title, "summary": summary, "link": e.get("link", "#"),
-                "source": source, "lang": lang, "cat": cat, "dt": dt,
-                "age": age_label(dt),
-                "place": geo[0] if geo else None,
-                "lat": geo[1] if geo else None,
-                "lon": geo[2] if geo else None,
-            })
+                geo = geolocate(blob)
+                items.append({
+                    "title": title, "summary": summary, "link": e.get("link", "#"),
+                    "source": source, "lang": lang, "cat": cat, "dt": dt,
+                    "age": age_label(dt), "image": extract_image(e),
+                    "place": geo[0] if geo else None,
+                    "lat": geo[1] if geo else None,
+                    "lon": geo[2] if geo else None,
+                })
+            except Exception as ex:
+                print(f"  ! {source} entry skipped: {ex}")
         print(f"  ✓ {source}")
 
     unique = []
@@ -265,12 +298,82 @@ def fetch_markets():
             price = meta["regularMarketPrice"]
             prev = meta.get("chartPreviousClose") or meta.get("previousClose") or price
             pct = (price - prev) / prev * 100 if prev else 0
-            out.append({"label": label, "price": f"{price:,.2f}",
+            out.append({"label": label, "price": f"{price:,.2f}", "raw_price": price,
                         "pct": pct, "pct_str": f"{pct:+.2f}%"})
             print(f"  ✓ {label}")
         except Exception as ex:
             print(f"  ! {label}: {ex}")
     return out
+
+
+# ─────────────────────────────────────────────────────────────
+# cache (fallback ถ้ารอบนี้ดึงข่าว/ราคาไม่ได้เลย) + ประวัติราคา (sparkline)
+# ─────────────────────────────────────────────────────────────
+def load_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_json(path, data):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception as ex:
+        print(f"  ! save {path}: {ex}")
+
+
+def news_from_cache(cache):
+    out = []
+    for d in cache.get("news", []):
+        try:
+            d = dict(d)
+            dt = datetime.fromisoformat(d["dt"])
+            if (NOW - dt).total_seconds() > MAX_AGE_HOURS * 3600:
+                continue
+            d["dt"] = dt
+            d["age"] = age_label(dt)
+            out.append(d)
+        except Exception:
+            continue
+    return out
+
+
+def save_cache(news, markets):
+    serial_news = []
+    for it in news:
+        d = dict(it)
+        d["dt"] = it["dt"].isoformat() if isinstance(it["dt"], datetime) else it["dt"]
+        serial_news.append(d)
+    save_json(CACHE_FILE, {"news": serial_news, "markets": markets})
+
+
+def update_history(markets):
+    """เก็บราคาย้อนหลังต่อ ticker ไว้วาด sparkline"""
+    history = load_json(HISTORY_FILE)
+    ts = NOW.isoformat()
+    for m in markets:
+        h = history.setdefault(m["label"], [])
+        h.append({"t": ts, "p": m["raw_price"]})
+        del h[:-HISTORY_POINTS]
+    save_json(HISTORY_FILE, history)
+    return history
+
+
+def sparkline_svg(points, color):
+    if len(points) < 2:
+        return ""
+    lo, hi = min(points), max(points)
+    span = (hi - lo) or (abs(hi) or 1)
+    w, h, pad = 60, 20, 2
+    step = (w - pad * 2) / (len(points) - 1)
+    coords = [(pad + i * step, pad + (1 - (v - lo) / span) * (h - pad * 2))
+              for i, v in enumerate(points)]
+    d = "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    return (f'<svg class="spark" viewBox="0 0 {w} {h}" preserveAspectRatio="none">'
+            f'<path d="{d}" fill="none" stroke="{color}" stroke-width="1.6"/></svg>')
 
 
 def top_keywords(items, n=14):
@@ -371,7 +474,7 @@ let _t; addEventListener("resize", () => { clearTimeout(_t); _t = setTimeout(dra
 """
 
 
-def render(news, markets):
+def render(news, markets, history):
     econ = [i for i in news if i["cat"] == "econ"][:PER_CATEGORY]
     poli = [i for i in news if i["cat"] == "poli"][:PER_CATEGORY]
     latest = news[:7]
@@ -382,11 +485,24 @@ def render(news, markets):
 
     def card(it):
         loc = f'<span class="loc">{html.escape(it["place"])}</span>' if it["place"] else ""
-        return f"""<a class="item" href="{html.escape(it['link'])}" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">{html.escape(it['source'])}{loc}</span><span class="age">{it['age']}</span></div>
-      <h3>{html.escape(it['title'])}</h3>
-      {f'<p>{html.escape(it["summary"])}</p>' if it['summary'] else ''}
-    </a>"""
+        img = (f'<img class="thumb" src="{html.escape(it["image"])}" loading="lazy" alt=""'
+               f' onerror="this.remove()">') if it.get("image") else ""
+        speak_text = html.escape(f"{it['title']}. {it['summary']}", quote=True)
+        speak_lang = "th-TH" if it["lang"] == "th" else "en-US"
+        return f"""<div class="item">
+      {img}
+      <div class="item-body">
+        <div class="item-head"><span class="src">{html.escape(it['source'])}{loc}</span><span class="age">{it['age']}</span></div>
+        <a class="item-link" href="{html.escape(it['link'])}" target="_blank" rel="noopener">
+          <h3>{html.escape(it['title'])}</h3>
+          {f'<p>{html.escape(it["summary"])}</p>' if it['summary'] else ''}
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="{speak_text}" data-lang="{speak_lang}">🔊 ฟังข่าว</button>
+          <a class="full" href="{html.escape(it['link'])}" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div>"""
 
     def feed_row(it):
         return f"""<a class="feed-row" href="{html.escape(it['link'])}" target="_blank" rel="noopener">
@@ -396,8 +512,11 @@ def render(news, markets):
 
     def tick(m):
         cls = "up" if m["pct"] > 0 else ("down" if m["pct"] < 0 else "flat")
+        color = {"up": "var(--up)", "down": "var(--down)", "flat": "var(--mute)"}[cls]
+        pts = [p["p"] for p in history.get(m["label"], [])]
+        spark = sparkline_svg(pts, color)
         return f"""<div class="tick"><span class="t-label">{html.escape(m['label'])}</span>
-      <span class="t-price">{m['price']}</span><span class="t-pct {cls}">{m['pct_str']}</span></div>"""
+      <span class="t-price">{m['price']}</span>{spark}<span class="t-pct {cls}">{m['pct_str']}</span></div>"""
 
     def hot_row(m, i):
         return f"""<div class="hot"><span class="rank">{i+1}</span>
@@ -411,6 +530,13 @@ def render(news, markets):
 
     next_run = (NOW + timedelta(hours=3)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
+    page_desc = f"ข่าวเศรษฐกิจ-การเมือง {len(news)} ข่าวใน 24 ชม. จาก {len(FEEDS)} แหล่ง อัปเดต {NOW.strftime('%d %b %Y %H:%M')} น."
+    favicon = ("data:image/svg+xml,"
+               "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
+               "%3Crect width='100' height='100' rx='20' fill='%230A0E1A'/%3E"
+               "%3Ccircle cx='30' cy='62' r='9' fill='%234C8DFF'/%3E"
+               "%3Ccircle cx='58' cy='40' r='9' fill='%23F5A524'/%3E"
+               "%3Ccircle cx='78' cy='58' r='7' fill='%239B8AFB'/%3E%3C/svg%3E")
 
     return f"""<!doctype html>
 <html lang="th">
@@ -419,6 +545,14 @@ def render(news, markets):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="900">
 <title>Econ · Politics Monitor</title>
+<meta name="description" content="{html.escape(page_desc)}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Econ · Politics Monitor">
+<meta property="og:description" content="{html.escape(page_desc)}">
+<meta property="og:url" content="https://netflixss266-lang.github.io/econ-monitor/">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#0A0E1A">
+<link rel="icon" href="{favicon}">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -452,6 +586,7 @@ h1 span{{color:var(--dim);font-weight:400}}
 .t-price{{font-family:'IBM Plex Mono',monospace;font-size:.95rem;font-weight:500}}
 .t-pct{{font-family:'IBM Plex Mono',monospace;font-size:.74rem}}
 .up{{color:var(--up)}} .down{{color:var(--down)}} .flat{{color:var(--mute)}}
+.spark{{width:60px;height:20px;display:block}}
 
 .panel{{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}}
 .panel-head{{display:flex;align-items:center;justify-content:space-between;
@@ -512,12 +647,21 @@ h1 span{{color:var(--dim);font-weight:400}}
 .hot-bars .be{{background:var(--econ)}} .hot-bars .bp{{background:var(--poli)}}
 .hot-n{{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--mute);text-align:right}}
 
+.search-wrap{{padding:11px 15px;border-bottom:1px solid var(--line)}}
+.search{{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  color:var(--ink);font-family:inherit;font-size:.82rem;padding:8px 12px}}
+.search::placeholder{{color:var(--dim)}}
+.search:focus{{outline:none;border-color:var(--econ)}}
+
 .grid{{display:grid;grid-template-columns:1fr 1fr 330px;gap:16px;align-items:start}}
 @media(max-width:1000px){{.grid{{grid-template-columns:1fr}}}}
 .items{{max-height:620px;overflow-y:auto}}
-.item{{display:block;padding:13px 15px;border-bottom:1px solid var(--line);transition:background .12s}}
+.item{{display:flex;gap:11px;padding:13px 15px;border-bottom:1px solid var(--line);transition:background .12s}}
 .item:hover{{background:#151C2C}}
 .item:last-child{{border-bottom:0}}
+.item.hidden{{display:none}}
+.item .thumb{{width:64px;height:64px;border-radius:8px;object-fit:cover;flex:none;background:var(--panel2)}}
+.item-body{{flex:1;min-width:0}}
 .item-head{{display:flex;justify-content:space-between;gap:10px;margin-bottom:5px}}
 .src{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--mute);
   text-transform:uppercase;letter-spacing:.05em}}
@@ -526,6 +670,13 @@ h1 span{{color:var(--dim);font-weight:400}}
 .age{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim)}}
 .item h3{{font-size:.92rem;font-weight:600;line-height:1.42;margin-bottom:4px}}
 .item p{{font-size:.78rem;color:var(--mute);line-height:1.5}}
+.item-foot{{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px}}
+.speak{{font-family:inherit;font-size:.7rem;color:var(--mute);background:var(--panel2);
+  border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer}}
+.speak:hover{{color:var(--ink);border-color:var(--dim)}}
+.speak.playing{{color:var(--econ);border-color:var(--econ)}}
+.full{{font-size:.7rem;color:var(--dim)}}
+.full:hover{{color:var(--mute)}}
 
 .kws{{display:flex;flex-wrap:wrap;gap:7px 12px;padding:15px;align-items:baseline}}
 .kw{{font-weight:500;line-height:1.2}}
@@ -579,11 +730,13 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 <div class="grid">
   <section class="panel">
     <div class="panel-head"><h2><span class="bar econ"></span>เศรษฐกิจ</h2><span class="count">{len(econ)}</span></div>
+    <div class="search-wrap"><input class="search" type="search" placeholder="ค้นหาข่าวเศรษฐกิจ…" oninput="filterItems(this)"></div>
     <div class="items">{''.join(card(i) for i in econ) or '<div class="item"><p>ยังไม่มีข่าวในรอบนี้</p></div>'}</div>
   </section>
 
   <section class="panel">
     <div class="panel-head"><h2><span class="bar poli"></span>การเมือง</h2><span class="count">{len(poli)}</span></div>
+    <div class="search-wrap"><input class="search" type="search" placeholder="ค้นหาข่าวการเมือง…" oninput="filterItems(this)"></div>
     <div class="items">{''.join(card(i) for i in poli) or '<div class="item"><p>ยังไม่มีข่าวในรอบนี้</p></div>'}</div>
   </section>
 
@@ -608,6 +761,38 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 <script>window.__MARKERS__ = {markers_json};</script>
 <script>{MAP_JS}</script>
+<script>
+function filterItems(input){{
+  const q = input.value.trim().toLowerCase();
+  const items = input.closest('section').querySelectorAll('.item');
+  items.forEach(it => {{
+    const hit = !q || it.textContent.toLowerCase().includes(q);
+    it.classList.toggle('hidden', !hit);
+  }});
+}}
+
+if ('speechSynthesis' in window) {{
+  let currentBtn = null;
+  document.addEventListener('click', ev => {{
+    const btn = ev.target.closest('.speak');
+    if (!btn) return;
+    const wasPlaying = btn.classList.contains('playing');
+    speechSynthesis.cancel();
+    if (currentBtn) {{ currentBtn.classList.remove('playing'); currentBtn.textContent = '🔊 ฟังข่าว'; }}
+    currentBtn = null;
+    if (wasPlaying) return;
+    const u = new SpeechSynthesisUtterance(btn.dataset.text);
+    u.lang = btn.dataset.lang;
+    u.onend = u.onerror = () => {{ btn.classList.remove('playing'); btn.textContent = '🔊 ฟังข่าว'; currentBtn = null; }};
+    btn.classList.add('playing');
+    btn.textContent = '⏸ กำลังอ่าน…';
+    currentBtn = btn;
+    speechSynthesis.speak(u);
+  }});
+}} else {{
+  document.querySelectorAll('.speak').forEach(b => b.style.display = 'none');
+}}
+</script>
 </body>
 </html>"""
 
@@ -621,6 +806,17 @@ if __name__ == "__main__":
     markets = fetch_markets()
     print()
 
+    cache = load_json(CACHE_FILE)
+    if not news:
+        print("  ⚠ ดึงข่าวไม่ได้เลยรอบนี้ ใช้ cache รอบก่อนแทน")
+        news = news_from_cache(cache)
+    if not markets:
+        print("  ⚠ ดึงราคาตลาดไม่ได้เลยรอบนี้ ใช้ cache รอบก่อนแทน")
+        markets = cache.get("markets", [])
+
+    history = update_history(markets) if markets else load_json(HISTORY_FILE)
+    save_cache(news, markets)
+
     with open("index.html", "w", encoding="utf-8") as f:
-        f.write(render(news, markets))
+        f.write(render(news, markets, history))
     print(f"เสร็จ · index.html · {NOW.strftime('%H:%M')} น.")

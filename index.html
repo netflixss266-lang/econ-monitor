@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="900">
 <title>Econ · Politics Monitor</title>
+<meta name="description" content="ข่าวเศรษฐกิจ-การเมือง 144 ข่าวใน 24 ชม. จาก 13 แหล่ง อัปเดต 24 Jul 2026 17:41 น.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Econ · Politics Monitor">
+<meta property="og:description" content="ข่าวเศรษฐกิจ-การเมือง 144 ข่าวใน 24 ชม. จาก 13 แหล่ง อัปเดต 24 Jul 2026 17:41 น.">
+<meta property="og:url" content="https://netflixss266-lang.github.io/econ-monitor/">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#0A0E1A">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230A0E1A'/%3E%3Ccircle cx='30' cy='62' r='9' fill='%234C8DFF'/%3E%3Ccircle cx='58' cy='40' r='9' fill='%23F5A524'/%3E%3Ccircle cx='78' cy='58' r='7' fill='%239B8AFB'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -38,6 +46,7 @@ h1 span{color:var(--dim);font-weight:400}
 .t-price{font-family:'IBM Plex Mono',monospace;font-size:.95rem;font-weight:500}
 .t-pct{font-family:'IBM Plex Mono',monospace;font-size:.74rem}
 .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--mute)}
+.spark{width:60px;height:20px;display:block}
 
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .panel-head{display:flex;align-items:center;justify-content:space-between;
@@ -98,12 +107,21 @@ h1 span{color:var(--dim);font-weight:400}
 .hot-bars .be{background:var(--econ)} .hot-bars .bp{background:var(--poli)}
 .hot-n{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--mute);text-align:right}
 
+.search-wrap{padding:11px 15px;border-bottom:1px solid var(--line)}
+.search{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  color:var(--ink);font-family:inherit;font-size:.82rem;padding:8px 12px}
+.search::placeholder{color:var(--dim)}
+.search:focus{outline:none;border-color:var(--econ)}
+
 .grid{display:grid;grid-template-columns:1fr 1fr 330px;gap:16px;align-items:start}
 @media(max-width:1000px){.grid{grid-template-columns:1fr}}
 .items{max-height:620px;overflow-y:auto}
-.item{display:block;padding:13px 15px;border-bottom:1px solid var(--line);transition:background .12s}
+.item{display:flex;gap:11px;padding:13px 15px;border-bottom:1px solid var(--line);transition:background .12s}
 .item:hover{background:#151C2C}
 .item:last-child{border-bottom:0}
+.item.hidden{display:none}
+.item .thumb{width:64px;height:64px;border-radius:8px;object-fit:cover;flex:none;background:var(--panel2)}
+.item-body{flex:1;min-width:0}
 .item-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:5px}
 .src{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--mute);
   text-transform:uppercase;letter-spacing:.05em}
@@ -112,6 +130,13 @@ h1 span{color:var(--dim);font-weight:400}
 .age{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim)}
 .item h3{font-size:.92rem;font-weight:600;line-height:1.42;margin-bottom:4px}
 .item p{font-size:.78rem;color:var(--mute);line-height:1.5}
+.item-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px}
+.speak{font-family:inherit;font-size:.7rem;color:var(--mute);background:var(--panel2);
+  border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer}
+.speak:hover{color:var(--ink);border-color:var(--dim)}
+.speak.playing{color:var(--econ);border-color:var(--econ)}
+.full{font-size:.7rem;color:var(--dim)}
+.full:hover{color:var(--mute)}
 
 .kws{display:flex;flex-wrap:wrap;gap:7px 12px;padding:15px;align-items:baseline}
 .kw{font-weight:500;line-height:1.2}
@@ -131,25 +156,25 @@ footer{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   <h1>Econ · Politics Monitor <span>/ เศรษฐกิจ · การเมือง</span></h1>
   <div class="stamp">
     <span class="pulse"></span>
-    <span>อัปเดต 24 Jul 2026 · 11:50 น.</span>
-    <span style="color:var(--dim)">· รอบถัดไป 14:50 น.</span>
+    <span>อัปเดต 24 Jul 2026 · 17:41 น.</span>
+    <span style="color:var(--dim)">· รอบถัดไป 20:41 น.</span>
   </div>
 </header>
 
 <div class="ticker"><div class="tick"><span class="t-label">SET</span>
-      <span class="t-price">1,284.36</span><span class="t-pct up">+0.42%</span></div><div class="tick"><span class="t-label">S&amp;P 500</span>
-      <span class="t-price">5,223.40</span><span class="t-pct up">+0.68%</span></div><div class="tick"><span class="t-label">NASDAQ</span>
-      <span class="t-price">16,832.60</span><span class="t-pct up">+0.84%</span></div><div class="tick"><span class="t-label">USD/THB</span>
-      <span class="t-price">34.28</span><span class="t-pct down">-0.15%</span></div><div class="tick"><span class="t-label">ทองคำ</span>
-      <span class="t-price">2,343.20</span><span class="t-pct down">-0.18%</span></div><div class="tick"><span class="t-label">น้ำมัน WTI</span>
-      <span class="t-price">78.21</span><span class="t-pct up">+0.42%</span></div><div class="tick"><span class="t-label">Bitcoin</span>
-      <span class="t-price">64,180.00</span><span class="t-pct up">+1.26%</span></div></div>
+      <span class="t-price">1,644.39</span><svg class="spark" viewBox="0 0 60 20" preserveAspectRatio="none"><path d="M2.0,18.0 L58.0,18.0" fill="none" stroke="var(--up)" stroke-width="1.6"/></svg><span class="t-pct up">+0.20%</span></div><div class="tick"><span class="t-label">S&amp;P 500</span>
+      <span class="t-price">7,408.30</span><svg class="spark" viewBox="0 0 60 20" preserveAspectRatio="none"><path d="M2.0,18.0 L58.0,18.0" fill="none" stroke="var(--down)" stroke-width="1.6"/></svg><span class="t-pct down">-1.34%</span></div><div class="tick"><span class="t-label">NASDAQ</span>
+      <span class="t-price">25,137.69</span><svg class="spark" viewBox="0 0 60 20" preserveAspectRatio="none"><path d="M2.0,18.0 L58.0,18.0" fill="none" stroke="var(--down)" stroke-width="1.6"/></svg><span class="t-pct down">-2.71%</span></div><div class="tick"><span class="t-label">USD/THB</span>
+      <span class="t-price">33.67</span><svg class="spark" viewBox="0 0 60 20" preserveAspectRatio="none"><path d="M2.0,18.0 L58.0,2.0" fill="none" stroke="var(--down)" stroke-width="1.6"/></svg><span class="t-pct down">-0.30%</span></div><div class="tick"><span class="t-label">ทองคำ</span>
+      <span class="t-price">4,066.30</span><svg class="spark" viewBox="0 0 60 20" preserveAspectRatio="none"><path d="M2.0,18.0 L58.0,2.0" fill="none" stroke="var(--up)" stroke-width="1.6"/></svg><span class="t-pct up">+0.49%</span></div><div class="tick"><span class="t-label">น้ำมัน WTI</span>
+      <span class="t-price">89.67</span><svg class="spark" viewBox="0 0 60 20" preserveAspectRatio="none"><path d="M2.0,18.0 L58.0,2.0" fill="none" stroke="var(--down)" stroke-width="1.6"/></svg><span class="t-pct down">-2.73%</span></div><div class="tick"><span class="t-label">Bitcoin</span>
+      <span class="t-price">64,991.80</span><svg class="spark" viewBox="0 0 60 20" preserveAspectRatio="none"><path d="M2.0,18.0 L58.0,2.0" fill="none" stroke="var(--down)" stroke-width="1.6"/></svg><span class="t-pct down">-0.08%</span></div></div>
 
 <div class="top">
   <section class="panel">
     <div class="panel-head">
       <h2>แผนที่ข่าว</h2>
-      <span class="count">19 พื้นที่ · คลิกจุดเพื่อดูข่าว</span>
+      <span class="count">20 พื้นที่ · คลิกจุดเพื่อดูข่าว</span>
     </div>
     <div class="map-wrap">
       <svg id="map"></svg>
@@ -165,144 +190,510 @@ footer{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
   <section class="panel">
     <div class="panel-head"><h2>ล่าสุด</h2><span class="count">LIVE</span></div>
-    <div class="feed"><a class="feed-row" href="#" target="_blank" rel="noopener">
+    <div class="feed"><a class="feed-row" href="https://thestandard.co/thai-gdp-2026-factors-risks/" target="_blank" rel="noopener">
       <span class="dot econ"></span>
-      <span class="feed-title">[ตัวอย่าง] ธนาคารกลางสหรัฐคงอัตราดอกเบี้ยนโยบาย ตลาดหุ้นตอบรับเชิงบวก</span>
-      <span class="feed-age">8 นาทีที่แล้ว</span></a><a class="feed-row" href="#" target="_blank" rel="noopener">
+      <span class="feed-title">เปิด 5 ปัจจัยบวกกับ 3 ปัจจัยเสี่ยง หลังคลังปรับเพิ่มประมาณการ GDP ไทย 2569 โตดีขึ้น เป็น2.5%</span>
+      <span class="feed-age">7 ชม.ที่แล้ว</span></a><a class="feed-row" href="https://thestandard.co/suksomruay-yingcheep-defamation-senator-hawking/" target="_blank" rel="noopener">
       <span class="dot poli"></span>
-      <span class="feed-title">[ตัวอย่าง] สภาไทยเปิดอภิปรายร่างงบประมาณประจำปี</span>
-      <span class="feed-age">19 นาทีที่แล้ว</span></a><a class="feed-row" href="#" target="_blank" rel="noopener">
-      <span class="dot econ"></span>
-      <span class="feed-title">[SAMPLE] China exports surge as trade tension eases</span>
-      <span class="feed-age">31 นาทีที่แล้ว</span></a><a class="feed-row" href="#" target="_blank" rel="noopener">
+      <span class="feed-title">สุขสมรวย แจ้งความ ‘ยิ่งชีพ’ ข้อหาหมิ่นประมาท ปมกล่าวหาเอี่ยวฮั้ว สว. ถามกลับใส่ความคนอื่นโดยไร้หลักฐาน สง่างามหรือไม่</span>
+      <span class="feed-age">7 ชม.ที่แล้ว</span></a><a class="feed-row" href="https://www.bbc.co.uk/news/articles/cwymj9lkx13o?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">
       <span class="dot poli"></span>
-      <span class="feed-title">[ตัวอย่าง] ยูเครนเจรจาสันติภาพรอบใหม่ ท่ามกลางแรงกดดันจากยุโรป</span>
-      <span class="feed-age">44 นาทีที่แล้ว</span></a><a class="feed-row" href="#" target="_blank" rel="noopener">
+      <span class="feed-title">South Africa&#x27;s president wins bid to temporarily halt impeachment inquiry over &#x27;Farmgate&#x27;</span>
+      <span class="feed-age">7 ชม.ที่แล้ว</span></a><a class="feed-row" href="https://www.investing.com/news/earnings/gormanrupp-earnings-beat-by-003-revenue-fell-short-of-estimates-4811019" target="_blank" rel="noopener">
       <span class="dot econ"></span>
-      <span class="feed-title">[ตัวอย่าง] ค่าเงินบาทเคลื่อนไหวในกรอบแคบ ตลาดรอตัวเลขเงินเฟ้อไทย</span>
-      <span class="feed-age">57 นาทีที่แล้ว</span></a><a class="feed-row" href="#" target="_blank" rel="noopener">
+      <span class="feed-title">Gorman-Rupp earnings beat by $0.03, revenue fell short of estimates</span>
+      <span class="feed-age">7 ชม.ที่แล้ว</span></a><a class="feed-row" href="https://www.prachachat.net/economic/news-2042792" target="_blank" rel="noopener">
+      <span class="dot econ"></span>
+      <span class="feed-title">น้ำมันไทยไม่ขาด มีสำรองใช้ 108 วัน พร้อมดึงกองทุนฯ ลดราคา แม้ติดลบ 6.4 หมื่นล้าน</span>
+      <span class="feed-age">7 ชม.ที่แล้ว</span></a><a class="feed-row" href="https://www.investing.com/news/economic-indicators/trump-imposes-forced-labor-duties-on-60-trading-partners-as-10-us-tariffs-expire-4810447" target="_blank" rel="noopener">
+      <span class="dot econ"></span>
+      <span class="feed-title">Trump imposes forced labor tariffs, drawing protests from trading partners</span>
+      <span class="feed-age">7 ชม.ที่แล้ว</span></a><a class="feed-row" href="https://www.matichon.co.th/foreign/news_5820440" target="_blank" rel="noopener">
       <span class="dot poli"></span>
-      <span class="feed-title">[SAMPLE] Israel and Lebanon ceasefire talks continue</span>
-      <span class="feed-age">1 ชม.ที่แล้ว</span></a><a class="feed-row" href="#" target="_blank" rel="noopener">
-      <span class="dot econ"></span>
-      <span class="feed-title">[ตัวอย่าง] ครม.เห็นชอบมาตรการกระตุ้นการท่องเที่ยวรอบใหม่</span>
-      <span class="feed-age">1 ชม.ที่แล้ว</span></a></div>
+      <span class="feed-title">‘ฮุน มาเนต’ โต้ ‘สีหศักดิ์’ กล่าวหากัมพูชาเป็นฝ่ายปิดประตูเจรจาชายแดน เป็นเรื่อง ‘ไม่ถูกต้อง’</span>
+      <span class="feed-age">7 ชม.ที่แล้ว</span></a></div>
   </section>
 </div>
 
 <div class="grid">
   <section class="panel">
     <div class="panel-head"><h2><span class="bar econ"></span>เศรษฐกิจ</h2><span class="count">18</span></div>
-    <div class="items"><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">CNBC<span class="loc">สหรัฐฯ</span></span><span class="age">8 นาทีที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] ธนาคารกลางสหรัฐคงอัตราดอกเบี้ยนโยบาย ตลาดหุ้นตอบรับเชิงบวก</h3>
-      <p>คณะกรรมการประเมินแนวโน้มเงินเฟ้อไตรมาสถัดไป</p>
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">BBC Business<span class="loc">จีน</span></span><span class="age">31 นาทีที่แล้ว</span></div>
-      <h3>[SAMPLE] China exports surge as trade tension eases</h3>
-      <p>Customs data shows third straight month of growth</p>
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">ประชาชาติธุรกิจ<span class="loc">ไทย</span></span><span class="age">57 นาทีที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] ค่าเงินบาทเคลื่อนไหวในกรอบแคบ ตลาดรอตัวเลขเงินเฟ้อไทย</h3>
+    <div class="search-wrap"><input class="search" type="search" placeholder="ค้นหาข่าวเศรษฐกิจ…" oninput="filterItems(this)"></div>
+    <div class="items"><div class="item">
+      <img class="thumb" src="https://thestandard.co/wp-content/uploads/2026/07/thai-gdp-2026-factors-cover.jpg?x94939" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">The Standard<span class="loc">ไทย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://thestandard.co/thai-gdp-2026-factors-risks/" target="_blank" rel="noopener">
+          <h3>เปิด 5 ปัจจัยบวกกับ 3 ปัจจัยเสี่ยง หลังคลังปรับเพิ่มประมาณการ GDP ไทย 2569 โตดีขึ้น เป็น2.5%</h3>
+          <p>คลังปรับเพิ่มประมาณการ GDP ปี 2569 ขึ้นเป็น 2.5% จากเดิ […] The post เปิด 5 ปัจจัยบวกกับ 3 ปัจจัยเสี่ยง หลังคลังปรับเพิ่มประมาณการ GDP ไทย 2569 โตดีขึ้น เป็น2.5% appeared first on THE STANDARD.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="เปิด 5 ปัจจัยบวกกับ 3 ปัจจัยเสี่ยง หลังคลังปรับเพิ่มประมาณการ GDP ไทย 2569 โตดีขึ้น เป็น2.5%. คลังปรับเพิ่มประมาณการ GDP ปี 2569 ขึ้นเป็น 2.5% จากเดิ […] The post เปิด 5 ปัจจัยบวกกับ 3 ปัจจัยเสี่ยง หลังคลังปรับเพิ่มประมาณการ GDP ไทย 2569 โตดีขึ้น เป็น2.5% appeared first on THE STANDARD." data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://thestandard.co/thai-gdp-2026-factors-risks/" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://i-invdn-com.investing.com/news/LYNXNPEB6R0AQ_M.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">Investing.com</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.investing.com/news/earnings/gormanrupp-earnings-beat-by-003-revenue-fell-short-of-estimates-4811019" target="_blank" rel="noopener">
+          <h3>Gorman-Rupp earnings beat by $0.03, revenue fell short of estimates</h3>
+          
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="Gorman-Rupp earnings beat by $0.03, revenue fell short of estimates. " data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.investing.com/news/earnings/gormanrupp-earnings-beat-by-003-revenue-fell-short-of-estimates-4811019" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.prachachat.net/wp-content/uploads/2025/05/Fuel-Price-Today-Oil-Price.png" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">ประชาชาติธุรกิจ<span class="loc">ไทย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.prachachat.net/economic/news-2042792" target="_blank" rel="noopener">
+          <h3>น้ำมันไทยไม่ขาด มีสำรองใช้ 108 วัน พร้อมดึงกองทุนฯ ลดราคา แม้ติดลบ 6.4 หมื่นล้าน</h3>
+          <p>กระทรวงพลังงาน ยันไทยมีน้ำมันสำรองเพียงพอใช้ได้ 108 วัน ใช้มาตรการลดราคาดีเซลหน้าโรงกลั่น 2.40 บาทต่อลิตร และติดตามสถานการณ์ราคาน้ำมันโลกอย่างใกล้ชิดช่วงราคาผันผวน กองทุนน้ำมันเชื้อเพลิงแม้ติดลบ 63,921 ล้านบาท ยังมีสภาพคล่องเพียงพอรักษาเสถียรภาพราคาน … อ่านข่าวต้นฉบับ: น้ำมันไทยไม่ขาด มีสำรองใช้ 108 วัน พร้อมดึงกองทุนฯ</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="น้ำมันไทยไม่ขาด มีสำรองใช้ 108 วัน พร้อมดึงกองทุนฯ ลดราคา แม้ติดลบ 6.4 หมื่นล้าน. กระทรวงพลังงาน ยันไทยมีน้ำมันสำรองเพียงพอใช้ได้ 108 วัน ใช้มาตรการลดราคาดีเซลหน้าโรงกลั่น 2.40 บาทต่อลิตร และติดตามสถานการณ์ราคาน้ำมันโลกอย่างใกล้ชิดช่วงราคาผันผวน กองทุนน้ำมันเชื้อเพลิงแม้ติดลบ 63,921 ล้านบาท ยังมีสภาพคล่องเพียงพอรักษาเสถียรภาพราคาน … อ่านข่าวต้นฉบับ: น้ำมันไทยไม่ขาด มีสำรองใช้ 108 วัน พร้อมดึงกองทุนฯ" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.prachachat.net/economic/news-2042792" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://i-invdn-com.investing.com/news/LYNXNPEB6J0AJ_M.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">Investing.com</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.investing.com/news/economic-indicators/trump-imposes-forced-labor-duties-on-60-trading-partners-as-10-us-tariffs-expire-4810447" target="_blank" rel="noopener">
+          <h3>Trump imposes forced labor tariffs, drawing protests from trading partners</h3>
+          
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="Trump imposes forced labor tariffs, drawing protests from trading partners. " data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.investing.com/news/economic-indicators/trump-imposes-forced-labor-duties-on-60-trading-partners-as-10-us-tariffs-expire-4810447" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://i-invdn-com.investing.com/news/LYNXNPED4F0IQ_M.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">Investing.com<span class="loc">ไต้หวัน</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.investing.com/news/economy-news/taiwan-central-bank-says-it-has-good-communications-with-us-treasury-after-currency-report-4810991" target="_blank" rel="noopener">
+          <h3>Taiwan central bank says it has good communications with US Treasury after currency report</h3>
+          
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="Taiwan central bank says it has good communications with US Treasury after currency report. " data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.investing.com/news/economy-news/taiwan-central-bank-says-it-has-good-communications-with-us-treasury-after-currency-report-4810991" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://i-invdn-com.investing.com/news/LYNXNPEC3B0CQ_M.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">Investing.com</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.investing.com/news/stock-market-news/why-is-maxlinear-stock-sliding-today-93CH-4810990" target="_blank" rel="noopener">
+          <h3>Why is MaxLinear stock sliding today?</h3>
+          
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="Why is MaxLinear stock sliding today?. " data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.investing.com/news/stock-market-news/why-is-maxlinear-stock-sliding-today-93CH-4810990" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
       
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">The Standard</span><span class="age">1 ชม.ที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] ครม.เห็นชอบมาตรการกระตุ้นการท่องเที่ยวรอบใหม่</h3>
-      <p>ครอบคลุมการเดินทางในประเทศและดึงนักท่องเที่ยวต่างชาติ</p>
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">CNBC<span class="loc">ญี่ปุ่น</span></span><span class="age">1 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] Japan&#x27;s central bank signals policy shift</h3>
+      <div class="item-body">
+        <div class="item-head"><span class="src">CNBC<span class="loc">อิหร่าน</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.cnbc.com/2026/07/24/oil-price-trump-hormuz-red-sea-iran-war.html" target="_blank" rel="noopener">
+          <h3>Oil prices ease but are set for 10% weekly gain as Trump mulls &#x27;bigger than ever&#x27; attack on Iran</h3>
+          <p>Oil prices dropped by around 3% on Friday, but remained on track for a weekly jump of 10% as the U.S.-Iran war continued to escalate.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="Oil prices ease but are set for 10% weekly gain as Trump mulls &#x27;bigger than ever&#x27; attack on Iran. Oil prices dropped by around 3% on Friday, but remained on track for a weekly jump of 10% as the U.S.-Iran war continued to escalate." data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.cnbc.com/2026/07/24/oil-price-trump-hormuz-red-sea-iran-war.html" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.prachachat.net/wp-content/uploads/2024/11/Cover-photo-Logo-15.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">ประชาชาติธุรกิจ</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.prachachat.net/finance/news-2042795" target="_blank" rel="noopener">
+          <h3>ก.ล.ต. กล่าวโทษ ‘สุภาพร พิมพงษ์’ รายเดียว ยื่นข้อมูลเท็จถือหุ้น TRUE</h3>
+          <p>ก.ล.ต. กล่าวโทษ “สุภาพร พิมพงษ์” กรณีนำส่งเอกสารที่แสดงข้อความอันเป็นเท็จต่อ บก.ปอศ. ปมยื่นแบบถือหุ้น “TRUE” รวมถึง บจ. อีก 5 หลักทรัพย์ รายงานจากสำนักงานคณะกรรมการกำกับหลักทรัพย์และตลาดหลักทรัพย์ (ก.ล.ต.) กล่าวโทษนางสาวสุภาพร … อ่านข่าวต้นฉบับ: ก.ล.ต. กล่าวโทษ ‘สุภาพร พิมพงษ์’ รายเดียว ยื่นข้อมูลเท็จถือหุ้น TRUE</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="ก.ล.ต. กล่าวโทษ ‘สุภาพร พิมพงษ์’ รายเดียว ยื่นข้อมูลเท็จถือหุ้น TRUE. ก.ล.ต. กล่าวโทษ “สุภาพร พิมพงษ์” กรณีนำส่งเอกสารที่แสดงข้อความอันเป็นเท็จต่อ บก.ปอศ. ปมยื่นแบบถือหุ้น “TRUE” รวมถึง บจ. อีก 5 หลักทรัพย์ รายงานจากสำนักงานคณะกรรมการกำกับหลักทรัพย์และตลาดหลักทรัพย์ (ก.ล.ต.) กล่าวโทษนางสาวสุภาพร … อ่านข่าวต้นฉบับ: ก.ล.ต. กล่าวโทษ ‘สุภาพร พิมพงษ์’ รายเดียว ยื่นข้อมูลเท็จถือหุ้น TRUE" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.prachachat.net/finance/news-2042795" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.matichon.co.th/wp-content/uploads/2026/07/33-9.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">มติชน<span class="loc">ไทย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.matichon.co.th/politics/news_5820548" target="_blank" rel="noopener">
+          <h3>อนุทิน เชื่อสัมพันธ์ ‘ไทย-สหรัฐฯ’ ยังดี เร่งแก้ปมแรงงาน จ่ออุทธรณ์ลดภาษี 12.5%</h3>
+          <p>“อนุทิน” เชื่อสัมพันธ์ดี “ไทย-สหรัฐฯ” คุยภาษีกันได้จะอุ […]</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="อนุทิน เชื่อสัมพันธ์ ‘ไทย-สหรัฐฯ’ ยังดี เร่งแก้ปมแรงงาน จ่ออุทธรณ์ลดภาษี 12.5%. “อนุทิน” เชื่อสัมพันธ์ดี “ไทย-สหรัฐฯ” คุยภาษีกันได้จะอุ […]" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.matichon.co.th/politics/news_5820548" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
       
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">กรุงเทพธุรกิจ<span class="loc">ไทย</span></span><span class="age">1 ชม.ที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] ยอดส่งออกไทยขยายตัวต่อเนื่องเป็นเดือนที่สาม</h3>
+      <div class="item-body">
+        <div class="item-head"><span class="src">Google News<span class="loc">ไทย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://news.google.com/rss/articles/CBMiX0FVX3lxTE5BMzQwSE93ZWN0WVBUQ3VIZW1uQ3JhRzFXeURLQmRtVlVYOGZEcTdUWVlBYTJGUmRHUzFHajY0eXVrNWdYb09tVzJKczBjVFhRSTZobkxwakVFclZfYTlR?oc=5" target="_blank" rel="noopener">
+          <h3>&#x27;แลนด์บริดจ์’โครงการบูมเศรษฐกิจไทย แต่..คนพื้นที่หวั่นทำ &#x27;ต่างชาติฮุบที่ดิน&#x27; - springnews</h3>
+          <p>&#x27;แลนด์บริดจ์’โครงการบูมเศรษฐกิจไทย แต่..คนพื้นที่หวั่นทำ &#x27;ต่างชาติฮุบที่ดิน&#x27; springnews</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="&#x27;แลนด์บริดจ์’โครงการบูมเศรษฐกิจไทย แต่..คนพื้นที่หวั่นทำ &#x27;ต่างชาติฮุบที่ดิน&#x27; - springnews. &#x27;แลนด์บริดจ์’โครงการบูมเศรษฐกิจไทย แต่..คนพื้นที่หวั่นทำ &#x27;ต่างชาติฮุบที่ดิน&#x27; springnews" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://news.google.com/rss/articles/CBMiX0FVX3lxTE5BMzQwSE93ZWN0WVBUQ3VIZW1uQ3JhRzFXeURLQmRtVlVYOGZEcTdUWVlBYTJGUmRHUzFHajY0eXVrNWdYb09tVzJKczBjVFhRSTZobkxwakVFclZfYTlR?oc=5" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/e698/live/f875fc40-873e-11f1-926f-c90d1bcfbc84.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">BBC World</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.bbc.co.uk/news/videos/c5yw2xgnv2jo?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">
+          <h3>Watch: Are Trump&#x27;s tariffs delivering on his objectives?</h3>
+          <p>The BBC&#x27;s Samira Hussain explains how President Trump&#x27;s tariffs affect US economy, who pays the price, and whether they&#x27;re working.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="Watch: Are Trump&#x27;s tariffs delivering on his objectives?. The BBC&#x27;s Samira Hussain explains how President Trump&#x27;s tariffs affect US economy, who pays the price, and whether they&#x27;re working." data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.bbc.co.uk/news/videos/c5yw2xgnv2jo?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.prachachat.net/wp-content/uploads/2023/09/1200-x-800-46.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">ประชาชาติธุรกิจ<span class="loc">ไทย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.prachachat.net/finance/news-2042768" target="_blank" rel="noopener">
+          <h3>EXIM BANK ผลงาน Q2/69 ปล่อยสินเชื่อใหม่ 2.2 หมื่นล้าน ปรับกลยุทธ์ช่วย SMEs</h3>
+          <p>EXIM BANK ผลงาน Q2/69 ปล่อยสินเชื่อใหม่ 2.2 หมื่นล้าน ปรับกลยุทธ์ช่วย SMEs เดินหน้าบทบาท Export Co-pilot รับมือเศรษฐกิจโลกช่วงครึ่งหลังปี 2569 นายชลัช รัตนบุญนิธิ กรรมการผู้จัดการ ธนาคารเพื่อการส่งออกและนำเข้าแห่งประเทศไทย (EXIM BANK) แถลงผลการดำเนิน … อ่านข่าวต้นฉบับ: EXIM BANK ผลงาน Q2/69 ปล่อยสินเชื่อใหม่ 2.2 หมื่นล</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="EXIM BANK ผลงาน Q2/69 ปล่อยสินเชื่อใหม่ 2.2 หมื่นล้าน ปรับกลยุทธ์ช่วย SMEs. EXIM BANK ผลงาน Q2/69 ปล่อยสินเชื่อใหม่ 2.2 หมื่นล้าน ปรับกลยุทธ์ช่วย SMEs เดินหน้าบทบาท Export Co-pilot รับมือเศรษฐกิจโลกช่วงครึ่งหลังปี 2569 นายชลัช รัตนบุญนิธิ กรรมการผู้จัดการ ธนาคารเพื่อการส่งออกและนำเข้าแห่งประเทศไทย (EXIM BANK) แถลงผลการดำเนิน … อ่านข่าวต้นฉบับ: EXIM BANK ผลงาน Q2/69 ปล่อยสินเชื่อใหม่ 2.2 หมื่นล" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.prachachat.net/finance/news-2042768" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://thestandard.co/wp-content/uploads/2026/07/sot-cuts-car-target-1.jpg?x94939" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">The Standard<span class="loc">สหรัฐฯ</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://thestandard.co/sot-cuts-car-target-hormuz-ev-china/" target="_blank" rel="noopener">
+          <h3>ฮอร์มุซ-ภาษีสหรัฐฯ-ศึก EV จีน บีบ ‘ส.อ.ท.’ หั่นเป้าผลิตรถเหลือ 1.45 ล้านคัน ชี้ BEV พุ่ง 140% แต่กระบะยังทรุด</h3>
+          <p>ครึ่งทางปี‘69 ส.อ.ท.ปรับลดเป้าผลิตรถยนต์ทั้งปี เหลือ 1. […] The post ฮอร์มุซ-ภาษีสหรัฐฯ-ศึก EV จีน บีบ ‘ส.อ.ท.’ หั่นเป้าผลิตรถเหลือ 1.45 ล้านคัน ชี้ BEV พุ่ง 140% แต่กระบะยังทรุด appeared first on THE STANDARD.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="ฮอร์มุซ-ภาษีสหรัฐฯ-ศึก EV จีน บีบ ‘ส.อ.ท.’ หั่นเป้าผลิตรถเหลือ 1.45 ล้านคัน ชี้ BEV พุ่ง 140% แต่กระบะยังทรุด. ครึ่งทางปี‘69 ส.อ.ท.ปรับลดเป้าผลิตรถยนต์ทั้งปี เหลือ 1. […] The post ฮอร์มุซ-ภาษีสหรัฐฯ-ศึก EV จีน บีบ ‘ส.อ.ท.’ หั่นเป้าผลิตรถเหลือ 1.45 ล้านคัน ชี้ BEV พุ่ง 140% แต่กระบะยังทรุด appeared first on THE STANDARD." data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://thestandard.co/sot-cuts-car-target-hormuz-ev-china/" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
       
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">CNBC<span class="loc">สหรัฐฯ</span></span><span class="age">2 ชม.ที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] ราคาน้ำมันดิบปรับลดหลังรายงานสต็อกสหรัฐเพิ่มขึ้น</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">BBC Business<span class="loc">อินเดีย</span></span><span class="age">2 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] India GDP growth beats forecasts</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">Al Jazeera<span class="loc">เยอรมนี</span></span><span class="age">3 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] Germany announces industrial investment package</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">กรุงเทพธุรกิจ<span class="loc">สิงคโปร์</span></span><span class="age">3 ชม.ที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] ตลาดหุ้นสิงคโปร์ปิดบวก แรงซื้อกลุ่มธนาคาร</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">ประชาชาติธุรกิจ<span class="loc">ไทย</span></span><span class="age">3 ชม.ที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] ดัชนีความเชื่อมั่นผู้บริโภคไทยปรับตัวดีขึ้น</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">BBC Business<span class="loc">สหราชอาณาจักร</span></span><span class="age">4 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] UK inflation lands below forecasts</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">Google News<span class="loc">เวียดนาม</span></span><span class="age">4 ชม.ที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] เวียดนามดึงการลงทุนต่างชาติเพิ่มในภาคการผลิต</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">CNBC<span class="loc">ไต้หวัน</span></span><span class="age">4 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] Taiwan chip exports hit record high</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">Al Jazeera<span class="loc">บราซิล</span></span><span class="age">5 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] Brazil hosts regional trade summit</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">Google News<span class="loc">อินโดนีเซีย</span></span><span class="age">5 ชม.ที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] อินโดนีเซียปรับนโยบายส่งออกแร่</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">CNBC<span class="loc">เกาหลีใต้</span></span><span class="age">5 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] South Korea won weakens against dollar</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">BBC Business<span class="loc">ซาอุดีอาระเบีย</span></span><span class="age">6 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] Saudi Arabia announces energy investment</h3>
-      
-    </a></div>
+      <div class="item-body">
+        <div class="item-head"><span class="src">Al Jazeera<span class="loc">อิสราเอล</span></span><span class="age">8 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.aljazeera.com/news/2026/7/24/four-palestinians-killed-as-israeli-settlers-raid-occupied-west-bank-town?traffic_source=rss" target="_blank" rel="noopener">
+          <h3>Four Palestinians killed as Israeli settlers raid occupied West Bank town</h3>
+          <p>One Israeli was also killed near town of Tal in Nablus, according to Israel&#x27;s Magen David Adom rescue services.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="Four Palestinians killed as Israeli settlers raid occupied West Bank town. One Israeli was also killed near town of Tal in Nablus, according to Israel&#x27;s Magen David Adom rescue services." data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.aljazeera.com/news/2026/7/24/four-palestinians-killed-as-israeli-settlers-raid-occupied-west-bank-town?traffic_source=rss" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.matichon.co.th/wp-content/uploads/2026/07/%E0%B8%A8%E0%B8%B2%E0%B8%A5%E0%B8%A3%E0%B8%B1%E0%B8%9A%E0%B8%9F%E0%B9%89%E0%B8%AD%E0%B8%87ceo%E0%B9%81%E0%B8%9A%E0%B8%A3%E0%B8%99%E0%B8%94%E0%B9%8C%E0%B8%94%E0%B8%B1%E0%B8%87-%E0%B8%9B%E0%B8%A5%E0%B8%AD%E0%B8%A1%E0%B8%9A%E0%B8%AD%E0%B8%88.5.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">มติชน</span><span class="age">8 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.matichon.co.th/local/news_5820401" target="_blank" rel="noopener">
+          <h3>ศาลอาญารับฟ้อง คดี CEO อาหารเสริมชื่อดัง กับพวก ปลอม ‘บอจ.5’ ยักย้ายหุ้น เสียหายกว่า 100 ล.</h3>
+          <p>ศาลอาญารับฟ้อง คดี CEO เวย์โปรตีนชื่อดัง กับพวก ปลอม &amp;# […]</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="ศาลอาญารับฟ้อง คดี CEO อาหารเสริมชื่อดัง กับพวก ปลอม ‘บอจ.5’ ยักย้ายหุ้น เสียหายกว่า 100 ล.. ศาลอาญารับฟ้อง คดี CEO เวย์โปรตีนชื่อดัง กับพวก ปลอม &amp;# […]" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.matichon.co.th/local/news_5820401" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.matichon.co.th/wp-content/uploads/2026/07/451890_0.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">มติชน<span class="loc">ไทย</span></span><span class="age">8 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.matichon.co.th/publicize/news_5820402" target="_blank" rel="noopener">
+          <h3>ทีทีบี ชูบทบาท Growth Navigator หนุน SME ไทย เชื่อมข้อมูล อินไซต์ และโซลูชันการเงิน ช่วยธุรกิจเติบโตในยุคเศรษฐกิจผันผวน</h3>
+          <p>ท่ามกลางภาวะเศรษฐกิจที่เติบโตต่ำ ต้นทุนธุรกิจที่ยังอยู่ […]</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="ทีทีบี ชูบทบาท Growth Navigator หนุน SME ไทย เชื่อมข้อมูล อินไซต์ และโซลูชันการเงิน ช่วยธุรกิจเติบโตในยุคเศรษฐกิจผันผวน. ท่ามกลางภาวะเศรษฐกิจที่เติบโตต่ำ ต้นทุนธุรกิจที่ยังอยู่ […]" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.matichon.co.th/publicize/news_5820402" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.matichon.co.th/wp-content/uploads/2026/07/2026-07-24T073229Z_527047070_RC2O7KATG0GY_RTRMADP_3_ECB-POLICY-INFLATION.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">มติชน<span class="loc">จีน</span></span><span class="age">8 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.matichon.co.th/foreign/news_5820331" target="_blank" rel="noopener">
+          <h3>หมายหัวเพิ่ม! จีนห้ามส่งออก สินค้าใช้สองทาง ไป 14 บริษัทในอียู โต้แซงก์ชั่นรัสเซีย กระทบบ.จีน</h3>
+          <p>หมายหัวเพิ่ม! จีนห้ามส่งออก สินค้าใช้สองทาง ไป 14 บริษั […]</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="หมายหัวเพิ่ม! จีนห้ามส่งออก สินค้าใช้สองทาง ไป 14 บริษัทในอียู โต้แซงก์ชั่นรัสเซีย กระทบบ.จีน. หมายหัวเพิ่ม! จีนห้ามส่งออก สินค้าใช้สองทาง ไป 14 บริษั […]" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.matichon.co.th/foreign/news_5820331" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.prachachat.net/wp-content/uploads/2026/07/image-319.png" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">ประชาชาติธุรกิจ<span class="loc">ไทย</span></span><span class="age">8 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.prachachat.net/biz-movement/public-relations/news-2042710" target="_blank" rel="noopener">
+          <h3>ททท. ชวนชอป “Amazing Thailand Grand Sale 2026” ดันท่องเที่ยว-แบรนด์ไทยสู่โลก</h3>
+          <p>การท่องเที่ยวแห่งประเทศไทย (ททท.) ร่วมกับพันธมิตร หน่วยงานภาครัฐและเอกชน ห้างสรรพสินค้า ศูนย์การค้า บัตรเครดิต สายการบิน แพลตฟอร์มท่องเที่ยว และสถานประกอบการชั้นนำของประเทศ ที่มีความพร้อมและมีศักยภาพด้านสินค้า บริการ สิ่งอำนวยความสะดวก และประสบการณ์ก … อ่านข่าวต้นฉบับ: ททท. ชวนชอป “Amazing Thailand Grand Sale 2026” ดัน</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="ททท. ชวนชอป “Amazing Thailand Grand Sale 2026” ดันท่องเที่ยว-แบรนด์ไทยสู่โลก. การท่องเที่ยวแห่งประเทศไทย (ททท.) ร่วมกับพันธมิตร หน่วยงานภาครัฐและเอกชน ห้างสรรพสินค้า ศูนย์การค้า บัตรเครดิต สายการบิน แพลตฟอร์มท่องเที่ยว และสถานประกอบการชั้นนำของประเทศ ที่มีความพร้อมและมีศักยภาพด้านสินค้า บริการ สิ่งอำนวยความสะดวก และประสบการณ์ก … อ่านข่าวต้นฉบับ: ททท. ชวนชอป “Amazing Thailand Grand Sale 2026” ดัน" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.prachachat.net/biz-movement/public-relations/news-2042710" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div></div>
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2><span class="bar poli"></span>การเมือง</h2><span class="count">8</span></div>
-    <div class="items"><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">Thai PBS<span class="loc">ไทย</span></span><span class="age">19 นาทีที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] สภาไทยเปิดอภิปรายร่างงบประมาณประจำปี</h3>
-      <p>วาระพิจารณาร่างพระราชบัญญัติงบประมาณรายจ่าย</p>
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">Al Jazeera<span class="loc">ยูเครน</span></span><span class="age">44 นาทีที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] ยูเครนเจรจาสันติภาพรอบใหม่ ท่ามกลางแรงกดดันจากยุโรป</h3>
+    <div class="panel-head"><h2><span class="bar poli"></span>การเมือง</h2><span class="count">18</span></div>
+    <div class="search-wrap"><input class="search" type="search" placeholder="ค้นหาข่าวการเมือง…" oninput="filterItems(this)"></div>
+    <div class="items"><div class="item">
+      <img class="thumb" src="https://thestandard.co/wp-content/uploads/2026/07/suksomruay-yingcheep-defamation-senator-cover.jpg?x94939" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">The Standard</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://thestandard.co/suksomruay-yingcheep-defamation-senator-hawking/" target="_blank" rel="noopener">
+          <h3>สุขสมรวย แจ้งความ ‘ยิ่งชีพ’ ข้อหาหมิ่นประมาท ปมกล่าวหาเอี่ยวฮั้ว สว. ถามกลับใส่ความคนอื่นโดยไร้หลักฐาน สง่างามหรือไม่</h3>
+          <p>วันนี้ (24 กรกฎาคม) เวลา 17.00 น. ที่สถานีตำรวจภูธรเมือ […] The post สุขสมรวย แจ้งความ ‘ยิ่งชีพ’ ข้อหาหมิ่นประมาท ปมกล่าวหาเอี่ยวฮั้ว สว. ถามกลับใส่ความคนอื่นโดยไร้หลักฐาน สง่างามหรือไม่ appeared first on THE STANDARD.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="สุขสมรวย แจ้งความ ‘ยิ่งชีพ’ ข้อหาหมิ่นประมาท ปมกล่าวหาเอี่ยวฮั้ว สว. ถามกลับใส่ความคนอื่นโดยไร้หลักฐาน สง่างามหรือไม่. วันนี้ (24 กรกฎาคม) เวลา 17.00 น. ที่สถานีตำรวจภูธรเมือ […] The post สุขสมรวย แจ้งความ ‘ยิ่งชีพ’ ข้อหาหมิ่นประมาท ปมกล่าวหาเอี่ยวฮั้ว สว. ถามกลับใส่ความคนอื่นโดยไร้หลักฐาน สง่างามหรือไม่ appeared first on THE STANDARD." data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://thestandard.co/suksomruay-yingcheep-defamation-senator-hawking/" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/1b0b/live/5f10c1f0-873b-11f1-a10e-a5d4f08bc20c.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">BBC World<span class="loc">แอฟริกาใต้</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.bbc.co.uk/news/articles/cwymj9lkx13o?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">
+          <h3>South Africa&#x27;s president wins bid to temporarily halt impeachment inquiry over &#x27;Farmgate&#x27;</h3>
+          <p>Ramaphosa has faced scrutiny following the theft of large sums of cash from his private farm in 2020.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="South Africa&#x27;s president wins bid to temporarily halt impeachment inquiry over &#x27;Farmgate&#x27;. Ramaphosa has faced scrutiny following the theft of large sums of cash from his private farm in 2020." data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.bbc.co.uk/news/articles/cwymj9lkx13o?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.matichon.co.th/wp-content/uploads/2026/07/hun-manet11122.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">มติชน<span class="loc">กัมพูชา</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.matichon.co.th/foreign/news_5820440" target="_blank" rel="noopener">
+          <h3>‘ฮุน มาเนต’ โต้ ‘สีหศักดิ์’ กล่าวหากัมพูชาเป็นฝ่ายปิดประตูเจรจาชายแดน เป็นเรื่อง ‘ไม่ถูกต้อง’</h3>
+          <p>‘ฮุน มาเนต’ โต้ ‘สีหศักดิ์’ กล่ […]</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="‘ฮุน มาเนต’ โต้ ‘สีหศักดิ์’ กล่าวหากัมพูชาเป็นฝ่ายปิดประตูเจรจาชายแดน เป็นเรื่อง ‘ไม่ถูกต้อง’. ‘ฮุน มาเนต’ โต้ ‘สีหศักดิ์’ กล่ […]" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.matichon.co.th/foreign/news_5820440" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/4614/live/a3ae37c0-873b-11f1-a10e-a5d4f08bc20c.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">BBC World<span class="loc">อินเดีย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.bbc.co.uk/news/articles/cjwx4x04yqzo?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">
+          <h3>India&#x27;s &#x27;cockroach&#x27; protesters hold talks with government as stalemate continues</h3>
+          <p>The meeting came hours after activist Sonam Wangchuk announced he was ending his 26-day hunger strike.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="India&#x27;s &#x27;cockroach&#x27; protesters hold talks with government as stalemate continues. The meeting came hours after activist Sonam Wangchuk announced he was ending his 26-day hunger strike." data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.bbc.co.uk/news/articles/cjwx4x04yqzo?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.prachachat.net/wp-content/uploads/2026/07/1761789.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">ประชาชาติธุรกิจ</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.prachachat.net/politics/news-2042791" target="_blank" rel="noopener">
+          <h3>ปกรณ์ เผยตรวจสอบโกงสอบท้องถิ่น จบแล้ว มีภาครัฐ-เอกชนเอี่ยวนับ 100 ชีวิต</h3>
+          <p>ปกรณ์ เผย คกก.ตรวจสอบโกงสอบท้องถิ่น จบแล้ว เตรียมประชุมนัดสุดท้าย 4 ส.ค. ตรวจเอกสารส่งนายกฯ พบผิดปกติตั้งแต่ขั้นตอนทำทีโออาร์-จัดสอบ-ประกาศผล ชี้ตัวเลขขอบรรจุจาก 8,000 บวมขึ้นเป็น 10,000 ตำแหน่ง บอกมีคนเกี่ยวข้องทั้งภาครัฐ-เอกชนกว่า 100 ชีวิต ขออย่าถ … อ่านข่าวต้นฉบับ: ปกรณ์ เผยตรวจสอบโกงสอบท้องถิ่น จบแล้ว มีภาครัฐ-เอก</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="ปกรณ์ เผยตรวจสอบโกงสอบท้องถิ่น จบแล้ว มีภาครัฐ-เอกชนเอี่ยวนับ 100 ชีวิต. ปกรณ์ เผย คกก.ตรวจสอบโกงสอบท้องถิ่น จบแล้ว เตรียมประชุมนัดสุดท้าย 4 ส.ค. ตรวจเอกสารส่งนายกฯ พบผิดปกติตั้งแต่ขั้นตอนทำทีโออาร์-จัดสอบ-ประกาศผล ชี้ตัวเลขขอบรรจุจาก 8,000 บวมขึ้นเป็น 10,000 ตำแหน่ง บอกมีคนเกี่ยวข้องทั้งภาครัฐ-เอกชนกว่า 100 ชีวิต ขออย่าถ … อ่านข่าวต้นฉบับ: ปกรณ์ เผยตรวจสอบโกงสอบท้องถิ่น จบแล้ว มีภาครัฐ-เอก" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.prachachat.net/politics/news-2042791" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://thestandard.co/wp-content/uploads/2026/07/local-exam-corruption-probe-cover-1.jpg?x94939" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">The Standard</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://thestandard.co/local-exam-corruption-probe-report/" target="_blank" rel="noopener">
+          <h3>คืบหน้าผลประชุม คกก.สอบทุจริตสอบท้องถิ่น พบผู้เกี่ยวข้องร้อยกว่าคน ทั้งรัฐ-เอกชน เตรียมส่งรายงานให้นายกฯ 4 ส.ค.</h3>
+          <p>วันนี้ (24 กรกฎาคม) เวลา 16.00 น. ที่ทำเนียบรัฐบาล ปกรณ […] The post คืบหน้าผลประชุม คกก.สอบทุจริตสอบท้องถิ่น พบผู้เกี่ยวข้องร้อยกว่าคน ทั้งรัฐ-เอกชน เตรียมส่งรายงานให้นายกฯ 4 ส.ค. appeared first on THE STANDARD.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="คืบหน้าผลประชุม คกก.สอบทุจริตสอบท้องถิ่น พบผู้เกี่ยวข้องร้อยกว่าคน ทั้งรัฐ-เอกชน เตรียมส่งรายงานให้นายกฯ 4 ส.ค.. วันนี้ (24 กรกฎาคม) เวลา 16.00 น. ที่ทำเนียบรัฐบาล ปกรณ […] The post คืบหน้าผลประชุม คกก.สอบทุจริตสอบท้องถิ่น พบผู้เกี่ยวข้องร้อยกว่าคน ทั้งรัฐ-เอกชน เตรียมส่งรายงานให้นายกฯ 4 ส.ค. appeared first on THE STANDARD." data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://thestandard.co/local-exam-corruption-probe-report/" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.prachachat.net/wp-content/uploads/2026/07/IMG_8395.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">ประชาชาติธุรกิจ<span class="loc">สหรัฐฯ</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.prachachat.net/politics/news-2042783" target="_blank" rel="noopener">
+          <h3>‘เอกนิติ’ เผย ‘ศุภจี’ เร่งเจรจาภาษีสหรัฐฯ คุยภาคเอกชนรับมือ</h3>
+          <p>‘เอกนิติ’ เผย ‘ศุภจี’ เร่งเจรจาภาษีสหรัฐฯ จ่อคุยภาคเอกชนรับมือ ชี้ยังไม่ปิดประตูเจรจา เร่งทำข้อตกลงหวังได้ลดภาษี ดันปฏิรูปแรงงานภาคบังคับ เพิ่มขีดความสามารถแข่งขันประเทศ นายเอกนิติ นิติทัณฑ์ประภาศ รองนายกรัฐมนตรี และรัฐมนตรีว่ … อ่านข่าวต้นฉบับ: ‘เอกนิติ’ เผย ‘ศุภจี’ เร่งเจรจาภาษีสหรัฐฯ คุยภาคเอกชนรับมือ</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="‘เอกนิติ’ เผย ‘ศุภจี’ เร่งเจรจาภาษีสหรัฐฯ คุยภาคเอกชนรับมือ. ‘เอกนิติ’ เผย ‘ศุภจี’ เร่งเจรจาภาษีสหรัฐฯ จ่อคุยภาคเอกชนรับมือ ชี้ยังไม่ปิดประตูเจรจา เร่งทำข้อตกลงหวังได้ลดภาษี ดันปฏิรูปแรงงานภาคบังคับ เพิ่มขีดความสามารถแข่งขันประเทศ นายเอกนิติ นิติทัณฑ์ประภาศ รองนายกรัฐมนตรี และรัฐมนตรีว่ … อ่านข่าวต้นฉบับ: ‘เอกนิติ’ เผย ‘ศุภจี’ เร่งเจรจาภาษีสหรัฐฯ คุยภาคเอกชนรับมือ" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.prachachat.net/politics/news-2042783" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://thestandard.co/wp-content/uploads/2026/07/thai-sweden-defence-offset-students-tech-5.jpg?x94939" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">The Standard<span class="loc">ไทย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://thestandard.co/thai-sweden-defence-offset-students-tech/" target="_blank" rel="noopener">
+          <h3>อว.-กองทัพอากาศ แถลงผลข้อตกลงนโยบายชดเชยการนำเข้ายุทโธปกรณ์ หนุน 9 นักเรียนทุนไทยศึกษาเทคโนโลยีจากสวีเดน</h3>
+          <p>การจัดหาเครื่องบินขับไล่โจมตีทดแทนระยะที่ 1 รุ่น Gripen […] The post อว.-กองทัพอากาศ แถลงผลข้อตกลงนโยบายชดเชยการนำเข้ายุทโธปกรณ์ หนุน 9 นักเรียนทุนไทยศึกษาเทคโนโลยีจากสวีเดน appeared first on THE STANDARD.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="อว.-กองทัพอากาศ แถลงผลข้อตกลงนโยบายชดเชยการนำเข้ายุทโธปกรณ์ หนุน 9 นักเรียนทุนไทยศึกษาเทคโนโลยีจากสวีเดน. การจัดหาเครื่องบินขับไล่โจมตีทดแทนระยะที่ 1 รุ่น Gripen […] The post อว.-กองทัพอากาศ แถลงผลข้อตกลงนโยบายชดเชยการนำเข้ายุทโธปกรณ์ หนุน 9 นักเรียนทุนไทยศึกษาเทคโนโลยีจากสวีเดน appeared first on THE STANDARD." data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://thestandard.co/thai-sweden-defence-offset-students-tech/" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://thestandard.co/wp-content/uploads/2026/07/anutin-srettha-zero-dropout-1.jpg?x94939" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">The Standard<span class="loc">ไทย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://thestandard.co/anutin-srettha-zero-dropout-award/" target="_blank" rel="noopener">
+          <h3>อนุทินต้อนรับ ‘เศรษฐา’ กลับทำเนียบรัฐบาล มอบรางวัลในฐานะผู้ริเริ่มผลักดัน ‘Thailand Zero Dropout’ เด็กหลุดระบบลดจาก 1 ล้าน เหลือ 6 แสนคน</h3>
+          <p>วันนี้ (24 กรกฎาคม) ที่ทำเนียบรัฐบาล เวลา 15.30 น. ที่ต […] The post อนุทินต้อนรับ ‘เศรษฐา’ กลับทำเนียบรัฐบาล มอบรางวัลในฐานะผู้ริเริ่มผลักดัน ‘Thailand Zero Dropout’ เด็กหลุดระบบลดจาก 1 ล้าน เหลือ 6 แสนคน appeared first on THE STANDARD.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="อนุทินต้อนรับ ‘เศรษฐา’ กลับทำเนียบรัฐบาล มอบรางวัลในฐานะผู้ริเริ่มผลักดัน ‘Thailand Zero Dropout’ เด็กหลุดระบบลดจาก 1 ล้าน เหลือ 6 แสนคน. วันนี้ (24 กรกฎาคม) ที่ทำเนียบรัฐบาล เวลา 15.30 น. ที่ต […] The post อนุทินต้อนรับ ‘เศรษฐา’ กลับทำเนียบรัฐบาล มอบรางวัลในฐานะผู้ริเริ่มผลักดัน ‘Thailand Zero Dropout’ เด็กหลุดระบบลดจาก 1 ล้าน เหลือ 6 แสนคน appeared first on THE STANDARD." data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://thestandard.co/anutin-srettha-zero-dropout-award/" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.prachachat.net/wp-content/uploads/2026/07/IMG_8385.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">ประชาชาติธุรกิจ<span class="loc">จีน</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.prachachat.net/politics/news-2042777" target="_blank" rel="noopener">
+          <h3>รัฐบาลพับแผน ‘แลนด์บริดจ์’ ชี้ผลศึกษาไม่คุ้ม เปลี่ยนไปพัฒนาระบบราง-ท่าเรือระนอง</h3>
+          <p>เอกนิติ เผยพับแผน “แลนด์บริดจ์” หลังผลศึกษาชี้ ไม่คุ้มค่าทางเศรษฐกิจ-ความเป็นไปได้ทางธุรกิจต่ำ-ผลกระทบสิ่งแวดล้อมเสี่ยงสูง เล็งใช้แผนพัฒนาท่าเรือระนอง เชื่อมระบบทางรางภาคใต้ขึ้นเหนือไปจีนแทน นายเอกนิติ นิติทัณฑ์ประภาศ รองนายกรัฐมนตรี และร … อ่านข่าวต้นฉบับ: รัฐบาลพับแผน ‘แลนด์บริดจ์’ ชี้ผลศึกษาไม่คุ้ม เปลี่ยนไปพัฒนาระบ</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="รัฐบาลพับแผน ‘แลนด์บริดจ์’ ชี้ผลศึกษาไม่คุ้ม เปลี่ยนไปพัฒนาระบบราง-ท่าเรือระนอง. เอกนิติ เผยพับแผน “แลนด์บริดจ์” หลังผลศึกษาชี้ ไม่คุ้มค่าทางเศรษฐกิจ-ความเป็นไปได้ทางธุรกิจต่ำ-ผลกระทบสิ่งแวดล้อมเสี่ยงสูง เล็งใช้แผนพัฒนาท่าเรือระนอง เชื่อมระบบทางรางภาคใต้ขึ้นเหนือไปจีนแทน นายเอกนิติ นิติทัณฑ์ประภาศ รองนายกรัฐมนตรี และร … อ่านข่าวต้นฉบับ: รัฐบาลพับแผน ‘แลนด์บริดจ์’ ชี้ผลศึกษาไม่คุ้ม เปลี่ยนไปพัฒนาระบ" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.prachachat.net/politics/news-2042777" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://thestandard.co/wp-content/uploads/2026/07/industry-ministry-90-days-cover.jpg?x94939" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">The Standard</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://thestandard.co/industry-ministry-90-days-one-mind/" target="_blank" rel="noopener">
+          <h3>เปิดผลงาน 90 วัน ก.อุตสาหกรรม ภายใต้แนวคิด ONE MIND</h3>
+          <p>วราวุธ ศิลปอาชา รัฐมนตรีว่าการกระทรวงอุตสาหกรรม เปิดเผย […] The post เปิดผลงาน 90 วัน ก.อุตสาหกรรม ภายใต้แนวคิด ONE MIND appeared first on THE STANDARD.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="เปิดผลงาน 90 วัน ก.อุตสาหกรรม ภายใต้แนวคิด ONE MIND. วราวุธ ศิลปอาชา รัฐมนตรีว่าการกระทรวงอุตสาหกรรม เปิดเผย […] The post เปิดผลงาน 90 วัน ก.อุตสาหกรรม ภายใต้แนวคิด ONE MIND appeared first on THE STANDARD." data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://thestandard.co/industry-ministry-90-days-one-mind/" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
       
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">BBC World<span class="loc">อิสราเอล</span></span><span class="age">1 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] Israel and Lebanon ceasefire talks continue</h3>
+      <div class="item-body">
+        <div class="item-head"><span class="src">CNBC<span class="loc">รัสเซีย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.cnbc.com/2026/07/24/russia-ukraine-war-zelenskyy-putin-oil.html" target="_blank" rel="noopener">
+          <h3>Russian attack cuts power to around 150,000 in Ukraine’s north as Kyiv hits missile, oil facilities</h3>
+          <p>The update comes as Ukrainian President Volodymyr Zelenskyy welcomed strikes on a key missile components facility in the Russian city of Kirov.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="Russian attack cuts power to around 150,000 in Ukraine’s north as Kyiv hits missile, oil facilities. The update comes as Ukrainian President Volodymyr Zelenskyy welcomed strikes on a key missile components facility in the Russian city of Kirov." data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.cnbc.com/2026/07/24/russia-ukraine-war-zelenskyy-putin-oil.html" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
       
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">BBC World</span><span class="age">2 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] EU parliament debates new fiscal framework</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">มติชน</span><span class="age">2 ชม.ที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] พรรคการเมืองเตรียมเสนอร่างแก้ไขกฎหมายเลือกตั้ง</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">BBC World<span class="loc">รัสเซีย</span></span><span class="age">3 ชม.ที่แล้ว</span></div>
-      <h3>[SAMPLE] Russia sanctions package under review</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">The Standard</span><span class="age">5 ชม.ที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] ศาลรัฐธรรมนูญนัดพิจารณาคำร้องสัปดาห์หน้า</h3>
-      
-    </a><a class="item" href="#" target="_blank" rel="noopener">
-      <div class="item-head"><span class="src">มติชน<span class="loc">เมียนมา</span></span><span class="age">6 ชม.ที่แล้ว</span></div>
-      <h3>[ตัวอย่าง] เมียนมาชายแดนตึงเครียด กระทบการค้าชายแดนไทย</h3>
-      
-    </a></div>
+      <div class="item-body">
+        <div class="item-head"><span class="src">Al Jazeera</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.aljazeera.com/economy/2026/7/24/andy-burnhams-number-10-north-changes-the-postcode-but-not-the-politics?traffic_source=rss" target="_blank" rel="noopener">
+          <h3>Andy Burnham’s Number 10 North changes the postcode, but not the politics</h3>
+          <p>As Andy Burnham moves part of Downing Street to Manchester, Scotland and Wales are asking what it means for devolution.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="Andy Burnham’s Number 10 North changes the postcode, but not the politics. As Andy Burnham moves part of Downing Street to Manchester, Scotland and Wales are asking what it means for devolution." data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.aljazeera.com/economy/2026/7/24/andy-burnhams-number-10-north-changes-the-postcode-but-not-the-politics?traffic_source=rss" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/f1b5/live/c3089370-873d-11f1-a10e-a5d4f08bc20c.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">BBC World<span class="loc">ฝรั่งเศส</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.bbc.co.uk/news/videos/cz641jd4p4lo?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">
+          <h3>Watch: Wildfires rage across France and Spain</h3>
+          <p>French authorities order evacuations in tourist hot spot, as Spain&#x27;s government declares national emergency.</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="Watch: Wildfires rage across France and Spain. French authorities order evacuations in tourist hot spot, as Spain&#x27;s government declares national emergency." data-lang="en-US">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.bbc.co.uk/news/videos/cz641jd4p4lo?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.prachachat.net/wp-content/uploads/2026/07/Untitled-design-2026-07-24T165726.359.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">ประชาชาติธุรกิจ<span class="loc">ไทย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.prachachat.net/real-estate/news-2042750" target="_blank" rel="noopener">
+          <h3>จาก ”แสนสิริ” สู่ผู้นำประเทศ “เศรษฐา ทวีสิน” คว้ารางวัลเกียรติยศ Thailand Zero Dropout</h3>
+          <p>“เศรษฐา ทวีสิน” คว้ารางวัลเกียรติยศ Thailand Zero Dropout ยกระดับแคมเปญภาคเอกชนสู่ “วาระแห่งชาติ” พลิกโฉมโครงสร้างความเสมอภาคทางการศึกษาไทย เปลี่ยนจุดวิกฤต นำร่องสร้างราชบุรีโมเดล ผู้สื่อข่าวรายงานว่า นายเศรษฐา ทวีสิน นายกรัฐมนตรีคนที่ 30 เข้ารับมอบร … อ่านข่าวต้นฉบับ: จาก ”แสนสิริ” สู่ผู้นำประเทศ “เศรษฐา ทวีสิน” คว้าร</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="จาก ”แสนสิริ” สู่ผู้นำประเทศ “เศรษฐา ทวีสิน” คว้ารางวัลเกียรติยศ Thailand Zero Dropout. “เศรษฐา ทวีสิน” คว้ารางวัลเกียรติยศ Thailand Zero Dropout ยกระดับแคมเปญภาคเอกชนสู่ “วาระแห่งชาติ” พลิกโฉมโครงสร้างความเสมอภาคทางการศึกษาไทย เปลี่ยนจุดวิกฤต นำร่องสร้างราชบุรีโมเดล ผู้สื่อข่าวรายงานว่า นายเศรษฐา ทวีสิน นายกรัฐมนตรีคนที่ 30 เข้ารับมอบร … อ่านข่าวต้นฉบับ: จาก ”แสนสิริ” สู่ผู้นำประเทศ “เศรษฐา ทวีสิน” คว้าร" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.prachachat.net/real-estate/news-2042750" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.prachachat.net/wp-content/uploads/2026/07/Cover-photo-162.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">ประชาชาติธุรกิจ<span class="loc">ไทย</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.prachachat.net/politics/news-2042745" target="_blank" rel="noopener">
+          <h3>นายกฯ ถก เศรษฐา บนตึกไทยคู่ฟ้า รับคำแนะนำด้านเศรษฐกิจ</h3>
+          <p>นายกฯ เผยหลังคุยเศรษฐาบนตึกไทยคู่ฟ้า ย้ำความสัมพันธ์ไม่เปลี่ยน พบปะ-แลกเปลี่ยนความเห็นมาตลอด พร้อมรับคำแนะนำด้านเศรษฐกิจ-ธุรกิจ ที่ทำเนียบรัฐบาล นายอนุทิน ชาญวีรกูล นายกรัฐมนตรีและรัฐมนตรีว่าการกระทรวงมหาดไทย กล่าวถึงการพบกับนายเศรษฐา ทวีสิน อดีตนายก … อ่านข่าวต้นฉบับ: นายกฯ ถก เศรษฐา บนตึกไทยคู่ฟ้า รับคำแนะนำด้านเศรษฐ</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="นายกฯ ถก เศรษฐา บนตึกไทยคู่ฟ้า รับคำแนะนำด้านเศรษฐกิจ. นายกฯ เผยหลังคุยเศรษฐาบนตึกไทยคู่ฟ้า ย้ำความสัมพันธ์ไม่เปลี่ยน พบปะ-แลกเปลี่ยนความเห็นมาตลอด พร้อมรับคำแนะนำด้านเศรษฐกิจ-ธุรกิจ ที่ทำเนียบรัฐบาล นายอนุทิน ชาญวีรกูล นายกรัฐมนตรีและรัฐมนตรีว่าการกระทรวงมหาดไทย กล่าวถึงการพบกับนายเศรษฐา ทวีสิน อดีตนายก … อ่านข่าวต้นฉบับ: นายกฯ ถก เศรษฐา บนตึกไทยคู่ฟ้า รับคำแนะนำด้านเศรษฐ" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.prachachat.net/politics/news-2042745" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.matichon.co.th/wp-content/uploads/2026/07/4076.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">มติชน</span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.matichon.co.th/local/quality-life/news_5820463" target="_blank" rel="noopener">
+          <h3>‘รามาธิบดี’ สร้างประวัติศาสตร์ ‘ทีมมะเร็งปอด’ คว้ารางวัล Cancer Care Team Award ระดับโลก ทีมแรกของเอเชียตะวันออกเฉียงใต้</h3>
+          <p>‘รามาธิบดี’ สร้างประวัติศาสตร์ ทีมมะเร็งปอด คว้ารางวัล […]</p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="‘รามาธิบดี’ สร้างประวัติศาสตร์ ‘ทีมมะเร็งปอด’ คว้ารางวัล Cancer Care Team Award ระดับโลก ทีมแรกของเอเชียตะวันออกเฉียงใต้. ‘รามาธิบดี’ สร้างประวัติศาสตร์ ทีมมะเร็งปอด คว้ารางวัล […]" data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.matichon.co.th/local/quality-life/news_5820463" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div><div class="item">
+      <img class="thumb" src="https://www.prachachat.net/wp-content/uploads/2026/07/Cover-photo2-12.jpg" loading="lazy" alt="" onerror="this.remove()">
+      <div class="item-body">
+        <div class="item-head"><span class="src">ประชาชาติธุรกิจ<span class="loc">สหรัฐฯ</span></span><span class="age">7 ชม.ที่แล้ว</span></div>
+        <a class="item-link" href="https://www.prachachat.net/economic/news-2042742" target="_blank" rel="noopener">
+          <h3>‘อนุทิน’ ขอรอฟัง ‘ศุภจี’ รายงานผลเจรจาฉบับเต็ม หลังสหรัฐขึ้นภาษีนำเข้าไทย 12.5%</h3>
+          <p>‘อนุทิน’ ขอรอฟัง ‘ศุภจี’ รายงานผลเจรจาฉบับเต็ม หลังสหรัฐขึ้นภาษีนำเข้าไทย 12.5% ตั้งเป้าแก้ปมแรงงานภาคบังคับให้เสร็จก่อน ทำอุทธรณ์รอบใหม่ หวังลดเหลือน้อยที่สุด นายอนุทิน ชาญวีรกูล นายกรัฐมนตรีและรัฐมนตรีว่าการกระทรวงมหาดไทย กล … อ่านข่าวต้นฉบับ: ‘อนุทิน’ ขอรอฟัง ‘ศุภจี’ รายงานผลเจรจาฉบับเต็ม หลังสหรัฐขึ้นภาษีนำเข้าไทย </p>
+        </a>
+        <div class="item-foot">
+          <button class="speak" type="button" data-text="‘อนุทิน’ ขอรอฟัง ‘ศุภจี’ รายงานผลเจรจาฉบับเต็ม หลังสหรัฐขึ้นภาษีนำเข้าไทย 12.5%. ‘อนุทิน’ ขอรอฟัง ‘ศุภจี’ รายงานผลเจรจาฉบับเต็ม หลังสหรัฐขึ้นภาษีนำเข้าไทย 12.5% ตั้งเป้าแก้ปมแรงงานภาคบังคับให้เสร็จก่อน ทำอุทธรณ์รอบใหม่ หวังลดเหลือน้อยที่สุด นายอนุทิน ชาญวีรกูล นายกรัฐมนตรีและรัฐมนตรีว่าการกระทรวงมหาดไทย กล … อ่านข่าวต้นฉบับ: ‘อนุทิน’ ขอรอฟัง ‘ศุภจี’ รายงานผลเจรจาฉบับเต็ม หลังสหรัฐขึ้นภาษีนำเข้าไทย " data-lang="th-TH">🔊 ฟังข่าว</button>
+          <a class="full" href="https://www.prachachat.net/economic/news-2042742" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
+        </div>
+      </div>
+    </div></div>
   </section>
 
   <div style="display:flex;flex-direction:column;gap:16px">
@@ -310,51 +701,51 @@ footer{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
       <div class="panel-head"><h2>พื้นที่ที่มีข่าวมากสุด</h2></div>
       <div><div class="hot"><span class="rank">1</span>
       <span class="hot-name">ไทย</span>
-      <span class="hot-bars"><i class="be" style="flex:4"></i><i class="bp" style="flex:1"></i></span>
-      <span class="hot-n">5</span></div><div class="hot"><span class="rank">2</span>
+      <span class="hot-bars"><i class="be" style="flex:24"></i><i class="bp" style="flex:8"></i></span>
+      <span class="hot-n">32</span></div><div class="hot"><span class="rank">2</span>
       <span class="hot-name">สหรัฐฯ</span>
-      <span class="hot-bars"><i class="be" style="flex:2"></i><i class="bp" style="flex:0"></i></span>
-      <span class="hot-n">2</span></div><div class="hot"><span class="rank">3</span>
+      <span class="hot-bars"><i class="be" style="flex:10"></i><i class="bp" style="flex:4"></i></span>
+      <span class="hot-n">14</span></div><div class="hot"><span class="rank">3</span>
+      <span class="hot-name">อิหร่าน</span>
+      <span class="hot-bars"><i class="be" style="flex:2"></i><i class="bp" style="flex:8"></i></span>
+      <span class="hot-n">10</span></div><div class="hot"><span class="rank">4</span>
       <span class="hot-name">จีน</span>
-      <span class="hot-bars"><i class="be" style="flex:1"></i><i class="bp" style="flex:0"></i></span>
-      <span class="hot-n">1</span></div><div class="hot"><span class="rank">4</span>
-      <span class="hot-name">ยูเครน</span>
-      <span class="hot-bars"><i class="be" style="flex:0"></i><i class="bp" style="flex:1"></i></span>
-      <span class="hot-n">1</span></div><div class="hot"><span class="rank">5</span>
+      <span class="hot-bars"><i class="be" style="flex:4"></i><i class="bp" style="flex:3"></i></span>
+      <span class="hot-n">7</span></div><div class="hot"><span class="rank">5</span>
       <span class="hot-name">อิสราเอล</span>
-      <span class="hot-bars"><i class="be" style="flex:0"></i><i class="bp" style="flex:1"></i></span>
-      <span class="hot-n">1</span></div><div class="hot"><span class="rank">6</span>
-      <span class="hot-name">ญี่ปุ่น</span>
-      <span class="hot-bars"><i class="be" style="flex:1"></i><i class="bp" style="flex:0"></i></span>
-      <span class="hot-n">1</span></div><div class="hot"><span class="rank">7</span>
+      <span class="hot-bars"><i class="be" style="flex:2"></i><i class="bp" style="flex:3"></i></span>
+      <span class="hot-n">5</span></div><div class="hot"><span class="rank">6</span>
       <span class="hot-name">อินเดีย</span>
-      <span class="hot-bars"><i class="be" style="flex:1"></i><i class="bp" style="flex:0"></i></span>
-      <span class="hot-n">1</span></div><div class="hot"><span class="rank">8</span>
-      <span class="hot-name">เยอรมนี</span>
-      <span class="hot-bars"><i class="be" style="flex:1"></i><i class="bp" style="flex:0"></i></span>
-      <span class="hot-n">1</span></div><div class="hot"><span class="rank">9</span>
-      <span class="hot-name">สิงคโปร์</span>
-      <span class="hot-bars"><i class="be" style="flex:1"></i><i class="bp" style="flex:0"></i></span>
-      <span class="hot-n">1</span></div><div class="hot"><span class="rank">10</span>
+      <span class="hot-bars"><i class="be" style="flex:0"></i><i class="bp" style="flex:4"></i></span>
+      <span class="hot-n">4</span></div><div class="hot"><span class="rank">7</span>
       <span class="hot-name">รัสเซีย</span>
-      <span class="hot-bars"><i class="be" style="flex:0"></i><i class="bp" style="flex:1"></i></span>
-      <span class="hot-n">1</span></div></div>
+      <span class="hot-bars"><i class="be" style="flex:0"></i><i class="bp" style="flex:3"></i></span>
+      <span class="hot-n">3</span></div><div class="hot"><span class="rank">8</span>
+      <span class="hot-name">ยูเครน</span>
+      <span class="hot-bars"><i class="be" style="flex:0"></i><i class="bp" style="flex:2"></i></span>
+      <span class="hot-n">2</span></div><div class="hot"><span class="rank">9</span>
+      <span class="hot-name">ซาอุดีอาระเบีย</span>
+      <span class="hot-bars"><i class="be" style="flex:1"></i><i class="bp" style="flex:1"></i></span>
+      <span class="hot-n">2</span></div><div class="hot"><span class="rank">10</span>
+      <span class="hot-name">ญี่ปุ่น</span>
+      <span class="hot-bars"><i class="be" style="flex:1"></i><i class="bp" style="flex:1"></i></span>
+      <span class="hot-n">2</span></div></div>
     </section>
     <section class="panel">
       <div class="panel-head"><h2>คำที่พูดถึงมากสุด</h2></div>
-      <div class="kws"><span class="kw" style="font-size:1.63rem;opacity:1.00">ตัวอย่าง</span><span class="kw" style="font-size:1.52rem;opacity:0.93">SAMPLE</span><span class="kw" style="font-size:0.95rem;opacity:0.56">trade</span><span class="kw" style="font-size:0.89rem;opacity:0.52">exports</span><span class="kw" style="font-size:0.89rem;opacity:0.52">forecasts</span><span class="kw" style="font-size:0.89rem;opacity:0.52">announces</span><span class="kw" style="font-size:0.89rem;opacity:0.52">investment</span><span class="kw" style="font-size:0.89rem;opacity:0.52">package</span><span class="kw" style="font-size:0.84rem;opacity:0.49">ธนาคารกลางสหรัฐคงอัตราดอกเบี้ยนโยบาย</span><span class="kw" style="font-size:0.84rem;opacity:0.49">ตลาดหุ้นตอบรับเชิงบวก</span><span class="kw" style="font-size:0.84rem;opacity:0.49">สภาไทยเปิดอภิปรายร่างงบประมาณประจำปี</span><span class="kw" style="font-size:0.84rem;opacity:0.49">China</span><span class="kw" style="font-size:0.84rem;opacity:0.49">surge</span><span class="kw" style="font-size:0.84rem;opacity:0.49">tension</span></div>
+      <div class="kws"><span class="kw" style="font-size:1.63rem;opacity:1.00">Reuters</span><span class="kw" style="font-size:1.41rem;opacity:0.86">Trump</span><span class="kw" style="font-size:1.36rem;opacity:0.83">tariffs</span><span class="kw" style="font-size:1.18rem;opacity:0.71">Iran</span><span class="kw" style="font-size:1.09rem;opacity:0.65">oil</span><span class="kw" style="font-size:1.09rem;opacity:0.65">war</span><span class="kw" style="font-size:1.05rem;opacity:0.62">Thailand</span><span class="kw" style="font-size:1.00rem;opacity:0.59">GDP</span><span class="kw" style="font-size:1.00rem;opacity:0.59">forced</span><span class="kw" style="font-size:1.00rem;opacity:0.59">stock</span><span class="kw" style="font-size:1.00rem;opacity:0.59">India</span><span class="kw" style="font-size:0.96rem;opacity:0.57">ไทย</span><span class="kw" style="font-size:0.96rem;opacity:0.57">labor</span><span class="kw" style="font-size:0.96rem;opacity:0.57">partners</span></div>
     </section>
   </div>
 </div>
 
 <footer>
-  <span>11 แหล่งข่าว · 28 ข่าวใน 24 ชม. · ระบุพิกัดได้ 24 ข่าว</span>
+  <span>13 แหล่งข่าว · 144 ข่าวใน 24 ชม. · ระบุพิกัดได้ 91 ข่าว</span>
   <span>รีเฟรชอัตโนมัติทุก 15 นาที · ดึงข้อมูลใหม่ทุก 3 ชม.</span>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
-<script>window.__MARKERS__ = [{"place": "ไทย", "lat": 13.75, "lon": 100.5, "econ": 4, "poli": 1, "stories": [{"title": "[ตัวอย่าง] สภาไทยเปิดอภิปรายร่างงบประมาณประจำปี", "link": "#", "source": "Thai PBS", "age": "19 นาทีที่แล้ว", "cat": "poli"}, {"title": "[ตัวอย่าง] ค่าเงินบาทเคลื่อนไหวในกรอบแคบ ตลาดรอตัวเลขเงินเฟ้อไทย", "link": "#", "source": "ประชาชาติธุรกิจ", "age": "57 นาทีที่แล้ว", "cat": "econ"}, {"title": "[ตัวอย่าง] ยอดส่งออกไทยขยายตัวต่อเนื่องเป็นเดือนที่สาม", "link": "#", "source": "กรุงเทพธุรกิจ", "age": "1 ชม.ที่แล้ว", "cat": "econ"}, {"title": "[ตัวอย่าง] ดัชนีความเชื่อมั่นผู้บริโภคไทยปรับตัวดีขึ้น", "link": "#", "source": "ประชาชาติธุรกิจ", "age": "3 ชม.ที่แล้ว", "cat": "econ"}, {"title": "[ตัวอย่าง] ธุรกิจค้าปลีกไทยปรับกลยุทธ์รับกำลังซื้อเปลี่ยน", "link": "#", "source": "กรุงเทพธุรกิจ", "age": "6 ชม.ที่แล้ว", "cat": "econ"}], "total": 5, "cat": "econ"}, {"place": "สหรัฐฯ", "lat": 38.9, "lon": -77.04, "econ": 2, "poli": 0, "stories": [{"title": "[ตัวอย่าง] ธนาคารกลางสหรัฐคงอัตราดอกเบี้ยนโยบาย ตลาดหุ้นตอบรับเชิงบวก", "link": "#", "source": "CNBC", "age": "8 นาทีที่แล้ว", "cat": "econ"}, {"title": "[ตัวอย่าง] ราคาน้ำมันดิบปรับลดหลังรายงานสต็อกสหรัฐเพิ่มขึ้น", "link": "#", "source": "CNBC", "age": "2 ชม.ที่แล้ว", "cat": "econ"}], "total": 2, "cat": "econ"}, {"place": "จีน", "lat": 39.9, "lon": 116.4, "econ": 1, "poli": 0, "stories": [{"title": "[SAMPLE] China exports surge as trade tension eases", "link": "#", "source": "BBC Business", "age": "31 นาทีที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "ยูเครน", "lat": 50.45, "lon": 30.52, "econ": 0, "poli": 1, "stories": [{"title": "[ตัวอย่าง] ยูเครนเจรจาสันติภาพรอบใหม่ ท่ามกลางแรงกดดันจากยุโรป", "link": "#", "source": "Al Jazeera", "age": "44 นาทีที่แล้ว", "cat": "poli"}], "total": 1, "cat": "poli"}, {"place": "อิสราเอล", "lat": 31.78, "lon": 35.22, "econ": 0, "poli": 1, "stories": [{"title": "[SAMPLE] Israel and Lebanon ceasefire talks continue", "link": "#", "source": "BBC World", "age": "1 ชม.ที่แล้ว", "cat": "poli"}], "total": 1, "cat": "poli"}, {"place": "ญี่ปุ่น", "lat": 35.68, "lon": 139.69, "econ": 1, "poli": 0, "stories": [{"title": "[SAMPLE] Japan's central bank signals policy shift", "link": "#", "source": "CNBC", "age": "1 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "อินเดีย", "lat": 28.61, "lon": 77.21, "econ": 1, "poli": 0, "stories": [{"title": "[SAMPLE] India GDP growth beats forecasts", "link": "#", "source": "BBC Business", "age": "2 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "เยอรมนี", "lat": 52.52, "lon": 13.4, "econ": 1, "poli": 0, "stories": [{"title": "[SAMPLE] Germany announces industrial investment package", "link": "#", "source": "Al Jazeera", "age": "3 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "สิงคโปร์", "lat": 1.35, "lon": 103.82, "econ": 1, "poli": 0, "stories": [{"title": "[ตัวอย่าง] ตลาดหุ้นสิงคโปร์ปิดบวก แรงซื้อกลุ่มธนาคาร", "link": "#", "source": "กรุงเทพธุรกิจ", "age": "3 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "รัสเซีย", "lat": 55.75, "lon": 37.62, "econ": 0, "poli": 1, "stories": [{"title": "[SAMPLE] Russia sanctions package under review", "link": "#", "source": "BBC World", "age": "3 ชม.ที่แล้ว", "cat": "poli"}], "total": 1, "cat": "poli"}, {"place": "สหราชอาณาจักร", "lat": 51.51, "lon": -0.13, "econ": 1, "poli": 0, "stories": [{"title": "[SAMPLE] UK inflation lands below forecasts", "link": "#", "source": "BBC Business", "age": "4 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "เวียดนาม", "lat": 21.03, "lon": 105.85, "econ": 1, "poli": 0, "stories": [{"title": "[ตัวอย่าง] เวียดนามดึงการลงทุนต่างชาติเพิ่มในภาคการผลิต", "link": "#", "source": "Google News", "age": "4 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "ไต้หวัน", "lat": 25.03, "lon": 121.57, "econ": 1, "poli": 0, "stories": [{"title": "[SAMPLE] Taiwan chip exports hit record high", "link": "#", "source": "CNBC", "age": "4 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "บราซิล", "lat": -15.79, "lon": -47.88, "econ": 1, "poli": 0, "stories": [{"title": "[SAMPLE] Brazil hosts regional trade summit", "link": "#", "source": "Al Jazeera", "age": "5 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "อินโดนีเซีย", "lat": -6.21, "lon": 106.85, "econ": 1, "poli": 0, "stories": [{"title": "[ตัวอย่าง] อินโดนีเซียปรับนโยบายส่งออกแร่", "link": "#", "source": "Google News", "age": "5 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "เกาหลีใต้", "lat": 37.57, "lon": 126.98, "econ": 1, "poli": 0, "stories": [{"title": "[SAMPLE] South Korea won weakens against dollar", "link": "#", "source": "CNBC", "age": "5 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "เมียนมา", "lat": 16.87, "lon": 96.2, "econ": 0, "poli": 1, "stories": [{"title": "[ตัวอย่าง] เมียนมาชายแดนตึงเครียด กระทบการค้าชายแดนไทย", "link": "#", "source": "มติชน", "age": "6 ชม.ที่แล้ว", "cat": "poli"}], "total": 1, "cat": "poli"}, {"place": "ซาอุดีอาระเบีย", "lat": 24.71, "lon": 46.68, "econ": 1, "poli": 0, "stories": [{"title": "[SAMPLE] Saudi Arabia announces energy investment", "link": "#", "source": "BBC Business", "age": "6 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "ออสเตรเลีย", "lat": -35.28, "lon": 149.13, "econ": 1, "poli": 0, "stories": [{"title": "[SAMPLE] Australia trade surplus widens", "link": "#", "source": "BBC Business", "age": "7 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}];</script>
+<script>window.__MARKERS__ = [{"place": "ไทย", "lat": 13.75, "lon": 100.5, "econ": 24, "poli": 8, "stories": [{"title": "เปิด 5 ปัจจัยบวกกับ 3 ปัจจัยเสี่ยง หลังคลังปรับเพิ่มประมาณการ GDP ไทย 2569 โตดีขึ้น เป็น2.5%", "link": "https://thestandard.co/thai-gdp-2026-factors-risks/", "source": "The Standard", "age": "7 ชม.ที่แล้ว", "cat": "econ"}, {"title": "น้ำมันไทยไม่ขาด มีสำรองใช้ 108 วัน พร้อมดึงกองทุนฯ ลดราคา แม้ติดลบ 6.4 หมื่นล้าน", "link": "https://www.prachachat.net/economic/news-2042792", "source": "ประชาชาติธุรกิจ", "age": "7 ชม.ที่แล้ว", "cat": "econ"}, {"title": "อนุทิน เชื่อสัมพันธ์ ‘ไทย-สหรัฐฯ’ ยังดี เร่งแก้ปมแรงงาน จ่ออุทธรณ์ลดภาษี 12.5%", "link": "https://www.matichon.co.th/politics/news_5820548", "source": "มติชน", "age": "7 ชม.ที่แล้ว", "cat": "econ"}, {"title": "'แลนด์บริดจ์’โครงการบูมเศรษฐกิจไทย แต่..คนพื้นที่หวั่นทำ 'ต่างชาติฮุบที่ดิน' - springnews", "link": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE5BMzQwSE93ZWN0WVBUQ3VIZW1uQ3JhRzFXeURLQmRtVlVYOGZEcTdUWVlBYTJGUmRHUzFHajY0eXVrNWdYb09tVzJKczBjVFhRSTZobkxwakVFclZfYTlR?oc=5", "source": "Google News", "age": "7 ชม.ที่แล้ว", "cat": "econ"}, {"title": "อว.-กองทัพอากาศ แถลงผลข้อตกลงนโยบายชดเชยการนำเข้ายุทโธปกรณ์ หนุน 9 นักเรียนทุนไทยศึกษาเทคโนโลยีจากสวีเดน", "link": "https://thestandard.co/thai-sweden-defence-offset-students-tech/", "source": "The Standard", "age": "7 ชม.ที่แล้ว", "cat": "poli"}, {"title": "อนุทินต้อนรับ ‘เศรษฐา’ กลับทำเนียบรัฐบาล มอบรางวัลในฐานะผู้ริเริ่มผลักดัน ‘Thailand Zero Dropout’ เด็กหลุดระบบลดจาก 1 ล้าน เหลือ 6 แสนคน", "link": "https://thestandard.co/anutin-srettha-zero-dropout-award/", "source": "The Standard", "age": "7 ชม.ที่แล้ว", "cat": "poli"}], "total": 32, "cat": "econ"}, {"place": "สหรัฐฯ", "lat": 38.9, "lon": -77.04, "econ": 10, "poli": 4, "stories": [{"title": "‘เอกนิติ’ เผย ‘ศุภจี’ เร่งเจรจาภาษีสหรัฐฯ คุยภาคเอกชนรับมือ", "link": "https://www.prachachat.net/politics/news-2042783", "source": "ประชาชาติธุรกิจ", "age": "7 ชม.ที่แล้ว", "cat": "poli"}, {"title": "‘อนุทิน’ ขอรอฟัง ‘ศุภจี’ รายงานผลเจรจาฉบับเต็ม หลังสหรัฐขึ้นภาษีนำเข้าไทย 12.5%", "link": "https://www.prachachat.net/economic/news-2042742", "source": "ประชาชาติธุรกิจ", "age": "7 ชม.ที่แล้ว", "cat": "poli"}, {"title": "ฮอร์มุซ-ภาษีสหรัฐฯ-ศึก EV จีน บีบ ‘ส.อ.ท.’ หั่นเป้าผลิตรถเหลือ 1.45 ล้านคัน ชี้ BEV พุ่ง 140% แต่กระบะยังทรุด", "link": "https://thestandard.co/sot-cuts-car-target-hormuz-ev-china/", "source": "The Standard", "age": "7 ชม.ที่แล้ว", "cat": "econ"}, {"title": "เฟทโก้ เมินสหรัฐขึ้นภาษีไทย เชื่อผลกระทบไม่มาก การันตียังเนื้อหอมในสายตาทุนต่างชาติ", "link": "https://www.matichon.co.th/economy/news_5820278", "source": "มติชน", "age": "8 ชม.ที่แล้ว", "cat": "econ"}, {"title": "สรุปประเด็น สหรัฐฯ เก็บภาษีมาตรา 301 ปมแรงงานบังคับ 60 ประเทศ ไทยโดน 12.5% ส่งผลกระทบแค่ไหน?", "link": "https://thestandard.co/us-tax-section301-forced-labor-thailand/", "source": "The Standard", "age": "9 ชม.ที่แล้ว", "cat": "econ"}, {"title": "‘ปกรณ์’ เปิดเกมรับภาษีสหรัฐฯ เดินหน้ามาตรฐานแรงงานตาม OECD เร่งเจรจาการค้าใหม่เพิ่มอำนาจต่อรอง", "link": "https://thestandard.co/pakorn-us-tax-labor-trade/", "source": "The Standard", "age": "10 ชม.ที่แล้ว", "cat": "poli"}], "total": 14, "cat": "econ"}, {"place": "อิหร่าน", "lat": 35.69, "lon": 51.39, "econ": 2, "poli": 8, "stories": [{"title": "Oil prices ease but are set for 10% weekly gain as Trump mulls 'bigger than ever' attack on Iran", "link": "https://www.cnbc.com/2026/07/24/oil-price-trump-hormuz-red-sea-iran-war.html", "source": "CNBC", "age": "7 ชม.ที่แล้ว", "cat": "econ"}, {"title": "US and Iran trade more strikes in Gulf as fears of escalation mount", "link": "https://www.bbc.co.uk/news/articles/c05ql5llj4do?at_medium=RSS&at_campaign=rss", "source": "BBC World", "age": "8 ชม.ที่แล้ว", "cat": "poli"}, {"title": "US attacks Iran for 13th consecutive night", "link": "https://www.aljazeera.com/video/newsfeed/2026/7/24/us-attacks-iran-for-13th-consecutive-night?traffic_source=rss", "source": "Al Jazeera", "age": "9 ชม.ที่แล้ว", "cat": "poli"}, {"title": "Trump considering a ‘massive attack’ on Iran as Tehran labels UK ‘accomplice’ to America", "link": "https://www.cnbc.com/2026/07/24/us-iran-war-trump-hormuz-houthis.html", "source": "CNBC", "age": "9 ชม.ที่แล้ว", "cat": "poli"}, {"title": "Tehran slams Trump’s threat to use frozen Iranian assets as ‘incendiary’", "link": "https://www.aljazeera.com/news/2026/7/24/tehran-slams-trumps-threat-to-use-frozen-iranian-assets-as-incendiary?traffic_source=rss", "source": "Al Jazeera", "age": "10 ชม.ที่แล้ว", "cat": "poli"}, {"title": "Pentagon lowers official Iran war death toll, omitting four killed this month", "link": "https://www.cnbc.com/2026/07/24/pentagon-removed-four-official-iran-war-death-toll.html", "source": "CNBC", "age": "11 ชม.ที่แล้ว", "cat": "poli"}], "total": 10, "cat": "poli"}, {"place": "จีน", "lat": 39.9, "lon": 116.4, "econ": 4, "poli": 3, "stories": [{"title": "รัฐบาลพับแผน ‘แลนด์บริดจ์’ ชี้ผลศึกษาไม่คุ้ม เปลี่ยนไปพัฒนาระบบราง-ท่าเรือระนอง", "link": "https://www.prachachat.net/politics/news-2042777", "source": "ประชาชาติธุรกิจ", "age": "7 ชม.ที่แล้ว", "cat": "poli"}, {"title": "หมายหัวเพิ่ม! จีนห้ามส่งออก สินค้าใช้สองทาง ไป 14 บริษัทในอียู โต้แซงก์ชั่นรัสเซีย กระทบบ.จีน", "link": "https://www.matichon.co.th/foreign/news_5820331", "source": "มติชน", "age": "8 ชม.ที่แล้ว", "cat": "econ"}, {"title": "นายกฯ เปิดทำเนียบรับ รมว.กลาโหมจีน เร่งต่อยอดผลเยือนจีน สร้างกลไกความมั่นคงใหม่", "link": "https://www.prachachat.net/politics/news-2042678", "source": "ประชาชาติธุรกิจ", "age": "8 ชม.ที่แล้ว", "cat": "poli"}, {"title": "ส.อ.ท. หั่นเป้าผลิตรถยนต์ปี’69 เหลือ 1.45 ล้านคัน พิษส่งออกสะดุด BEV ยังโตแรงหนุนตลาดในประเทศ", "link": "https://www.prachachat.net/economic/news-2042542", "source": "ประชาชาติธุรกิจ", "age": "11 ชม.ที่แล้ว", "cat": "econ"}, {"title": "กอบศักดิ์ ภูตระกูล เชื่อจีนลงทุนไทย หนุนจีดีพี โตแตะ 5% ยันโรงงานศูนย์เหรียญไม่จริง - thansettakij", "link": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE4wc1pISDIwbWwxbnA4RW8yaGdsMDBBbzZLQm1ZYVluYkdqWTRzZTRxaDJ1b2hGSkIwSEk0RlgtQTRwQXJKQkNxczQ4TkVvbVdCNTVzTHVB?oc=5", "source": "Google News", "age": "11 ชม.ที่แล้ว", "cat": "econ"}, {"title": "China's largest memory chipmaker sparks fears of a cash drain as it readies for public debut", "link": "https://www.cnbc.com/2026/07/24/cxmt-china-ipo-listing-chip-memory.html", "source": "CNBC", "age": "15 ชม.ที่แล้ว", "cat": "econ"}], "total": 7, "cat": "econ"}, {"place": "อิสราเอล", "lat": 31.78, "lon": 35.22, "econ": 2, "poli": 3, "stories": [{"title": "Four Palestinians killed as Israeli settlers raid occupied West Bank town", "link": "https://www.aljazeera.com/news/2026/7/24/four-palestinians-killed-as-israeli-settlers-raid-occupied-west-bank-town?traffic_source=rss", "source": "Al Jazeera", "age": "8 ชม.ที่แล้ว", "cat": "econ"}, {"title": "Four Palestinians and one Israeli killed in West Bank shooting - Reuters", "link": "https://news.google.com/rss/articles/CBMilwFBVV95cUxOSXhYQlZnRlhuazhreEt2OElrbXJKaGhXbm5SSXREQmpjejZ0ZlhWNi1QOXdFREtnd0ZJYXczbzdtTHlKU1hLQi1ILWRmM1dsd25hX3FjSDFEdkFrNG1CQVUyY2pjSGdqQ2VOZnBDT2RKal9SZThsbGZtdXo2NUl5R2hLSGNoUEhEVEFEaUhZSTVIampVQVRz?oc=5", "source": "Reuters", "age": "11 ชม.ที่แล้ว", "cat": "econ"}, {"title": "Trillion dollar US defence bill would deepen military ties with Israel", "link": "https://www.aljazeera.com/video/newsfeed/2026/7/24/aje-onl-nf_us-defence-bill-deepen-military-ties-with-israel-240726?traffic_source=rss", "source": "Al Jazeera", "age": "12 ชม.ที่แล้ว", "cat": "poli"}, {"title": "Israel carries out blasts across south Lebanon despite ‘ceasefire’ deal", "link": "https://www.aljazeera.com/news/2026/7/24/israel-carries-out-blasts-across-south-lebanon-despite-ceasefire-deal?traffic_source=rss", "source": "Al Jazeera", "age": "13 ชม.ที่แล้ว", "cat": "poli"}, {"title": "Saudis must recognise Israel for nuclear deal, says Trump", "link": "https://www.bbc.co.uk/news/articles/cwye71yq8wwo?at_medium=RSS&at_campaign=rss", "source": "BBC World", "age": "23 ชม.ที่แล้ว", "cat": "poli"}], "total": 5, "cat": "poli"}, {"place": "อินเดีย", "lat": 28.61, "lon": 77.21, "econ": 0, "poli": 4, "stories": [{"title": "India's 'cockroach' protesters hold talks with government as stalemate continues", "link": "https://www.bbc.co.uk/news/articles/cjwx4x04yqzo?at_medium=RSS&at_campaign=rss", "source": "BBC World", "age": "7 ชม.ที่แล้ว", "cat": "poli"}, {"title": "Why have thousands taken to the streets? India's 'cockroach' protest explained", "link": "https://www.bbc.co.uk/news/videos/c3307vgneveo?at_medium=RSS&at_campaign=rss", "source": "BBC World", "age": "9 ชม.ที่แล้ว", "cat": "poli"}, {"title": "In India, Iran war forces Diet Coke to roll out a bigger can, heftier price tag - Reuters", "link": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxOaE1wYlpuSThBV1hnZUNHVy1GTDZLaUliaVozZi1qcXBMNXJFQ3drMW43dmNQdXBlSlVMTVZHMU1Ec1ZLUUw4MzFDMkFoWElhVU9HN253WW9KLVVRS1g1bGNqSDF2WkdOdzRLNG96NFQteG5MbjNqeTlWZ2VGdHlWNzNjbWVKaXItdGszUmR5bXpCTVpQYW5UZ2dhYmdTN2ZEQldBMFFURDd1WmJVVFBWYU5yRFZxbzJ5?oc=5", "source": "Reuters", "age": "10 ชม.ที่แล้ว", "cat": "poli"}, {"title": "CJP protest: The youth movement India's Modi didn't see coming", "link": "https://www.bbc.co.uk/news/articles/c07rgpxe51no?at_medium=RSS&at_campaign=rss", "source": "BBC World", "age": "17 ชม.ที่แล้ว", "cat": "poli"}], "total": 4, "cat": "poli"}, {"place": "รัสเซีย", "lat": 55.75, "lon": 37.62, "econ": 0, "poli": 3, "stories": [{"title": "Russian attack cuts power to around 150,000 in Ukraine’s north as Kyiv hits missile, oil facilities", "link": "https://www.cnbc.com/2026/07/24/russia-ukraine-war-zelenskyy-putin-oil.html", "source": "CNBC", "age": "7 ชม.ที่แล้ว", "cat": "poli"}, {"title": "Wildberries, 'Russia's Amazon,' says Ukrainian drones struck three more of its warehouses - Reuters", "link": "https://news.google.com/rss/articles/CBMivwFBVV95cUxNTEQxQVdDdUg1Wl9lWUdJRkhhV25UVm5jS05EallCd0FEdl9NZkdzM1poclA5ejgxcFI3ZmtPUl9WX3FhWGN5U19UbTFlZU9nNnloZm5UUnZ4OG1DVGhYSzhxZldCREhxaV9aZUlacExRVnAzWlZfcTNuMWNaV3ZBS1FoQTh4Y01LcF9FZkE2WklnT25oVFl5M0E0U0taMEQwVUdNM3ZGMVpVTklnaGp6LWo4RWtCbEozbkpjRnFvWQ?oc=5", "source": "Reuters", "age": "11 ชม.ที่แล้ว", "cat": "poli"}, {"title": "Russia’s Amazon-style retail giant Wildberries is now in Ukraine’s crosshairs. Here's why", "link": "https://www.cnbc.com/2026/07/23/ukraine-russia-war-wildberries-drones-amazon.html", "source": "CNBC", "age": "23 ชม.ที่แล้ว", "cat": "poli"}], "total": 3, "cat": "poli"}, {"place": "ยูเครน", "lat": 50.45, "lon": 30.52, "econ": 0, "poli": 2, "stories": [{"title": "Mykhailo Drapatyi: Can new Ukraine army chief alter Russia war’s direction?", "link": "https://www.aljazeera.com/news/2026/7/24/mykhailo-drapatyi-can-new-ukraine-army-chief-alter-russia-wars-direction?traffic_source=rss", "source": "Al Jazeera", "age": "11 ชม.ที่แล้ว", "cat": "poli"}, {"title": "Ukraine beheads its military as its performance begins to soar", "link": "https://www.aljazeera.com/news/2026/7/24/ukraine-beheads-its-military-as-its-performance-begins-to-soar?traffic_source=rss", "source": "Al Jazeera", "age": "12 ชม.ที่แล้ว", "cat": "poli"}], "total": 2, "cat": "poli"}, {"place": "ซาอุดีอาระเบีย", "lat": 24.71, "lon": 46.68, "econ": 1, "poli": 1, "stories": [{"title": "As oil soars, experts watch Red Sea tankers for clarity on Houthi blockade", "link": "https://www.aljazeera.com/economy/2026/7/24/as-oil-soars-experts-watch-red-sea-tankers-for-clarity-on-houthi-blockade?traffic_source=rss", "source": "Al Jazeera", "age": "14 ชม.ที่แล้ว", "cat": "econ"}, {"title": "What are the Abraham Accords?", "link": "https://www.aljazeera.com/video/newsfeed/2026/7/24/what-are-the-abraham-accords-3?traffic_source=rss", "source": "Al Jazeera", "age": "14 ชม.ที่แล้ว", "cat": "poli"}], "total": 2, "cat": "both"}, {"place": "ญี่ปุ่น", "lat": 35.68, "lon": 139.69, "econ": 1, "poli": 1, "stories": [{"title": "Japan ready to take decisive action on forex, finance minister says - Reuters", "link": "https://news.google.com/rss/articles/CBMitgFBVV95cUxQTWsxci1RNFVBYVBCV1dXYU4xanJKVlFOQjRfb2RyMFByd3VCUkdVZG4xRU9PdHEtSUxmQ2dQaWZYT3BTMWZtNWFBNUl6M0V2UnNWQ2hfNWpLVzZYSmNqQXloN280ckZjOURYUXo4N1JNRW5nRl9XbE9HLU8wcEk5cjRRQ1hQX1ZqMHM3MURraF9nXzFwbzEydGF6aEMzVDdxSTN3b2ZZZ0Q2WVNsNlA4Znc4Sm5Idw?oc=5", "source": "Reuters", "age": "14 ชม.ที่แล้ว", "cat": "poli"}, {"title": "Japan core inflation rate in June creeps up from 4-year low as higher oil prices bite", "link": "https://www.cnbc.com/2026/07/24/japan-cpi-june-inflation-oil-prices-yen.html", "source": "CNBC", "age": "15 ชม.ที่แล้ว", "cat": "econ"}], "total": 2, "cat": "both"}, {"place": "แอฟริกาใต้", "lat": -25.75, "lon": 28.19, "econ": 0, "poli": 1, "stories": [{"title": "South Africa's president wins bid to temporarily halt impeachment inquiry over 'Farmgate'", "link": "https://www.bbc.co.uk/news/articles/cwymj9lkx13o?at_medium=RSS&at_campaign=rss", "source": "BBC World", "age": "7 ชม.ที่แล้ว", "cat": "poli"}], "total": 1, "cat": "poli"}, {"place": "กัมพูชา", "lat": 11.56, "lon": 104.92, "econ": 0, "poli": 1, "stories": [{"title": "‘ฮุน มาเนต’ โต้ ‘สีหศักดิ์’ กล่าวหากัมพูชาเป็นฝ่ายปิดประตูเจรจาชายแดน เป็นเรื่อง ‘ไม่ถูกต้อง’", "link": "https://www.matichon.co.th/foreign/news_5820440", "source": "มติชน", "age": "7 ชม.ที่แล้ว", "cat": "poli"}], "total": 1, "cat": "poli"}, {"place": "ไต้หวัน", "lat": 25.03, "lon": 121.57, "econ": 1, "poli": 0, "stories": [{"title": "Taiwan central bank says it has good communications with US Treasury after currency report", "link": "https://www.investing.com/news/economy-news/taiwan-central-bank-says-it-has-good-communications-with-us-treasury-after-currency-report-4810991", "source": "Investing.com", "age": "7 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "ฝรั่งเศส", "lat": 48.86, "lon": 2.35, "econ": 0, "poli": 1, "stories": [{"title": "Watch: Wildfires rage across France and Spain", "link": "https://www.bbc.co.uk/news/videos/cz641jd4p4lo?at_medium=RSS&at_campaign=rss", "source": "BBC World", "age": "7 ชม.ที่แล้ว", "cat": "poli"}], "total": 1, "cat": "poli"}, {"place": "เกาหลีใต้", "lat": 37.57, "lon": 126.98, "econ": 1, "poli": 0, "stories": [{"title": "South Korea's president invokes dramatic Japan realty crash to push domestic property agenda", "link": "https://www.cnbc.com/2026/07/24/south-korea-property-bubble-japan-lost-decades.html", "source": "CNBC", "age": "10 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "เวียดนาม", "lat": 21.03, "lon": 105.85, "econ": 1, "poli": 0, "stories": [{"title": "Top apparel exporter Vietnam faces higher US tariffs than peers - Reuters", "link": "https://news.google.com/rss/articles/CBMisAFBVV95cUxOUkVTMmNzZXFIUG1DaVNfZXdIU2h3TWZsNlFNWUFfbDZlN1ZQVFpncF9XbjhKQlBQVUZSYzkxbzY5V3F2NHpTa0hVOTZFZjVRNE5jUXl5dEVZdWxXQmxUWXQtQVdkNWU4bHgzZzJhdzJMQjlSNFFNQmdjN3pGcjJMREpvbHJUSlI4TDNzUm1weHdlRUllNEludnRtaW9KYXdiQ3ptQlp6MDJvbjFDbk9VYw?oc=5", "source": "Reuters", "age": "12 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}, {"place": "มาเลเซีย", "lat": 3.14, "lon": 101.69, "econ": 0, "poli": 1, "stories": [{"title": "Malaysia envoy summoned by US over Israel policy, Bernama says - Reuters", "link": "https://news.google.com/rss/articles/CBMitwFBVV95cUxPMFZtekh4bXNxcW54SFpfMmxrcExfNmFpNEZweXVWa0dMaXVwMU14NEdxQmxva1cxMTRpT1Y5dUNqLU51QThBZmNRNWFzcUtlZEhNejVtdDRkYUZOb29WaFlZTlJ2Znh4MHdUemoyaU9Ub01Tb3BDTWlsTWhqRkkwdS1nTjNuNkE2dEhjYUpNeGFna1NXSWt2anZSTkxnSjNDWTVuZ0JmUHl0eGNCN0RqVzd0Y2lOUU0?oc=5", "source": "Reuters", "age": "13 ชม.ที่แล้ว", "cat": "poli"}], "total": 1, "cat": "poli"}, {"place": "นิวยอร์ก", "lat": 40.71, "lon": -74.01, "econ": 0, "poli": 1, "stories": [{"title": "Amazon cracks down on use of AI images by sellers after New York law", "link": "https://www.cnbc.com/2026/07/23/amazon-makes-sellers-label-ai-generated-people-in-images-after-ny-law.html", "source": "CNBC", "age": "17 ชม.ที่แล้ว", "cat": "poli"}], "total": 1, "cat": "poli"}, {"place": "สหราชอาณาจักร", "lat": 51.51, "lon": -0.13, "econ": 0, "poli": 1, "stories": [{"title": "UK complacent about war threat, warns BAE boss", "link": "https://www.bbc.co.uk/news/articles/cx2lpjjpny9o?at_medium=RSS&at_campaign=rss", "source": "BBC Business", "age": "18 ชม.ที่แล้ว", "cat": "poli"}], "total": 1, "cat": "poli"}, {"place": "บราซิล", "lat": -15.79, "lon": -47.88, "econ": 1, "poli": 0, "stories": [{"title": "Brazil says US tariffs related to forced labor are 'arbitrary' and 'unjustified' - Reuters", "link": "https://news.google.com/rss/articles/CBMivAFBVV95cUxPckxuQXRhUEJ6VVhqLXVsYmo1NHVhamMyVUJ5dEdMMHNRTTdnNVU0bkl1RGhzZmtBbTdpb3NZcEZ2Z3kwbno5SV9KQ2UySzZ5UDF0NWg0cWNpc3V0bWNkaWNXT1lXcE1yY3hlR2JMbW1xUkRhSTIwQUhPWXctMDE3NXp3NGlLdVRJOVhXU3d6THI2Q240ejRNV1VJS1lCY0tZOWFIQkRBRURrRWFFVGpwS1A4UU93Rm1XS0h2WA?oc=5", "source": "Reuters", "age": "19 ชม.ที่แล้ว", "cat": "econ"}], "total": 1, "cat": "econ"}];</script>
 <script>
 const MARKERS = window.__MARKERS__;
 const svg = d3.select("#map");
@@ -433,6 +824,38 @@ function draw(){
 if (MARKERS.length) show(MARKERS[0]);
 draw();
 let _t; addEventListener("resize", () => { clearTimeout(_t); _t = setTimeout(draw, 200); });
+</script>
+<script>
+function filterItems(input){
+  const q = input.value.trim().toLowerCase();
+  const items = input.closest('section').querySelectorAll('.item');
+  items.forEach(it => {
+    const hit = !q || it.textContent.toLowerCase().includes(q);
+    it.classList.toggle('hidden', !hit);
+  });
+}
+
+if ('speechSynthesis' in window) {
+  let currentBtn = null;
+  document.addEventListener('click', ev => {
+    const btn = ev.target.closest('.speak');
+    if (!btn) return;
+    const wasPlaying = btn.classList.contains('playing');
+    speechSynthesis.cancel();
+    if (currentBtn) { currentBtn.classList.remove('playing'); currentBtn.textContent = '🔊 ฟังข่าว'; }
+    currentBtn = null;
+    if (wasPlaying) return;
+    const u = new SpeechSynthesisUtterance(btn.dataset.text);
+    u.lang = btn.dataset.lang;
+    u.onend = u.onerror = () => { btn.classList.remove('playing'); btn.textContent = '🔊 ฟังข่าว'; currentBtn = null; };
+    btn.classList.add('playing');
+    btn.textContent = '⏸ กำลังอ่าน…';
+    currentBtn = btn;
+    speechSynthesis.speak(u);
+  });
+} else {
+  document.querySelectorAll('.speak').forEach(b => b.style.display = 'none');
+}
 </script>
 </body>
 </html>
