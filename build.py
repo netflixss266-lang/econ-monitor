@@ -274,7 +274,7 @@ def build_markers(news):
         m[it["cat"]] += 1
         if len(m["stories"]) < 6:
             m["stories"].append({
-                "title": it["title"], "link": it["link"],
+                "title": it["title"], "link": it["link"], "image": it["image"],
                 "source": it["source"], "age": it["age"], "cat": it["cat"],
             })
     out = list(by_place.values())
@@ -406,6 +406,7 @@ function show(d){
     `<div class="hd-top"><h4>${d.place}</h4><span>${d.total} ข่าว</span></div>` +
     d.stories.map(s =>
       `<a class="hd-row" href="${s.link}" target="_blank" rel="noopener">
+         ${s.image ? `<img class="hd-thumb" src="${s.image}" loading="lazy" alt="" onerror="this.remove()">` : ""}
          <span class="dot ${s.cat}"></span><span>${s.title}</span>
          <span class="hd-age">${s.age}</span></a>`).join("")
   );
@@ -505,7 +506,10 @@ def render(news, markets, history):
     </div>"""
 
     def feed_row(it):
+        img = (f'<img class="feed-thumb" src="{html.escape(it["image"])}" loading="lazy" alt=""'
+               f' onerror="this.remove()">') if it.get("image") else ""
         return f"""<a class="feed-row" href="{html.escape(it['link'])}" target="_blank" rel="noopener">
+      {img}
       <span class="dot {it['cat']}"></span>
       <span class="feed-title">{html.escape(it['title'])}</span>
       <span class="feed-age">{it['age']}</span></a>"""
@@ -553,6 +557,11 @@ def render(news, markets, history):
 <meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#0A0E1A">
 <link rel="icon" href="{favicon}">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Econ Monitor">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -624,20 +633,24 @@ h1 span{{color:var(--dim);font-weight:400}}
 .hd-top{{display:flex;justify-content:space-between;padding:10px 15px 6px;align-items:baseline}}
 .hd-top h4{{font-size:.85rem;font-weight:600}}
 .hd-top span{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--dim)}}
-.hd-row{{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:start;
+.hd-row{{display:flex;align-items:center;gap:9px;
   padding:8px 15px;border-top:1px solid var(--line);font-size:.8rem}}
 .hd-row:hover{{background:#151C2C}}
+.hd-row .dot{{flex:none}}
+.hd-row > span:nth-last-child(2){{flex:1;min-width:0}}
+.hd-thumb{{width:36px;height:36px;border-radius:6px;object-fit:cover;flex:none;background:var(--panel2)}}
 .hd-age{{font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--dim);white-space:nowrap}}
 
 .feed{{max-height:340px;overflow-y:auto}}
-.feed-row{{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:start;
-  padding:10px 15px;border-bottom:1px solid var(--line);transition:background .12s}}
+.feed-row{{display:flex;align-items:center;gap:10px;
+  padding:9px 15px;border-bottom:1px solid var(--line);transition:background .12s}}
 .feed-row:hover{{background:#151C2C}}
 .feed-row:last-child{{border-bottom:0}}
-.dot{{width:6px;height:6px;border-radius:50%;margin-top:7px;flex:none}}
+.feed-thumb{{width:44px;height:44px;border-radius:7px;object-fit:cover;flex:none;background:var(--panel2)}}
+.dot{{width:6px;height:6px;border-radius:50%;flex:none}}
 .dot.econ{{background:var(--econ)}} .dot.poli{{background:var(--poli)}}
-.feed-title{{font-size:.82rem;line-height:1.4}}
-.feed-age{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim);white-space:nowrap}}
+.feed-title{{flex:1;min-width:0;font-size:.82rem;line-height:1.4}}
+.feed-age{{flex:none;font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim);white-space:nowrap}}
 
 .hot{{display:grid;grid-template-columns:18px 1fr 62px 26px;gap:9px;align-items:center;
   padding:7px 15px;border-bottom:1px solid var(--line);font-size:.8rem}}
@@ -656,12 +669,12 @@ h1 span{{color:var(--dim);font-weight:400}}
 .grid{{display:grid;grid-template-columns:1fr 1fr 330px;gap:16px;align-items:start}}
 @media(max-width:1000px){{.grid{{grid-template-columns:1fr}}}}
 .items{{max-height:620px;overflow-y:auto}}
-.item{{display:flex;gap:11px;padding:13px 15px;border-bottom:1px solid var(--line);transition:background .12s}}
+.item{{display:block;border-bottom:1px solid var(--line);transition:background .12s}}
 .item:hover{{background:#151C2C}}
 .item:last-child{{border-bottom:0}}
 .item.hidden{{display:none}}
-.item .thumb{{width:64px;height:64px;border-radius:8px;object-fit:cover;flex:none;background:var(--panel2)}}
-.item-body{{flex:1;min-width:0}}
+.item .thumb{{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--panel2)}}
+.item-body{{padding:13px 15px}}
 .item-head{{display:flex;justify-content:space-between;gap:10px;margin-bottom:5px}}
 .src{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--mute);
   text-transform:uppercase;letter-spacing:.05em}}
@@ -791,6 +804,10 @@ if ('speechSynthesis' in window) {{
   }});
 }} else {{
   document.querySelectorAll('.speak').forEach(b => b.style.display = 'none');
+}}
+
+if ('serviceWorker' in navigator) {{
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
 }}
 </script>
 </body>
