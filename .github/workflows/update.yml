@@ -1,6 +1,8 @@
 name: Update dashboard
 
 on:
+  push:
+    branches: [main]            # แก้โค้ดแล้ว push → build + deploy ทันที
   schedule:
     - cron: "0 */3 * * *"      # ทุก 3 ชั่วโมง (เวลา UTC)
   workflow_dispatch:            # ปุ่มกดรันเองได้ในหน้า Actions
