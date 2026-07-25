@@ -7,7 +7,6 @@ Econ/Politics Monitor — dashboard ข่าวเศรษฐกิจ+กา�
 รัน:      python3 build.py
 """
 
-import os
 import re
 import html
 import json
@@ -46,6 +45,11 @@ FEEDS = [
     ("Google News",     "https://news.google.com/rss/search?q=การเมืองไทย&hl=th&gl=TH&ceid=TH:th", "th"),
     ("Reuters",         "https://news.google.com/rss/search?q=site:reuters.com+when:1d&hl=en&gl=US&ceid=US:en", "en"),
     ("Investing.com",   "https://www.investing.com/rss/news.rss",                     "en"),
+    ("Google News",     "https://news.google.com/rss/search?q=ธุรกิจ&hl=th&gl=TH&ceid=TH:th", "th"),
+    ("Google News",     "https://news.google.com/rss/search?q=พฤติกรรมผู้บริโภค&hl=th&gl=TH&ceid=TH:th", "th"),
+    ("Google News",     "https://news.google.com/rss/search?q=ภัยพิบัติ+OR+น้ำท่วม+OR+แผ่นดินไหว&hl=th&gl=TH&ceid=TH:th", "th"),
+    ("Google News",     "https://news.google.com/rss/search?q=consumer+trends+OR+retail+sales+when:1d&hl=en&gl=US&ceid=US:en", "en"),
+    ("Google News",     "https://news.google.com/rss/search?q=climate+OR+wildfire+OR+flood+OR+earthquake+when:1d&hl=en&gl=US&ceid=US:en", "en"),
 ]
 
 TICKERS = [
@@ -61,10 +65,10 @@ TICKERS = [
 KW_ECON = [
     "เศรษฐกิจ", "จีดีพี", "GDP", "เงินเฟ้อ", "ดอกเบี้ย", "ธปท", "แบงก์ชาติ", "ตลาดหุ้น",
     "หุ้น", "ค่าเงิน", "ส่งออก", "นำเข้า", "ลงทุน", "ภาษี", "งบประมาณ", "หนี้",
-    "ราคาน้ำมัน", "ทองคำ", "คริปโต", "ธนาคาร", "ท่องเที่ยว", "อสังหา", "ค้าปลีก",
+    "ราคาน้ำมัน", "ทองคำ", "คริปโต", "ธนาคาร", "ท่องเที่ยว", "อสังหา",
     "economy", "economic", "inflation", "gdp", "fed", "interest rate", "market",
     "stock", "trade", "tariff", "export", "import", "invest", "bank", "currency",
-    "oil price", "gold", "crypto", "recession", "budget", "debt", "earnings",
+    "oil price", "gold", "crypto", "recession", "budget", "debt",
 ]
 KW_POLI = [
     "การเมือง", "รัฐบาล", "นายก", "รัฐมนตรี", "สภา", "ส.ส.", "สว.", "พรรค", "เลือกตั้ง",
@@ -76,6 +80,25 @@ KW_POLI = [
     "president", "prime minister", "policy", "law", "war", "conflict", "military",
     "sanction", "diplomat", "protest", "coup", "border",
     "ceasefire", "peace talk", "summit", "treaty", "refugee", "strike", "sovereign",
+]
+KW_BIZ = [
+    "ธุรกิจ", "บริษัท", "ผู้บริโภค", "พฤติกรรมผู้บริโภค", "ค้าปลีก", "อีคอมเมิร์ซ",
+    "สตาร์ทอัพ", "แบรนด์", "การตลาด", "ยอดขาย", "กำไร", "ไตรมาส", "ผลประกอบการ",
+    "ควบรวมกิจการ", "เปิดตัวสินค้า", "นวัตกรรม", "ผู้ประกอบการ", "เอสเอ็มอี", "แฟรนไชส์",
+    "ผู้ผลิต", "โรงงาน", "ซัพพลายเชน", "ห่วงโซ่อุปทาน",
+    "business", "company", "companies", "corporate", "consumer", "retail", "e-commerce",
+    "startup", "brand", "marketing", "earnings", "quarterly", "ipo", "merger",
+    "acquisition", "ceo", "product launch", "supply chain", "manufacturer", "factory",
+]
+KW_ENV = [
+    "สิ่งแวดล้อม", "ภัยพิบัติ", "น้ำท่วม", "แผ่นดินไหว", "พายุ", "ไฟป่า", "ภัยแล้ง",
+    "ฝนตกหนัก", "ดินถล่ม", "คลื่นความร้อน", "มลพิษ", "ฝุ่นควัน", "โลกร้อน",
+    "การเปลี่ยนแปลงสภาพภูมิอากาศ", "โลกรวน", "คาร์บอน", "พลังงานสะอาด", "พลังงานหมุนเวียน",
+    "ระดับน้ำทะเล", "สึนามิ", "พายุเฮอริเคน", "ทอร์นาโด", "อากาศแปรปรวน",
+    "climate change", "climate crisis", "natural disaster", "flood", "earthquake",
+    "wildfire", "drought", "heatwave", "hurricane", "typhoon", "tsunami", "landslide",
+    "pollution", "carbon emission", "greenhouse gas", "global warming", "extreme weather",
+    "cyclone", "storm surge", "wildfire smoke", "air quality", "deforestation",
 ]
 
 # ─────────────────────────────────────────────────────────────
@@ -166,13 +189,16 @@ def geolocate(text):
     return (best[2], best[3], best[4]) if best else None
 
 
+CATEGORIES = [
+    ("econ", KW_ECON), ("poli", KW_POLI), ("biz", KW_BIZ), ("env", KW_ENV),
+]
+
+
 def classify(text):
     t = text.lower()
-    e = sum(1 for k in KW_ECON if k.lower() in t)
-    p = sum(1 for k in KW_POLI if k.lower() in t)
-    if e == 0 and p == 0:
-        return None
-    return "econ" if e >= p else "poli"
+    scores = {cat: sum(1 for k in kws if k.lower() in t) for cat, kws in CATEGORIES}
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else None
 
 
 def clean(s):
@@ -261,6 +287,9 @@ def fetch_news():
     return unique
 
 
+CAT_NAMES = [c for c, _ in CATEGORIES]
+
+
 def build_markers(news):
     """รวมข่าวตามสถานที่ → จุดบนแผนที่"""
     by_place = {}
@@ -269,7 +298,7 @@ def build_markers(news):
             continue
         m = by_place.setdefault(it["place"], {
             "place": it["place"], "lat": it["lat"], "lon": it["lon"],
-            "econ": 0, "poli": 0, "stories": [],
+            **{c: 0 for c in CAT_NAMES}, "stories": [],
         })
         m[it["cat"]] += 1
         if len(m["stories"]) < 6:
@@ -279,9 +308,9 @@ def build_markers(news):
             })
     out = list(by_place.values())
     for m in out:
-        m["total"] = m["econ"] + m["poli"]
-        m["cat"] = ("econ" if m["econ"] > m["poli"]
-                    else "poli" if m["poli"] > m["econ"] else "both")
+        m["total"] = sum(m[c] for c in CAT_NAMES)
+        top = max(CAT_NAMES, key=lambda c: m[c])
+        m["cat"] = top if sum(1 for c in CAT_NAMES if m[c] == m[top]) == 1 else "mixed"
     return sorted(out, key=lambda x: -x["total"])
 
 
@@ -399,7 +428,7 @@ const svg = d3.select("#map");
 const gMap = svg.append("g");
 const tip = d3.select("#tip");
 const detail = d3.select("#hotspot-detail");
-const COLOR = { econ:"#4C8DFF", poli:"#F5A524", both:"#9B8AFB" };
+const COLOR = { econ:"#4C8DFF", poli:"#F5A524", biz:"#2DD4BF", env:"#4ADE80", mixed:"#9B8AFB" };
 
 function show(d){
   detail.html(
@@ -439,7 +468,7 @@ function plot(proj){
       tip.style("opacity", 1)
          .style("left", (ev.offsetX + 14) + "px")
          .style("top", (ev.offsetY - 8) + "px")
-         .html(`<strong>${d.place}</strong><span>${d.total} ข่าว · เศรษฐกิจ ${d.econ} · การเมือง ${d.poli}</span>`);
+         .html(`<strong>${d.place}</strong><span>${d.total} ข่าว · ศก. ${d.econ} · การเมือง ${d.poli} · ธุรกิจ ${d.biz} · สวล. ${d.env}</span>`);
     })
     .on("mouseleave", () => tip.style("opacity", 0))
     .on("click", (ev, d) => { show(d); ev.stopPropagation(); });
@@ -478,6 +507,8 @@ let _t; addEventListener("resize", () => { clearTimeout(_t); _t = setTimeout(dra
 def render(news, markets, history):
     econ = [i for i in news if i["cat"] == "econ"][:PER_CATEGORY]
     poli = [i for i in news if i["cat"] == "poli"][:PER_CATEGORY]
+    biz = [i for i in news if i["cat"] == "biz"][:PER_CATEGORY]
+    env = [i for i in news if i["cat"] == "env"][:PER_CATEGORY]
     latest = news[:7]
     markers = build_markers(news)
     kws = top_keywords(news)
@@ -523,10 +554,18 @@ def render(news, markets, history):
       <span class="t-price">{m['price']}</span>{spark}<span class="t-pct {cls}">{m['pct_str']}</span></div>"""
 
     def hot_row(m, i):
+        bars = "".join(f'<i class="hb-{c}" style="flex:{m[c]}"></i>' for c in CAT_NAMES if m[c])
         return f"""<div class="hot"><span class="rank">{i+1}</span>
       <span class="hot-name">{html.escape(m['place'])}</span>
-      <span class="hot-bars"><i class="be" style="flex:{m['econ']}"></i><i class="bp" style="flex:{m['poli']}"></i></span>
+      <span class="hot-bars">{bars}</span>
       <span class="hot-n">{m['total']}</span></div>"""
+
+    def cat_section(cls, label, items):
+        return f"""<section class="panel">
+    <div class="panel-head"><h2><span class="bar {cls}"></span>{label}</h2><span class="count">{len(items)}</span></div>
+    <div class="search-wrap"><input class="search" type="search" placeholder="ค้นหาข่าว{label}…" oninput="filterItems(this)"></div>
+    <div class="items">{''.join(card(i) for i in items) or '<div class="item"><p>ยังไม่มีข่าวในรอบนี้</p></div>'}</div>
+  </section>"""
 
     def kw_chip(w, f):
         return (f'<span class="kw" style="font-size:{0.78 + (f/maxf)*0.85:.2f}rem;'
@@ -568,7 +607,8 @@ def render(news, markets, history):
 :root{{
   --bg:#0A0E1A; --panel:#111726; --panel2:#0E1420; --line:#1E2637;
   --ink:#E7ECF5; --mute:#7A879C; --dim:#4E5A70;
-  --econ:#4C8DFF; --poli:#F5A524; --both:#9B8AFB; --up:#3FB68B; --down:#E5484D;
+  --econ:#4C8DFF; --poli:#F5A524; --biz:#2DD4BF; --env:#4ADE80; --mixed:#9B8AFB;
+  --up:#3FB68B; --down:#E5484D;
 }}
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{background:var(--bg);color:var(--ink);
@@ -604,6 +644,7 @@ h1 span{{color:var(--dim);font-weight:400}}
 .count{{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--dim)}}
 .bar{{width:3px;height:14px;border-radius:2px;display:inline-block;margin-right:8px;vertical-align:-2px}}
 .bar.econ{{background:var(--econ)}} .bar.poli{{background:var(--poli)}}
+.bar.biz{{background:var(--biz)}} .bar.env{{background:var(--env)}}
 
 .top{{display:grid;grid-template-columns:1fr 330px;gap:16px;margin-bottom:16px}}
 @media(max-width:1000px){{.top{{grid-template-columns:1fr}}}}
@@ -624,7 +665,7 @@ h1 span{{color:var(--dim);font-weight:400}}
   background:rgba(10,14,26,.95);border:1px solid var(--line);border-radius:7px;
   padding:7px 10px;font-size:.74rem;display:flex;flex-direction:column;gap:2px;z-index:5}}
 #tip span{{color:var(--mute);font-family:'IBM Plex Mono',monospace;font-size:.66rem}}
-.legend{{position:absolute;left:14px;bottom:12px;display:flex;gap:14px;
+.legend{{position:absolute;left:14px;bottom:12px;right:14px;display:flex;flex-wrap:wrap;gap:6px 14px;
   font-size:.68rem;color:var(--mute);background:rgba(10,14,26,.8);
   border:1px solid var(--line);border-radius:7px;padding:6px 11px}}
 .legend i{{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}}
@@ -649,6 +690,7 @@ h1 span{{color:var(--dim);font-weight:400}}
 .feed-thumb{{width:44px;height:44px;border-radius:7px;object-fit:cover;flex:none;background:var(--panel2)}}
 .dot{{width:6px;height:6px;border-radius:50%;flex:none}}
 .dot.econ{{background:var(--econ)}} .dot.poli{{background:var(--poli)}}
+.dot.biz{{background:var(--biz)}} .dot.env{{background:var(--env)}}
 .feed-title{{flex:1;min-width:0;font-size:.82rem;line-height:1.4}}
 .feed-age{{flex:none;font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim);white-space:nowrap}}
 
@@ -657,7 +699,8 @@ h1 span{{color:var(--dim);font-weight:400}}
 .hot:last-child{{border-bottom:0}}
 .rank{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--dim)}}
 .hot-bars{{display:flex;height:5px;border-radius:3px;overflow:hidden;background:#1A2333}}
-.hot-bars .be{{background:var(--econ)}} .hot-bars .bp{{background:var(--poli)}}
+.hot-bars .hb-econ{{background:var(--econ)}} .hot-bars .hb-poli{{background:var(--poli)}}
+.hot-bars .hb-biz{{background:var(--biz)}} .hot-bars .hb-env{{background:var(--env)}}
 .hot-n{{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--mute);text-align:right}}
 
 .search-wrap{{padding:11px 15px;border-bottom:1px solid var(--line)}}
@@ -666,8 +709,10 @@ h1 span{{color:var(--dim);font-weight:400}}
 .search::placeholder{{color:var(--dim)}}
 .search:focus{{outline:none;border-color:var(--econ)}}
 
-.grid{{display:grid;grid-template-columns:1fr 1fr 330px;gap:16px;align-items:start}}
-@media(max-width:1000px){{.grid{{grid-template-columns:1fr}}}}
+.grid-cats{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:16px;align-items:start;margin-bottom:16px}}
+.grid-side{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
+@media(max-width:700px){{.grid-side{{grid-template-columns:1fr}}}}
 .items{{max-height:620px;overflow-y:auto}}
 .item{{display:block;border-bottom:1px solid var(--line);transition:background .12s}}
 .item:hover{{background:#151C2C}}
@@ -728,7 +773,9 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
       <div class="legend">
         <span><i style="background:var(--econ)"></i>เศรษฐกิจ</span>
         <span><i style="background:var(--poli)"></i>การเมือง</span>
-        <span><i style="background:var(--both)"></i>ทั้งสอง</span>
+        <span><i style="background:var(--biz)"></i>ธุรกิจ</span>
+        <span><i style="background:var(--env)"></i>สิ่งแวดล้อม</span>
+        <span><i style="background:var(--mixed)"></i>ผสม</span>
       </div>
     </div>
     <div id="hotspot-detail"></div>
@@ -740,29 +787,22 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </section>
 </div>
 
-<div class="grid">
-  <section class="panel">
-    <div class="panel-head"><h2><span class="bar econ"></span>เศรษฐกิจ</h2><span class="count">{len(econ)}</span></div>
-    <div class="search-wrap"><input class="search" type="search" placeholder="ค้นหาข่าวเศรษฐกิจ…" oninput="filterItems(this)"></div>
-    <div class="items">{''.join(card(i) for i in econ) or '<div class="item"><p>ยังไม่มีข่าวในรอบนี้</p></div>'}</div>
-  </section>
+<div class="grid-cats">
+  {cat_section("econ", "เศรษฐกิจ", econ)}
+  {cat_section("poli", "การเมือง", poli)}
+  {cat_section("biz", "ธุรกิจ", biz)}
+  {cat_section("env", "สิ่งแวดล้อม", env)}
+</div>
 
+<div class="grid-side">
   <section class="panel">
-    <div class="panel-head"><h2><span class="bar poli"></span>การเมือง</h2><span class="count">{len(poli)}</span></div>
-    <div class="search-wrap"><input class="search" type="search" placeholder="ค้นหาข่าวการเมือง…" oninput="filterItems(this)"></div>
-    <div class="items">{''.join(card(i) for i in poli) or '<div class="item"><p>ยังไม่มีข่าวในรอบนี้</p></div>'}</div>
+    <div class="panel-head"><h2>พื้นที่ที่มีข่าวมากสุด</h2></div>
+    <div>{''.join(hot_row(m, i) for i, m in enumerate(markers[:10])) or '<div class="hot"><span></span><span>—</span></div>'}</div>
   </section>
-
-  <div style="display:flex;flex-direction:column;gap:16px">
-    <section class="panel">
-      <div class="panel-head"><h2>พื้นที่ที่มีข่าวมากสุด</h2></div>
-      <div>{''.join(hot_row(m, i) for i, m in enumerate(markers[:10])) or '<div class="hot"><span></span><span>—</span></div>'}</div>
-    </section>
-    <section class="panel">
-      <div class="panel-head"><h2>คำที่พูดถึงมากสุด</h2></div>
-      <div class="kws">{''.join(kw_chip(w, f) for w, f in kws)}</div>
-    </section>
-  </div>
+  <section class="panel">
+    <div class="panel-head"><h2>คำที่พูดถึงมากสุด</h2></div>
+    <div class="kws">{''.join(kw_chip(w, f) for w, f in kws)}</div>
+  </section>
 </div>
 
 <footer>
