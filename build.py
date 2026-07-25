@@ -302,6 +302,35 @@ def fetch_news():
 
 CAT_NAMES = [c for c, _ in CATEGORIES]
 
+CAT_LABELS = {
+    "econ": "เศรษฐกิจ", "poli": "การเมือง",
+    "biz": "ธุรกิจ", "env": "สิ่งแวดล้อม", "mixed": "ผสม",
+}
+
+# ไอคอนประจำหมวด — เส้น stroke ใช้ currentColor จึงรับสีจาก .ic-* ได้
+CAT_ICONS = {
+    # เหรียญ + กราฟขาขึ้น
+    "econ": '<circle cx="6" cy="18" r="3.5"/>'
+            '<path d="M11 17.5L15.5 12l2.5 2.5L22 7"/><path d="M17 7h5v5"/>',
+    # อาคารเสาแบบโรมัน
+    "poli": '<path d="M2.5 10L12 4.5L21.5 10"/><path d="M4 20h16"/>'
+            '<path d="M6.5 10.5v9M12 10.5v9M17.5 10.5v9"/>',
+    # กระเป๋าเอกสาร
+    "biz": '<rect x="3" y="8" width="18" height="12" rx="2"/>'
+           '<path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/>',
+    # เมฆ + ลม
+    "env": '<g transform="translate(.5 -1.5) scale(.82)">'
+           '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></g>'
+           '<path d="M4.5 19H11M14 19h5.5M8 22h8"/>',
+    "mixed": '<circle cx="12" cy="12" r="6.5"/>',
+}
+
+
+def cat_icon(cat, extra=""):
+    cls = " ".join(x for x in ("cicon", f"ic-{cat}", extra) if x)
+    return (f'<svg class="{cls}" viewBox="0 0 24 24" aria-hidden="true">'
+            f'{CAT_ICONS.get(cat, "")}</svg>')
+
 
 def build_markers(news):
     """รวมข่าวตามสถานที่ → จุดบนแผนที่"""
@@ -474,6 +503,7 @@ def top_keywords(items, n=14):
 # ─────────────────────────────────────────────────────────────
 MAP_JS = r"""
 const MARKERS = window.__MARKERS__;
+const ICONS = window.__ICONS__;
 const svg = d3.select("#map");
 const gMap = svg.append("g");
 const tip = d3.select("#tip");
@@ -486,7 +516,7 @@ function show(d){
     d.stories.map(s =>
       `<a class="hd-row" href="${s.link}" target="_blank" rel="noopener">
          ${s.image ? `<img class="hd-thumb" src="${s.image}" loading="lazy" alt="" onerror="this.remove()">` : ""}
-         <span class="dot ${s.cat}"></span><span>${s.title}</span>
+         ${ICONS[s.cat] || ""}<span>${s.title}</span>
          <span class="hd-age">${s.age}</span></a>`).join("")
   );
 }
@@ -590,7 +620,7 @@ def render(news, markets, history):
     poli = [i for i in news if i["cat"] == "poli"][:PER_CATEGORY]
     biz = [i for i in news if i["cat"] == "biz"][:PER_CATEGORY]
     env = [i for i in news if i["cat"] == "env"][:PER_CATEGORY]
-    latest = news[:7]
+    latest = news[:8]
     markers = build_markers(news)
     kws = top_keywords(news)
     maxf = max([f for _, f in kws], default=1)
@@ -622,7 +652,7 @@ def render(news, markets, history):
                f' onerror="this.remove()">') if it.get("image") else ""
         return f"""<a class="feed-row" href="{html.escape(it['link'])}" target="_blank" rel="noopener">
       {img}
-      <span class="dot {it['cat']}"></span>
+      {cat_icon(it['cat'], 'ci-sm')}
       <span class="feed-title">{html.escape(it['title'])}</span>
       <span class="feed-age">{it['age']}</span></a>"""
 
@@ -641,9 +671,10 @@ def render(news, markets, history):
       <span class="hot-bars">{bars}</span>
       <span class="hot-n">{m['total']}</span></div>"""
 
-    def cat_section(cls, label, items):
+    def cat_section(cat, items):
+        label = CAT_LABELS[cat]
         return f"""<section class="panel">
-    <div class="panel-head"><h2><span class="bar {cls}"></span>{label}</h2><span class="count">{len(items)}</span></div>
+    <div class="panel-head"><h2>{cat_icon(cat)}{label}</h2><span class="count">{len(items)}</span></div>
     <div class="search-wrap"><input class="search" type="search" placeholder="ค้นหาข่าว{label}…" oninput="filterItems(this)"></div>
     <div class="items">{''.join(card(i) for i in items) or '<div class="item"><p>ยังไม่มีข่าวในรอบนี้</p></div>'}</div>
   </section>"""
@@ -656,6 +687,7 @@ def render(news, markets, history):
     tick_row = "".join(tick(m) for m in markets)
     next_run = (NOW + timedelta(hours=3)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
+    icons_json = json.dumps({c: cat_icon(c, "ci-sm") for c in CAT_NAMES}, ensure_ascii=False)
     page_desc = f"ข่าวเศรษฐกิจ-การเมือง {len(news)} ข่าวใน 24 ชม. จาก {len(FEEDS)} แหล่ง อัปเดต {NOW.strftime('%d %b %Y %H:%M')} น."
     favicon = ("data:image/svg+xml,"
                "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
@@ -731,14 +763,18 @@ h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
 .panel{{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}}
 .panel-head{{display:flex;align-items:center;justify-content:space-between;
   padding:12px 15px;border-bottom:1px solid var(--line);background:var(--panel2)}}
-.panel-head h2{{font-size:.8rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase}}
+.panel-head h2{{display:flex;align-items:center;gap:8px;
+  font-size:.8rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase}}
 .count{{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--dim)}}
-.bar{{width:3px;height:14px;border-radius:2px;display:inline-block;margin-right:8px;vertical-align:-2px}}
-.bar.econ{{background:var(--econ)}} .bar.poli{{background:var(--poli)}}
-.bar.biz{{background:var(--biz)}} .bar.env{{background:var(--env)}}
 
-.top{{display:grid;grid-template-columns:1fr 330px;gap:16px;margin-bottom:16px}}
-@media(max-width:1000px){{.top{{grid-template-columns:1fr}}}}
+/* ไอคอนหมวดข่าว */
+.cicon{{width:17px;height:17px;flex:none;fill:none;stroke:currentColor;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}}
+.cicon.ci-sm{{width:14px;height:14px;stroke-width:2.1}}
+.ic-econ{{color:var(--econ)}} .ic-poli{{color:var(--poli)}}
+.ic-biz{{color:var(--biz)}} .ic-env{{color:var(--env)}} .ic-mixed{{color:var(--mixed)}}
+
+.row-panel{{margin-bottom:16px}}
 
 .map-wrap{{position:relative;height:440px;
   background:radial-gradient(ellipse at 50% 45%,#101827 0%,#0B111C 70%)}}
@@ -763,10 +799,10 @@ h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
   background:rgba(10,14,26,.95);border:1px solid var(--line);border-radius:7px;
   padding:7px 10px;font-size:.74rem;display:flex;flex-direction:column;gap:2px;z-index:5}}
 #tip span{{color:var(--mute);font-family:'IBM Plex Mono',monospace;font-size:.66rem}}
-.legend{{position:absolute;left:14px;bottom:12px;right:14px;display:flex;flex-wrap:wrap;gap:6px 14px;
+.legend{{position:absolute;left:14px;bottom:12px;display:flex;flex-wrap:wrap;gap:6px 14px;
   font-size:.68rem;color:var(--mute);background:rgba(10,14,26,.8);
   border:1px solid var(--line);border-radius:7px;padding:6px 11px}}
-.legend i{{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}}
+.legend span{{display:flex;align-items:center;gap:5px}}
 
 #hotspot-detail{{border-top:1px solid var(--line);max-height:172px;overflow-y:auto}}
 .hd-top{{display:flex;justify-content:space-between;padding:10px 15px 6px;align-items:baseline}}
@@ -775,20 +811,16 @@ h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
 .hd-row{{display:flex;align-items:center;gap:9px;
   padding:8px 15px;border-top:1px solid var(--line);font-size:.8rem}}
 .hd-row:hover{{background:#151C2C}}
-.hd-row .dot{{flex:none}}
 .hd-row > span:nth-last-child(2){{flex:1;min-width:0}}
 .hd-thumb{{width:36px;height:36px;border-radius:6px;object-fit:cover;flex:none;background:var(--panel2)}}
 .hd-age{{font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--dim);white-space:nowrap}}
 
-.feed{{max-height:340px;overflow-y:auto}}
-.feed-row{{display:flex;align-items:center;gap:10px;
+/* ข่าวล่าสุดอยู่เต็มความกว้างเหนือแผนที่ → จัดเป็นหลายคอลัมน์ */
+.feed{{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}}
+.feed-row{{display:flex;align-items:center;gap:10px;min-width:0;
   padding:9px 15px;border-bottom:1px solid var(--line);transition:background .12s}}
 .feed-row:hover{{background:#151C2C}}
-.feed-row:last-child{{border-bottom:0}}
 .feed-thumb{{width:44px;height:44px;border-radius:7px;object-fit:cover;flex:none;background:var(--panel2)}}
-.dot{{width:6px;height:6px;border-radius:50%;flex:none}}
-.dot.econ{{background:var(--econ)}} .dot.poli{{background:var(--poli)}}
-.dot.biz{{background:var(--biz)}} .dot.env{{background:var(--env)}}
 .feed-title{{flex:1;min-width:0;font-size:.82rem;line-height:1.4}}
 .feed-age{{flex:none;font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim);white-space:nowrap}}
 
@@ -859,42 +891,36 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
 <div class="ticker"><div class="ticker-track">{tick_row}{tick_row}</div></div>
 
-<div class="top">
-  <section class="panel">
-    <div class="panel-head">
-      <h2>แผนที่ข่าว</h2>
-      <span class="count">{len(markers)} พื้นที่ · คลิกจุด · ซูมได้</span>
-    </div>
-    <div class="map-wrap">
-      <svg id="map"></svg>
-      <div id="tip"></div>
-      <div class="zoom-ctl">
-        <button type="button" onclick="zoomBy(1.6)" aria-label="ซูมเข้า">+</button>
-        <button type="button" onclick="zoomBy(1/1.6)" aria-label="ซูมออก">−</button>
-        <button type="button" onclick="zoomReset()" aria-label="รีเซ็ตแผนที่">⟲</button>
-      </div>
-      <div class="legend">
-        <span><i style="background:var(--econ)"></i>เศรษฐกิจ</span>
-        <span><i style="background:var(--poli)"></i>การเมือง</span>
-        <span><i style="background:var(--biz)"></i>ธุรกิจ</span>
-        <span><i style="background:var(--env)"></i>สิ่งแวดล้อม</span>
-        <span><i style="background:var(--mixed)"></i>ผสม</span>
-      </div>
-    </div>
-    <div id="hotspot-detail"></div>
-  </section>
+<section class="panel row-panel">
+  <div class="panel-head"><h2>ล่าสุด</h2><span class="count">LIVE</span></div>
+  <div class="feed">{''.join(feed_row(i) for i in latest)}</div>
+</section>
 
-  <section class="panel">
-    <div class="panel-head"><h2>ล่าสุด</h2><span class="count">LIVE</span></div>
-    <div class="feed">{''.join(feed_row(i) for i in latest)}</div>
-  </section>
-</div>
+<section class="panel row-panel">
+  <div class="panel-head">
+    <h2>แผนที่ข่าว</h2>
+    <span class="count">{len(markers)} พื้นที่ · คลิกจุด · ซูมได้</span>
+  </div>
+  <div class="map-wrap">
+    <svg id="map"></svg>
+    <div id="tip"></div>
+    <div class="zoom-ctl">
+      <button type="button" onclick="zoomBy(1.6)" aria-label="ซูมเข้า">+</button>
+      <button type="button" onclick="zoomBy(1/1.6)" aria-label="ซูมออก">−</button>
+      <button type="button" onclick="zoomReset()" aria-label="รีเซ็ตแผนที่">⟲</button>
+    </div>
+    <div class="legend">
+      {''.join(f'<span>{cat_icon(c, "ci-sm")}{CAT_LABELS[c]}</span>' for c in CAT_NAMES + ["mixed"])}
+    </div>
+  </div>
+  <div id="hotspot-detail"></div>
+</section>
 
 <div class="grid-cats">
-  {cat_section("econ", "เศรษฐกิจ", econ)}
-  {cat_section("poli", "การเมือง", poli)}
-  {cat_section("biz", "ธุรกิจ", biz)}
-  {cat_section("env", "สิ่งแวดล้อม", env)}
+  {cat_section("econ", econ)}
+  {cat_section("poli", poli)}
+  {cat_section("biz", biz)}
+  {cat_section("env", env)}
 </div>
 
 <div class="grid-side">
@@ -915,7 +941,7 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
-<script>window.__MARKERS__ = {markers_json};</script>
+<script>window.__MARKERS__ = {markers_json}; window.__ICONS__ = {icons_json};</script>
 <script>{MAP_JS}</script>
 <script>
 function filterItems(input){{
