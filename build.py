@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Econ/Politics Monitor — dashboard ข่าวเศรษฐกิจ+การเมือง พร้อมแผนที่โลก
+Econ/Politics Monitor — dashboard ข่าวเศรษฐกิจ / การเมือง / ธุรกิจ / สิ่งแวดล้อม
+พร้อมแผนที่โลกแบบซูมได้ และแถบราคาตลาด
 รันทุก 3 ชั่วโมง แล้วเขียนทับ index.html
 
 ติดตั้ง:  pip install feedparser requests
@@ -52,14 +53,26 @@ FEEDS = [
     ("Google News",     "https://news.google.com/rss/search?q=climate+OR+wildfire+OR+flood+OR+earthquake+when:1d&hl=en&gl=US&ceid=US:en", "en"),
 ]
 
+THAI_GOLD = "__THAIGOLD__"      # ไม่ใช่สัญลักษณ์ Yahoo — ดึงจากสมาคมค้าทองคำแทน
+
 TICKERS = [
     ("SET",       "^SET.BK"),
     ("S&P 500",   "^GSPC"),
     ("NASDAQ",    "^IXIC"),
     ("USD/THB",   "THB=X"),
-    ("ทองคำ",     "GC=F"),
-    ("น้ำมัน WTI", "CL=F"),
-    ("Bitcoin",   "BTC-USD"),
+    ("GOLD USD",  "GC=F"),
+    ("GOLD THB",  THAI_GOLD),
+    ("BITCOIN",   "BTC-USD"),
+    ("COKE",      "COKE"),
+    ("COST",      "COST"),
+    ("WMT",       "WMT"),
+    ("JEPQ",      "JEPQ"),
+    ("MSFT",      "MSFT"),
+    ("AMZN",      "AMZN"),
+    ("NVDA",      "NVDA"),
+    ("BRK.B",     "BRK-B"),
+    ("GOOG",      "GOOG"),
+    ("AAPL",      "AAPL"),
 ]
 
 KW_ECON = [
@@ -314,20 +327,54 @@ def build_markers(news):
     return sorted(out, key=lambda x: -x["total"])
 
 
+OZ_GRAM = 31.1034768      # 1 troy ounce
+BAHT_GRAM = 15.244        # ทอง 1 บาท (น้ำหนักไทย)
+GOLD_965 = 0.965          # ความบริสุทธิ์ทอง 96.5%
+
+
+def fetch_thai_gold(got):
+    """ราคาทองคำแท่ง 96.5% สมาคมค้าทองคำ (ราคาขายออก, บาท/บาททอง)
+
+    ถ้าดึงจากสมาคมไม่ได้ ประมาณจาก gold spot × USD/THB แทน
+    """
+    try:
+        r = requests.get("https://thaigold.info/RealTimeDataV2/gtdata_.txt",
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
+        for row in json.loads(r.text):
+            if row.get("name") != "สมาคมฯ":
+                continue
+            price = float(str(row["ask"]).replace(",", ""))
+            diff = float(str(row.get("diff") or 0).replace(",", "").replace("+", ""))
+            prev = price - diff
+            return price, ((diff / prev * 100) if prev else 0.0)
+    except Exception as ex:
+        print(f"    (สมาคมค้าทองคำใช้ไม่ได้: {ex} — ใช้ค่าประมาณจาก spot)")
+
+    gold, thb = got.get("GOLD USD"), got.get("USD/THB")
+    if not gold or not thb:
+        raise RuntimeError("ไม่มีราคา gold spot / USDTHB ให้คำนวณ")
+    return gold * thb / OZ_GRAM * BAHT_GRAM * GOLD_965, 0.0
+
+
 def fetch_markets():
-    out = []
+    out, got = [], {}
     for label, sym in TICKERS:
         try:
-            r = requests.get(
-                f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
-                params={"range": "2d", "interval": "1d"},
-                headers={"User-Agent": "Mozilla/5.0"}, timeout=12,
-            )
-            meta = r.json()["chart"]["result"][0]["meta"]
-            price = meta["regularMarketPrice"]
-            prev = meta.get("chartPreviousClose") or meta.get("previousClose") or price
-            pct = (price - prev) / prev * 100 if prev else 0
-            out.append({"label": label, "price": f"{price:,.2f}", "raw_price": price,
+            if sym == THAI_GOLD:
+                price, pct = fetch_thai_gold(got)
+            else:
+                r = requests.get(
+                    f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
+                    params={"range": "2d", "interval": "1d"},
+                    headers={"User-Agent": "Mozilla/5.0"}, timeout=12,
+                )
+                meta = r.json()["chart"]["result"][0]["meta"]
+                price = meta["regularMarketPrice"]
+                prev = meta.get("chartPreviousClose") or meta.get("previousClose") or price
+                pct = (price - prev) / prev * 100 if prev else 0
+            got[label] = price
+            decimals = 0 if price >= 10000 else 2
+            out.append({"label": label, "price": f"{price:,.{decimals}f}", "raw_price": price,
                         "pct": pct, "pct_str": f"{pct:+.2f}%"})
             print(f"  ✓ {label}")
         except Exception as ex:
@@ -382,6 +429,9 @@ def save_cache(news, markets):
 def update_history(markets):
     """เก็บราคาย้อนหลังต่อ ticker ไว้วาด sparkline"""
     history = load_json(HISTORY_FILE)
+    labels = {label for label, _ in TICKERS}
+    for stale in set(history) - labels:      # ทิ้งประวัติของ ticker ที่ถอด/เปลี่ยนชื่อไปแล้ว
+        del history[stale]
     ts = NOW.isoformat()
     for m in markets:
         h = history.setdefault(m["label"], [])
@@ -441,37 +491,59 @@ function show(d){
   );
 }
 
+const MAX_N = d3.max(MARKERS, d => d.total) || 1;
+let markerSel = null;
+
+// จุดยิ่งซูมยิ่งแยกจากกัน แต่ขนาดหมุด/ตัวอักษรคงเดิม (scale สวนกับ k)
+function rescale(k){
+  if (!markerSel) return;
+  markerSel.attr("transform", d => `translate(${d._x},${d._y}) scale(${1 / k})`);
+  markerSel.selectAll("text.mk-label")
+    .style("display", d => d.total >= Math.max(1, MAX_N * 0.5 / k) ? null : "none");
+}
+
+const zoom = d3.zoom()
+  .scaleExtent([1, 14])
+  .on("zoom", (ev) => {
+    gMap.attr("transform", ev.transform);
+    rescale(ev.transform.k);
+  });
+
 function plot(proj){
-  const maxN = d3.max(MARKERS, d => d.total) || 1;
-  const r = d3.scaleSqrt().domain([1, maxN]).range([5, 17]);
+  const r = d3.scaleSqrt().domain([1, MAX_N]).range([5, 17]);
   const g = gMap.append("g");
+
+  MARKERS.forEach(d => {
+    const p = proj([d.lon, d.lat]);
+    d._x = p[0]; d._y = p[1];
+  });
 
   const nodes = g.selectAll("g.mk").data(MARKERS).join("g")
     .attr("class", "mk")
-    .attr("transform", d => {
-      const p = proj([d.lon, d.lat]);
-      return `translate(${p[0]},${p[1]})`;
-    });
+    .attr("transform", d => `translate(${d._x},${d._y})`);
 
   nodes.append("circle").attr("class", "halo")
     .attr("r", d => r(d.total)).attr("fill", d => COLOR[d.cat]);
   nodes.append("circle").attr("class", "core")
     .attr("r", d => Math.max(2.6, r(d.total) * 0.36)).attr("fill", d => COLOR[d.cat]);
 
-  nodes.filter(d => d.total >= Math.max(2, maxN * 0.5))
-    .append("text").attr("class", "mk-label")
+  nodes.append("text").attr("class", "mk-label")
     .attr("y", d => -r(d.total) - 6).attr("text-anchor", "middle")
     .text(d => d.place);
 
   nodes
     .on("mousemove", (ev, d) => {
+      const [mx, my] = d3.pointer(ev, svg.node());
       tip.style("opacity", 1)
-         .style("left", (ev.offsetX + 14) + "px")
-         .style("top", (ev.offsetY - 8) + "px")
+         .style("left", (mx + 14) + "px")
+         .style("top", (my - 8) + "px")
          .html(`<strong>${d.place}</strong><span>${d.total} ข่าว · ศก. ${d.econ} · การเมือง ${d.poli} · ธุรกิจ ${d.biz} · สวล. ${d.env}</span>`);
     })
     .on("mouseleave", () => tip.style("opacity", 0))
     .on("click", (ev, d) => { show(d); ev.stopPropagation(); });
+
+  markerSel = nodes;
+  rescale(d3.zoomTransform(svg.node()).k);
 }
 
 function draw(){
@@ -479,6 +551,7 @@ function draw(){
   const W = box.width, H = box.height;
   svg.attr("viewBox", `0 0 ${W} ${H}`);
   gMap.selectAll("*").remove();
+  markerSel = null;
 
   const proj = d3.geoNaturalEarth1()
     .fitSize([W, H * 1.28], { type: "Sphere" })
@@ -487,6 +560,9 @@ function draw(){
 
   gMap.append("path").attr("class", "sphere").attr("d", path({ type: "Sphere" }));
   gMap.append("path").attr("class", "grat").attr("d", path(d3.geoGraticule10()));
+
+  svg.call(zoom).on("dblclick.zoom", null);
+  gMap.attr("transform", d3.zoomTransform(svg.node()));
 
   d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
     .then(topo => {
@@ -497,6 +573,11 @@ function draw(){
     })
     .catch(() => plot(proj));
 }
+
+const noMotion = matchMedia("(prefers-reduced-motion:reduce)");
+function ease(ms){ return noMotion.matches ? svg : svg.transition().duration(ms); }
+function zoomBy(f){ ease(220).call(zoom.scaleBy, f); }
+function zoomReset(){ ease(260).call(zoom.transform, d3.zoomIdentity); }
 
 if (MARKERS.length) show(MARKERS[0]);
 draw();
@@ -571,6 +652,8 @@ def render(news, markets, history):
         return (f'<span class="kw" style="font-size:{0.78 + (f/maxf)*0.85:.2f}rem;'
                 f'opacity:{0.45 + (f/maxf)*0.55:.2f}">{html.escape(w)}</span>')
 
+    # ทำซ้ำ 2 ชุดในแทร็กเดียว ให้ marquee วนต่อเนื่องแบบไม่มีรอยต่อ
+    tick_row = "".join(tick(m) for m in markets)
     next_run = (NOW + timedelta(hours=3)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
     page_desc = f"ข่าวเศรษฐกิจ-การเมือง {len(news)} ข่าวใน 24 ชม. จาก {len(FEEDS)} แหล่ง อัปเดต {NOW.strftime('%d %b %Y %H:%M')} น."
@@ -616,21 +699,29 @@ body{{background:var(--bg);color:var(--ink);
   font-size:15px;line-height:1.55;padding:20px;max-width:1560px;margin:0 auto}}
 a{{color:inherit;text-decoration:none}}
 
-header{{display:flex;align-items:center;justify-content:space-between;gap:20px;
-  flex-wrap:wrap;padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--line)}}
-h1{{font-size:1.35rem;font-weight:700;letter-spacing:-.01em}}
-h1 span{{color:var(--dim);font-weight:400}}
-.stamp{{display:flex;align-items:center;gap:10px;
+header{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:9px;
+  padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--line)}}
+h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
+@media(max-width:600px){{h1{{font-size:1.45rem}}}}
+.stamp{{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;
   font-family:'IBM Plex Mono',monospace;font-size:.76rem;color:var(--mute)}}
 .pulse{{width:7px;height:7px;border-radius:50%;background:var(--up);
   box-shadow:0 0 0 0 rgba(63,182,139,.6);animation:p 2.4s infinite}}
 @keyframes p{{70%{{box-shadow:0 0 0 9px rgba(63,182,139,0)}}100%{{box-shadow:0 0 0 0 rgba(63,182,139,0)}}}}
 
-.ticker{{display:flex;overflow-x:auto;border:1px solid var(--line);
+/* แถบราคาเลื่อนไปทางซ้ายต่อเนื่องแบบรายการทีวี (ชี้เมาส์ค้างไว้เพื่อหยุด) */
+.ticker{{overflow:hidden;border:1px solid var(--line);
   border-radius:10px;background:var(--panel);margin-bottom:16px}}
-.tick{{flex:1 0 auto;min-width:132px;padding:11px 16px;
+.ticker-track{{display:flex;width:max-content;animation:marquee 90s linear infinite}}
+.ticker:hover .ticker-track{{animation-play-state:paused}}
+@keyframes marquee{{from{{transform:translateX(0)}}to{{transform:translateX(-50%)}}}}
+@media(prefers-reduced-motion:reduce){{
+  .ticker{{overflow-x:auto}}
+  .ticker-track{{animation:none;width:auto}}
+  .ticker-track .tick:nth-child(n+{len(markets) + 1}){{display:none}}
+}}
+.tick{{flex:0 0 auto;min-width:132px;padding:11px 16px;
   border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px}}
-.tick:last-child{{border-right:0}}
 .t-label{{font-size:.68rem;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}}
 .t-price{{font-family:'IBM Plex Mono',monospace;font-size:.95rem;font-weight:500}}
 .t-pct{{font-family:'IBM Plex Mono',monospace;font-size:.74rem}}
@@ -651,10 +742,17 @@ h1 span{{color:var(--dim);font-weight:400}}
 
 .map-wrap{{position:relative;height:440px;
   background:radial-gradient(ellipse at 50% 45%,#101827 0%,#0B111C 70%)}}
-#map{{width:100%;height:100%;display:block}}
-.sphere{{fill:#0C1220;stroke:#1A2333;stroke-width:.8}}
-.grat{{fill:none;stroke:#141C2B;stroke-width:.45}}
-.country{{fill:#172030;stroke:#232E42;stroke-width:.45}}
+#map{{width:100%;height:100%;display:block;cursor:grab;touch-action:none}}
+#map:active{{cursor:grabbing}}
+/* เส้นขอบไม่หนาขึ้นตอนซูม */
+.sphere{{fill:#0C1220;stroke:#1A2333;stroke-width:.8;vector-effect:non-scaling-stroke}}
+.grat{{fill:none;stroke:#141C2B;stroke-width:.45;vector-effect:non-scaling-stroke}}
+.country{{fill:#172030;stroke:#232E42;stroke-width:.45;vector-effect:non-scaling-stroke}}
+.zoom-ctl{{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:5px;z-index:5}}
+.zoom-ctl button{{width:27px;height:27px;font-family:inherit;font-size:.95rem;line-height:1;
+  color:var(--mute);background:rgba(10,14,26,.85);border:1px solid var(--line);
+  border-radius:6px;cursor:pointer}}
+.zoom-ctl button:hover{{color:var(--ink);border-color:var(--dim)}}
 .mk{{cursor:pointer}}
 .mk .halo{{opacity:.16;transition:opacity .15s}}
 .mk .core{{stroke:#0A0E1A;stroke-width:1.2}}
@@ -751,7 +849,7 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 <body>
 
 <header>
-  <h1>Econ · Politics Monitor <span>/ เศรษฐกิจ · การเมือง</span></h1>
+  <h1>Econ · Politics Monitor</h1>
   <div class="stamp">
     <span class="pulse"></span>
     <span>อัปเดต {NOW.strftime('%d %b %Y · %H:%M')} น.</span>
@@ -759,17 +857,22 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
 </header>
 
-<div class="ticker">{''.join(tick(m) for m in markets)}</div>
+<div class="ticker"><div class="ticker-track">{tick_row}{tick_row}</div></div>
 
 <div class="top">
   <section class="panel">
     <div class="panel-head">
       <h2>แผนที่ข่าว</h2>
-      <span class="count">{len(markers)} พื้นที่ · คลิกจุดเพื่อดูข่าว</span>
+      <span class="count">{len(markers)} พื้นที่ · คลิกจุด · ซูมได้</span>
     </div>
     <div class="map-wrap">
       <svg id="map"></svg>
       <div id="tip"></div>
+      <div class="zoom-ctl">
+        <button type="button" onclick="zoomBy(1.6)" aria-label="ซูมเข้า">+</button>
+        <button type="button" onclick="zoomBy(1/1.6)" aria-label="ซูมออก">−</button>
+        <button type="button" onclick="zoomReset()" aria-label="รีเซ็ตแผนที่">⟲</button>
+      </div>
       <div class="legend">
         <span><i style="background:var(--econ)"></i>เศรษฐกิจ</span>
         <span><i style="background:var(--poli)"></i>การเมือง</span>
