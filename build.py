@@ -13,8 +13,10 @@ import html
 import json
 import time
 import socket
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from difflib import SequenceMatcher
+from urllib.parse import urljoin
 
 import feedparser
 import requests
@@ -34,11 +36,13 @@ HISTORY_POINTS = 60     # 60 รอบ x 3 ชม. ≈ 7.5 วัน
 # แหล่งข่าว — เพิ่ม/ลบได้ตามใจ ไม่ต้องใช้ API key
 # ─────────────────────────────────────────────────────────────
 FEEDS = [
-    ("Thai PBS",        "https://www.thaipbs.or.th/rss/news.xml",                    "th"),
+    ("Thai PBS",        "https://news.thaipbs.or.th/rss/news",                       "th"),
     ("The Standard",    "https://thestandard.co/feed/",                              "th"),
     ("ประชาชาติธุรกิจ",  "https://www.prachachat.net/feed",                            "th"),
-    ("กรุงเทพธุรกิจ",    "https://www.bangkokbiznews.com/rss/feed/business.xml",       "th"),
     ("มติชน",           "https://www.matichon.co.th/feed",                            "th"),
+    ("ไทยรัฐ",          "https://www.thairath.co.th/rss/news",                        "th"),
+    ("ไทยรัฐ",          "https://www.thairath.co.th/rss/business",                    "th"),
+    ("อินโฟเควสท์",      "https://www.infoquest.co.th/feed",                           "th"),
     ("BBC Business",    "https://feeds.bbci.co.uk/news/business/rss.xml",             "en"),
     ("BBC World",       "https://feeds.bbci.co.uk/news/world/rss.xml",                "en"),
     ("Al Jazeera",      "https://www.aljazeera.com/xml/rss/all.xml",                  "en"),
@@ -270,6 +274,57 @@ def extract_image(e):
     if m:
         return m.group(1)
     return None
+
+
+BROWSER_UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                            "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"}
+OG_TAG = re.compile(
+    r'<meta[^>]+(?:property|name)=["\'](?:og:image(?::url)?|twitter:image(?::src)?)["\'][^>]*>',
+    re.I)
+OG_CONTENT = re.compile(r'content=["\']([^"\']+)["\']', re.I)
+IMG_WORKERS = 12
+IMG_BUDGET = 110      # จำกัดจำนวนหน้าที่ไปเปิด กันไม่ให้ build นานเกินไป
+
+
+def fetch_og_image(url):
+    """เปิดหน้าข่าวแล้วดึง og:image / twitter:image (อ่านแค่ช่วงต้นของ <head> พอ)"""
+    try:
+        r = requests.get(url, headers=BROWSER_UA, timeout=8,
+                         allow_redirects=True, stream=True)
+        if r.status_code != 200 or "html" not in r.headers.get("content-type", ""):
+            return None
+        raw = r.raw.read(200_000, decode_content=True)
+        r.close()
+        tag = OG_TAG.search(raw.decode(r.encoding or "utf-8", errors="ignore"))
+        if not tag:
+            return None
+        m = OG_CONTENT.search(tag.group(0))
+        if not m:
+            return None
+        img = urljoin(r.url, html.unescape(m.group(1)).strip())
+        return img if img.startswith("http") else None
+    except Exception:
+        return None
+
+
+def enrich_images(items):
+    """ข่าวที่ RSS ไม่ส่งรูปมา (เช่น CNBC, Al Jazeera) ให้ไปดึงรูปจากหน้าข่าวจริง
+
+    ข้ามลิงก์ Google News เพราะเป็นหน้าคั่นที่ไม่มี og:image
+    และ URL จริงถูกเข้ารหัสไว้จนถอดไม่ได้
+    """
+    targets = [it for it in items
+               if not it.get("image") and "news.google.com" not in it["link"]][:IMG_BUDGET]
+    if not targets:
+        return
+    with ThreadPoolExecutor(max_workers=IMG_WORKERS) as pool:
+        found = list(pool.map(lambda it: fetch_og_image(it["link"]), targets))
+    got = 0
+    for it, img in zip(targets, found):
+        if img:
+            it["image"] = img
+            got += 1
+    print(f"  ✓ เติมรูปจากหน้าข่าวได้ {got}/{len(targets)} ข่าว")
 
 
 def fetch_news():
@@ -1221,7 +1276,12 @@ if ('serviceWorker' in navigator) {{
 if __name__ == "__main__":
     print("ดึงข่าว...")
     news = fetch_news()
-    print(f"→ ได้ {len(news)} ข่าว (ระบุพิกัดได้ {sum(1 for i in news if i['place'])})\n")
+    print(f"→ ได้ {len(news)} ข่าว (ระบุพิกัดได้ {sum(1 for i in news if i['place'])})")
+
+    if news:
+        print("เติมรูปให้ข่าวที่ RSS ไม่ส่งรูปมา...")
+        enrich_images(news)
+    print(f"→ มีรูปประกอบ {sum(1 for i in news if i.get('image'))}/{len(news)} ข่าว\n")
 
     print("ดึงราคาตลาด...")
     markets = fetch_markets()
