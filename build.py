@@ -632,6 +632,42 @@ function ringsOf(geom){
   return [];
 }
 
+/* ยิงเส้นตรงจาก (cx,cy) ไปตามทิศ (ux,uy) แล้วหาช่วงที่ยัง "อยู่ในแผ่นดิน"
+   ใช้กฎ even-odd: จุดตัดที่เรียงแล้วจะจับคู่เป็นช่วงใน 0-1, 2-3, ...
+   เลือกช่วงที่ยาวที่สุดเสมอ — ประเทศเว้าแหว่งอย่างนอร์เวย์ จุดกึ่งกลางรูปร่าง
+   อาจตกอยู่บนแผ่นดินแค่แถบบางๆ ถ้ายึดช่วงนั้นตัวหนังสือจะหดจนใช้ไม่ได้ */
+function spanInside(pts, cx, cy, ux, uy){
+  const ts = [];
+  for (let i = 0, n = pts.length; i < n; i++) {
+    const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % n];
+    const ex = x2 - x1, ey = y2 - y1;
+    // แก้ระบบสมการ  C + t*U = A + s*E  ด้วยกฎของคราเมอร์
+    const den = uy * ex - ux * ey;
+    if (Math.abs(den) < 1e-12) continue;          // ขอบขนานกับเส้น
+    const dx = x1 - cx, dy = y1 - cy;
+    const s = (ux * dy - uy * dx) / den;          // ตำแหน่งบนขอบ [0,1)
+    if (s < 0 || s >= 1) continue;
+    ts.push((ex * dy - ey * dx) / den);           // ตำแหน่งบนเส้น
+  }
+  if (ts.length < 2) return null;
+  ts.sort((a, b) => a - b);
+  let pick = null;
+  for (let i = 0; i + 1 < ts.length; i += 2) {
+    const a = ts[i], b = ts[i + 1];
+    if (!pick || b - a > pick.len) pick = { len: b - a, mid: (a + b) / 2 };
+  }
+  return pick;
+}
+
+function pointInRing(pts, x, y){
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
 function labelSpec(feature, proj){
   // ใช้เฉพาะผืนแผ่นดินที่ใหญ่สุด ไม่ให้เกาะเล็กเกาะน้อยดึงตำแหน่งเพี้ยน
   let best = null, bestArea = 0;
@@ -673,12 +709,28 @@ function labelSpec(feature, proj){
   const limit = ratio > 1.95 ? 90 : (ratio > 1.4 ? 45 : 22);
   deg = Math.max(-limit, Math.min(limit, deg));
   const name = (NAME_FIX[feature.properties.name] || feature.properties.name).toUpperCase();
-  const span = Math.max(1, major * 0.76);
-  // ตัวอักษรต้องไม่สูงเกินความ "หนา" ของประเทศ และต้องไม่ถูกบีบแนวนอน
+
+  // วัดความยาวที่ "อยู่ในเขตประเทศจริง" ตามแนวที่จะวางตัวอักษร
+  // (กรอบสี่เหลี่ยมของรูปร่างมักกินเลยชายฝั่ง ตัวหนังสือเลยล้นออกนอกประเทศ)
+  const rad = deg * Math.PI / 180;
+  const ux = Math.cos(rad), uy = Math.sin(rad);
+  const along = spanInside(best, cx, cy, ux, uy);
+  if (!along) return null;
+  const ax = cx + ux * along.mid, ay = cy + uy * along.mid;   // กึ่งกลางของช่วงในแผ่นดิน
+  const across = spanInside(best, ax, ay, -uy, ux);           // ความหนาตรงจุดนั้น
+  const thick = across ? across.len : minor;
+
+  const span = Math.max(1, along.len * 0.86);   // เว้นขอบซ้าย-ขวาไว้เล็กน้อย
+  // กันเหนียว: ถ้ายังวางไม่ลงในเขตประเทศจริง ไม่ต้องแสดงชื่อดีกว่าปล่อยให้ล้น
+  const h = span / 2;
+  if (!pointInRing(best, ax, ay) ||
+      !pointInRing(best, ax - ux * h, ay - uy * h) ||
+      !pointInRing(best, ax + ux * h, ay + uy * h)) return null;
+  // ตัวอักษรต้องไม่สูงเกินความหนาของประเทศ และต้องไม่ถูกบีบแนวนอน
   // (ประมาณความกว้างจริงของตัวพิมพ์ใหญ่ ≈ 0.62 เท่าของขนาดฟอนต์ต่อตัว)
   // ปล่อยให้ยืดออกได้อย่างเดียว จะได้หน้าตาคาดยาวแบบ HOI4
-  const fs = Math.max(2.4, Math.min(minor * 0.34, span / (0.62 * name.length)));
-  return { cx, cy, deg, major, minor, span, fs, name };
+  const fs = Math.max(2.4, Math.min(thick * 0.6, span / (0.62 * name.length)));
+  return { cx: ax, cy: ay, deg, major: along.len, minor: thick, span, fs, name };
 }
 
 function drawCountryLabels(features, proj){
