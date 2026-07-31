@@ -83,6 +83,114 @@ TICKERS = [
     ("AAPL",      "AAPL"),
 ]
 
+# คำที่ใช้จับว่าข่าวไหน "เกี่ยวข้อง" กับสินทรัพย์ตัวไหน
+#   primary   = ชื่อบริษัท/ชื่อสินทรัพย์โดยตรง (น้ำหนักสูง)
+#   secondary = ปัจจัยแวดล้อมของกลุ่มนั้น (น้ำหนักรอง)
+_US_EQUITY = ["wall street", "s&p", "nasdaq", "fed", "tariff", "earnings",
+              "หุ้นสหรัฐ", "วอลล์สตรีท", "ตลาดหุ้นสหรัฐ", "ภาษีทรัมป์"]
+_GOLD = ["safe haven", "สินทรัพย์ปลอดภัย", "เงินเฟ้อ", "inflation",
+         "ดอกเบี้ย", "interest rate", "ดอลลาร์"]
+
+TICKER_TERMS = {
+    "SET":      (["set index", "ตลาดหลักทรัพย์", "หุ้นไทย", "ตลาดหุ้นไทย"],
+                 ["เศรษฐกิจไทย", "ธปท", "แบงก์ชาติ", "ก.ล.ต.", "จีดีพี", "นักลงทุนต่างชาติ", "บจ."]),
+    "S&P 500":  (["s&p 500", "s&p500", "เอสแอนด์พี"], _US_EQUITY),
+    "NASDAQ":   (["nasdaq", "แนสแด็ก"],
+                 _US_EQUITY + ["chip", "semiconductor", "ชิป", "หุ้นเทค", "ai"]),
+    # "ดอลลาร์" เฉยๆ ใช้เป็นคำหลักไม่ได้ ข่าวไหนพูดถึงจำนวนเงินก็ติดหมด
+    "USD/THB":  (["เงินบาท", "ค่าเงินบาท", "ค่าเงินดอลลาร์", "ดอลลาร์แข็งค่า",
+                  "ดอลลาร์อ่อนค่า", "บาทแข็งค่า", "บาทอ่อนค่า", "usd/thb", "อัตราแลกเปลี่ยน"],
+                 ["ดอลลาร์", "ค่าเงิน", "fed", "ดอกเบี้ย", "currency", "ทุนสำรอง",
+                  "forex", "exchange rate"]),
+    "GOLD USD": (["ทองคำ", "gold", "xau"], _GOLD),
+    "GOLD THB": (["ราคาทอง", "ทองคำ", "ทองคำแท่ง", "สมาคมค้าทองคำ", "gold"],
+                 _GOLD + ["เงินบาท", "ค่าเงินบาท"]),
+    "BITCOIN":  (["bitcoin", "บิตคอยน์", "บิทคอยน์", "คริปโต", "crypto", "cryptocurrency", "btc"],
+                 ["blockchain", "digital asset", "etf", "เหรียญดิจิทัล", "สินทรัพย์ดิจิทัล"]),
+    "COKE":     (["coca-cola", "โคคา-โคล่า", "coke"], ["เครื่องดื่ม", "beverage", "consumer staples"]),
+    "COST":     (["costco", "คอสท์โก้"], ["ค้าปลีก", "retail", "consumer", "warehouse"]),
+    "WMT":      (["walmart", "วอลมาร์ท"], ["ค้าปลีก", "retail", "consumer", "supermarket"]),
+    "JEPQ":     (["jepq", "jpmorgan", "เจพีมอร์แกน"], ["etf", "nasdaq", "dividend", "ปันผล"]),
+    "MSFT":     (["microsoft", "ไมโครซอฟท์", "azure", "openai"], _US_EQUITY + ["cloud", "ai", "ชิป"]),
+    "AMZN":     (["amazon", "อเมซอน", "aws"], _US_EQUITY + ["e-commerce", "อีคอมเมิร์ซ", "cloud"]),
+    "NVDA":     (["nvidia", "เอ็นวิเดีย"],
+                 _US_EQUITY + ["chip", "semiconductor", "ชิป", "ai", "เอไอ", "gpu"]),
+    "BRK.B":    (["berkshire", "buffett", "บัฟเฟตต์", "เบิร์กเชียร์"], _US_EQUITY + ["insurance", "ลงทุน"]),
+    "GOOG":     (["alphabet", "google", "กูเกิล", "gemini"], _US_EQUITY + ["ai", "เอไอ", "โฆษณา", "search"]),
+    "AAPL":     (["apple", "แอปเปิล", "iphone", "ไอโฟน"], _US_EQUITY + ["ชิป", "chip", "สมาร์ทโฟน"]),
+}
+RELEVANCE_FLOOR = 4      # ต่ำกว่านี้ถือว่าไม่เกี่ยว ไม่ต้องแสดง
+RELEVANCE_MAX = 10       # จำนวนข่าวต่อสินทรัพย์
+
+
+def _compile_terms(terms):
+    """คำอังกฤษต้องจับแบบทั้งคำ ไม่งั้น 'gold' จะไปโดน 'Goldman'/'golden'
+    และ 'ai' จะโดน 'said' — ส่วนภาษาไทยไม่มีตัวคั่นคำ จึงจับแบบ substring ตามเดิม
+    (อนุญาต s ต่อท้ายไว้ เพราะ 'chip' กับ 'chips' ควรนับว่าตรงกัน)"""
+    out = []
+    for t in (x.lower() for x in terms):
+        if re.search(r"[a-z]", t):
+            out.append(re.compile(rf"(?<![a-z0-9]){re.escape(t)}s?(?![a-z0-9])"))
+        else:
+            out.append(t)
+    return out
+
+
+TICKER_TERMS_C = {k: (_compile_terms(p), _compile_terms(s))
+                  for k, (p, s) in TICKER_TERMS.items()}
+
+
+def _hit(term, text):
+    return term.search(text) is not None if hasattr(term, "search") else term in text
+
+
+def relevance(it, primary, secondary):
+    """คะแนน "ความเกี่ยวข้อง" ของข่าวกับสินทรัพย์ 0-100
+
+    เป็นการจับคู่คำล้วนๆ ไม่ใช่การวัดว่าข่าวทำให้ราคาขยับกี่เปอร์เซ็นต์
+    (ข้อมูลแบบนั้นไม่มีให้คำนวณจริง)
+
+    แถบสีจึงมีความหมายชัดเจน:
+      > 50 (เขียว)  ข่าวเอ่ยถึงสินทรัพย์นี้ตรงๆ ในหัวข้อ
+      10-49 (เหลือง) เอ่ยถึงในเนื้อข่าว หรือเกี่ยวทางอ้อมชัดเจน
+      < 10 (แดง)    แตะแค่ปัจจัยตลาดกว้างๆ ไม่ได้พูดถึงตัวนี้เลย
+    """
+    title = it["title"].lower()
+    summary = (it.get("summary") or "").lower()
+    direct = 0
+    for t in primary:
+        if _hit(t, title):
+            direct = max(direct, 60)
+        elif _hit(t, summary):
+            direct = max(direct, 32)
+    side = 0
+    for t in secondary:
+        if _hit(t, title):
+            side += 8
+        elif _hit(t, summary):
+            side += 4
+    if not direct:
+        return min(9, side)      # ไม่ได้พูดถึงตัวนี้เลย → อยู่ในแถบแดงเสมอ
+    return min(100, direct + min(side, 24))
+
+
+def attach_ticker_news(markets, news):
+    """แนบข่าวที่เกี่ยวข้องกับแต่ละสินทรัพย์ เรียงตามคะแนนความเกี่ยวข้อง"""
+    for m in markets:
+        primary, secondary = TICKER_TERMS_C.get(m["label"], ([], []))
+        scored = []
+        for it in news:
+            s = relevance(it, primary, secondary)
+            if s >= RELEVANCE_FLOOR:
+                scored.append((s, it))
+        scored.sort(key=lambda x: (-x[0], -x[1]["dt"].timestamp()))
+        m["news"] = [{
+            "title": it["title"], "link": it["link"], "source": it["source"],
+            "age": it["age"], "cat": it["cat"], "image": it.get("image"),
+            "score": s,
+        } for s, it in scored[:RELEVANCE_MAX]]
+    return markets
+
 KW_ECON = [
     "เศรษฐกิจ", "จีดีพี", "GDP", "เงินเฟ้อ", "ดอกเบี้ย", "ธปท", "แบงก์ชาติ", "ตลาดหุ้น",
     "หุ้น", "ค่าเงิน", "ส่งออก", "นำเข้า", "ลงทุน", "ภาษี", "งบประมาณ", "หนี้",
@@ -339,6 +447,11 @@ def fetch_news():
         for e in d.entries[:40]:
             try:
                 title = clean(e.get("title", ""))
+                if source == "Google News":
+                    # Google News ต่อท้ายหัวข้อด้วย " - ชื่อสำนักข่าว" เสมอ
+                    # ถ้าไม่ตัดออก ชื่อสำนักข่าวจะไปโดนจับคู่ด้วย เช่นข่าวค่าเงินสวิส
+                    # ที่เผยแพร่โดย "Bitcoin World" กลายเป็นข่าวบิตคอยน์
+                    title = re.sub(r"\s+-\s+[^-]{2,40}$", "", title).strip() or title
                 if not title:
                     continue
 
@@ -939,8 +1052,11 @@ def render(news, markets, history):
         color = {"up": "var(--up)", "down": "var(--down)", "flat": "var(--mute)"}[cls]
         pts = [p["p"] for p in history.get(m["label"], [])]
         spark = sparkline_svg(pts, color)
-        return f"""<div class="tick"><span class="t-label">{html.escape(m['label'])}</span>
-      <span class="t-price">{m['price']}</span>{spark}<span class="t-pct {cls}">{m['pct_str']}</span></div>"""
+        n = len(m.get("news") or [])
+        return f"""<button class="tick" type="button" data-label="{html.escape(m['label'], quote=True)}"
+      title="ดูข่าวที่เกี่ยวข้องกับ {html.escape(m['label'], quote=True)}">
+      <span class="t-label">{html.escape(m['label'])}<span class="t-n">{n}</span></span>
+      <span class="t-price">{m['price']}</span>{spark}<span class="t-pct {cls}">{m['pct_str']}</span></button>"""
 
     def hot_row(m, i):
         bars = "".join(f'<i class="hb-{c}" style="flex:{m[c]}"></i>' for c in CAT_NAMES if m[c])
@@ -995,6 +1111,11 @@ def render(news, markets, history):
     next_run = (NOW + timedelta(hours=3)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
     icons_json = json.dumps({c: cat_icon(c, "ci-sm") for c in CAT_NAMES}, ensure_ascii=False)
+    tnews_json = json.dumps(
+        {m["label"]: {"price": m["price"], "pct": m["pct_str"],
+                      "dir": "up" if m["pct"] > 0 else ("down" if m["pct"] < 0 else "flat"),
+                      "news": m.get("news") or []}
+         for m in markets}, ensure_ascii=False)
     page_desc = f"ข่าวเศรษฐกิจ-การเมือง {len(news)} ข่าวใน 24 ชม. จาก {len(FEEDS)} แหล่ง อัปเดต {NOW.strftime('%d %b %Y %H:%M')} น."
     favicon = ("data:image/svg+xml,"
                "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
@@ -1069,8 +1190,52 @@ h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
   .ticker-track{{animation:none;width:auto}}
   .ticker-track .tick:nth-child(n+{len(markets) + 1}){{display:none}}
 }}
-.tick{{flex:0 0 auto;min-width:132px;padding:11px 16px;
-  border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px}}
+.tick{{flex:0 0 auto;min-width:132px;padding:11px 16px;text-align:left;
+  border:0;border-right:1px solid var(--line);background:none;color:inherit;
+  font-family:inherit;cursor:pointer;display:flex;flex-direction:column;gap:2px;
+  transition:background .15s}}
+.tick:hover{{background:rgba(255,255,255,.06)}}
+.tick:focus-visible{{outline:2px solid var(--econ);outline-offset:-2px}}
+.t-n{{margin-left:6px;padding:0 5px;border-radius:20px;background:#1E2637;
+  color:var(--mute);font-size:.6rem;font-family:'IBM Plex Mono',monospace}}
+
+/* ── หน้าต่างข่าวที่เกี่ยวข้องกับสินทรัพย์ ─────────────────── */
+.tmodal{{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;
+  background:rgba(4,6,11,.82)}}
+.tmodal-box{{width:min(760px,100%);max-height:86vh;display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+  box-shadow:0 30px 80px rgba(0,0,0,.6)}}
+.tmodal-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
+  padding:16px 18px 12px;border-bottom:1px solid var(--line);background:var(--panel2)}}
+.tmodal-head h3{{font-size:1.1rem;font-weight:700;letter-spacing:.02em}}
+.tmodal-price{{display:flex;align-items:baseline;gap:9px;margin-top:3px;
+  font-family:'IBM Plex Mono',monospace}}
+#tmodal-p{{font-size:1rem}}
+#tmodal-c{{font-size:.8rem}}
+.tmodal-x{{flex:none;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:1.2rem;
+  line-height:1;color:var(--mute);background:transparent;border:1px solid var(--line)}}
+.tmodal-x:hover{{color:var(--ink);background:rgba(255,255,255,.07)}}
+.tmodal-note{{padding:10px 18px;font-size:.71rem;line-height:1.5;color:var(--dim);
+  border-bottom:1px solid var(--line)}}
+.tmodal-note strong{{color:var(--mute);font-weight:600}}
+.tmodal-list{{overflow-y:auto;padding:4px 0}}
+.trow{{display:flex;align-items:center;gap:11px;padding:11px 18px;
+  border-bottom:1px solid var(--line)}}
+.trow:last-child{{border-bottom:0}}
+.trow:hover{{background:#151C2C}}
+.trow-thumb{{width:58px;height:38px;border-radius:6px;object-fit:cover;flex:none;
+  background:var(--panel2)}}
+.trow-body{{flex:1;min-width:0}}
+.trow-title{{font-size:.85rem;line-height:1.4;font-weight:500}}
+.trow-meta{{display:flex;gap:8px;margin-top:4px;font-family:'IBM Plex Mono',monospace;
+  font-size:.64rem;color:var(--dim);text-transform:uppercase}}
+.score{{flex:none;min-width:52px;text-align:center;padding:5px 8px;border-radius:7px;
+  font-family:'IBM Plex Mono',monospace;font-size:.78rem;font-weight:600}}
+/* >50 เขียว · 10-49 เหลือง · <10 แดง */
+.score.hi{{color:#8CF0C6;background:rgba(63,182,139,.16);border:1px solid rgba(63,182,139,.4)}}
+.score.mid{{color:#FFD27A;background:rgba(245,165,36,.14);border:1px solid rgba(245,165,36,.38)}}
+.score.low{{color:#FFA9AC;background:rgba(229,72,77,.14);border:1px solid rgba(229,72,77,.38)}}
+.tmodal-empty{{padding:26px 18px;color:var(--mute);font-size:.85rem;text-align:center}}
 .t-label{{font-size:.68rem;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}}
 .t-price{{font-family:'IBM Plex Mono',monospace;font-size:.95rem;font-weight:500}}
 .t-pct{{font-family:'IBM Plex Mono',monospace;font-size:.74rem}}
@@ -1298,6 +1463,21 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
 <div id="intro" aria-hidden="true"><div class="intro-inner">ECON · POLITICS<b>MONITOR</b></div></div>
 
+<div id="tmodal" class="tmodal" hidden>
+  <div class="tmodal-box" role="dialog" aria-modal="true" aria-labelledby="tmodal-name">
+    <div class="tmodal-head">
+      <div>
+        <h3 id="tmodal-name"></h3>
+        <div class="tmodal-price"><span id="tmodal-p"></span><span id="tmodal-c"></span></div>
+      </div>
+      <button type="button" class="tmodal-x" onclick="closeTicker()" aria-label="ปิด">×</button>
+    </div>
+    <p class="tmodal-note">เรียงตาม<strong>ความเกี่ยวข้องของเนื้อหา</strong>กับสินทรัพย์นี้
+      (จับจากคำในหัวข้อ/เนื้อข่าว) — ไม่ใช่การวัดว่าข่าวทำให้ราคาขยับกี่เปอร์เซ็นต์</p>
+    <div class="tmodal-list" id="tmodal-list"></div>
+  </div>
+</div>
+
 <header>
   <h1>Econ · Politics Monitor</h1>
   <div class="stamp">
@@ -1356,7 +1536,8 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
-<script>window.__MARKERS__ = {markers_json}; window.__ICONS__ = {icons_json};</script>
+<script>window.__MARKERS__ = {markers_json}; window.__ICONS__ = {icons_json};
+window.__TNEWS__ = {tnews_json};</script>
 <script>{MAP_JS}</script>
 <script>
 function filterItems(input){{
@@ -1371,6 +1552,50 @@ function scrollRow(id, dir){{
   const el = document.getElementById(id);
   if (el) el.scrollBy({{ left: dir * Math.max(300, el.clientWidth * 0.8), behavior: 'smooth' }});
 }}
+
+// ── ข่าวที่เกี่ยวข้องกับสินทรัพย์ในแถบราคา ──────────────────
+const TNEWS = window.__TNEWS__ || {{}};
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({{ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }}[c]));
+const scoreClass = s => s > 50 ? 'hi' : (s >= 10 ? 'mid' : 'low');
+
+function openTicker(label){{
+  const d = TNEWS[label];
+  if (!d) return;
+  document.getElementById('tmodal-name').textContent = label;
+  document.getElementById('tmodal-p').textContent = d.price;
+  const c = document.getElementById('tmodal-c');
+  c.textContent = d.pct;
+  c.className = d.dir;
+  document.getElementById('tmodal-list').innerHTML = d.news.length
+    ? d.news.map(n => `<a class="trow" href="${{esc(n.link)}}" target="_blank" rel="noopener">
+        ${{n.image ? `<img class="trow-thumb" src="${{esc(n.image)}}" loading="lazy" alt="" onerror="this.remove()">` : ''}}
+        <span class="trow-body">
+          <span class="trow-title">${{esc(n.title)}}</span>
+          <span class="trow-meta"><span>${{esc(n.source)}}</span><span>${{esc(n.age)}}</span></span>
+        </span>
+        <span class="score ${{scoreClass(n.score)}}">${{n.score}}%</span>
+      </a>`).join('')
+    : '<p class="tmodal-empty">รอบนี้ยังไม่มีข่าวที่เกี่ยวข้องกับสินทรัพย์นี้</p>';
+  document.getElementById('tmodal').hidden = false;
+  document.body.style.overflow = 'hidden';
+}}
+
+function closeTicker(){{
+  document.getElementById('tmodal').hidden = true;
+  document.body.style.overflow = '';
+}}
+
+document.querySelector('.ticker').addEventListener('click', ev => {{
+  const t = ev.target.closest('.tick');
+  if (t) openTicker(t.dataset.label);
+}});
+document.getElementById('tmodal').addEventListener('click', ev => {{
+  if (ev.target.id === 'tmodal') closeTicker();      // คลิกพื้นหลังเพื่อปิด
+}});
+addEventListener('keydown', ev => {{
+  if (ev.key === 'Escape' && !document.getElementById('tmodal').hidden) closeTicker();
+}});
 
 function setScope(s){{
   document.querySelectorAll('.tab').forEach(t =>
@@ -1454,6 +1679,10 @@ if __name__ == "__main__":
         markets = cache.get("markets", [])
 
     history = update_history(markets) if markets else load_json(HISTORY_FILE)
+    if markets and news:
+        attach_ticker_news(markets, news)
+        linked = sum(len(m.get("news") or []) for m in markets)
+        print(f"จับคู่ข่าวกับสินทรัพย์ได้ {linked} รายการ\n")
     save_cache(news, markets)
 
     with open("index.html", "w", encoding="utf-8") as f:
