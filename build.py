@@ -614,10 +614,94 @@ function show(d){
 }
 
 const MAX_N = d3.max(MARKERS, d => d.total) || 1;
-let markerSel = null;
+let markerSel = null, labelSel = null, viewW = 0;
+
+const NAME_FIX = {
+  "United States of America": "United States",
+  "Dem. Rep. Congo": "DR Congo",
+  "Central African Rep.": "C. African Rep.",
+  "Bosnia and Herz.": "Bosnia & Herz.",
+  "Falkland Is.": "Falkland Is.",
+  "Eq. Guinea": "Eq. Guinea",
+};
+
+// ── ชื่อประเทศคาดยาวไปตามรูปร่างประเทศ (สไตล์ HOI4) ──────────
+function ringsOf(geom){
+  if (geom.type === "Polygon") return [geom.coordinates[0]];
+  if (geom.type === "MultiPolygon") return geom.coordinates.map(p => p[0]);
+  return [];
+}
+
+function labelSpec(feature, proj){
+  // ใช้เฉพาะผืนแผ่นดินที่ใหญ่สุด ไม่ให้เกาะเล็กเกาะน้อยดึงตำแหน่งเพี้ยน
+  let best = null, bestArea = 0;
+  for (const ring of ringsOf(feature.geometry)) {
+    const pts = [];
+    for (const c of ring) {
+      const p = proj(c);
+      if (p && isFinite(p[0]) && isFinite(p[1])) pts.push(p);
+    }
+    if (pts.length < 4) continue;
+    const a = Math.abs(d3.polygonArea(pts));
+    if (a > bestArea) { bestArea = a; best = pts; }
+  }
+  if (!best) return null;
+
+  const [cx, cy] = d3.polygonCentroid(best);
+  // หาแกนหลักของรูปร่างด้วย PCA แล้ววางตัวอักษรไปตามแกนนั้น
+  let sxx = 0, syy = 0, sxy = 0;
+  for (const [x, y] of best) {
+    const dx = x - cx, dy = y - cy;
+    sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+  }
+  const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+  for (const [x, y] of best) {
+    const dx = x - cx, dy = y - cy;
+    const u = dx * ca + dy * sa, v = -dx * sa + dy * ca;
+    if (u < u0) u0 = u; if (u > u1) u1 = u;
+    if (v < v0) v0 = v; if (v > v1) v1 = v;
+  }
+  let deg = ang * 180 / Math.PI;
+  if (deg > 90) deg -= 180; else if (deg < -90) deg += 180;   // กันตัวหนังสือกลับหัว
+
+  const major = u1 - u0, minor = v1 - v0;
+  // ประเทศที่รูปร่างค่อนข้างกลม แกนหลักจะสุ่มทิศ เอียงมากจะดูแปลก
+  // ยิ่งรูปร่างยาวเรียว (เช่น ชิลี) ยิ่งปล่อยให้เอียงได้เต็มที่
+  const ratio = major / Math.max(minor, 1e-6);
+  const limit = ratio > 1.95 ? 90 : (ratio > 1.4 ? 45 : 22);
+  deg = Math.max(-limit, Math.min(limit, deg));
+  const name = (NAME_FIX[feature.properties.name] || feature.properties.name).toUpperCase();
+  const span = Math.max(1, major * 0.76);
+  // ตัวอักษรต้องไม่สูงเกินความ "หนา" ของประเทศ และต้องไม่ถูกบีบแนวนอน
+  // (ประมาณความกว้างจริงของตัวพิมพ์ใหญ่ ≈ 0.62 เท่าของขนาดฟอนต์ต่อตัว)
+  // ปล่อยให้ยืดออกได้อย่างเดียว จะได้หน้าตาคาดยาวแบบ HOI4
+  const fs = Math.max(2.4, Math.min(minor * 0.34, span / (0.62 * name.length)));
+  return { cx, cy, deg, major, minor, span, fs, name };
+}
+
+function drawCountryLabels(features, proj){
+  const specs = features.map(f => labelSpec(f, proj)).filter(Boolean);
+  labelSel = gMap.append("g").attr("class", "clabels")
+    .selectAll("text").data(specs).join("text")
+      .attr("class", "country-label")
+      .attr("transform", d => `translate(${d.cx},${d.cy}) rotate(${d.deg})`)
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "central")
+      .attr("textLength", d => d.span)
+      .attr("lengthAdjust", "spacingAndGlyphs")
+      .style("font-size", d => d.fs + "px")
+      .text(d => d.name);
+}
 
 // จุดยิ่งซูมยิ่งแยกจากกัน แต่ขนาดหมุด/ตัวอักษรคงเดิม (scale สวนกับ k)
 function rescale(k){
+  if (labelSel) {
+    // ชื่อประเทศยืด-หดไปกับแผนที่ จึงโชว์เฉพาะช่วงที่อ่านออก
+    labelSel.style("display", d =>
+      (d.fs * k >= 6 && d.major * k <= viewW * 2.4) ? null : "none");
+  }
   if (!markerSel) return;
   markerSel.attr("transform", d => `translate(${d._x},${d._y}) scale(${1 / k})`);
   markerSel.selectAll("text.mk-label")
@@ -671,9 +755,11 @@ function plot(proj){
 function draw(){
   const box = svg.node().getBoundingClientRect();
   const W = box.width, H = box.height;
+  if (!W || !H) return;   // ยังวัดขนาดไม่ได้ เดี๋ยว ResizeObserver เรียกซ้ำให้เอง
+  viewW = W;
   svg.attr("viewBox", `0 0 ${W} ${H}`);
   gMap.selectAll("*").remove();
-  markerSel = null;
+  markerSel = labelSel = null;
 
   const proj = d3.geoNaturalEarth1()
     .fitSize([W, H * 1.28], { type: "Sphere" })
@@ -691,6 +777,7 @@ function draw(){
       const land = topojson.feature(topo, topo.objects.countries);
       gMap.append("g").selectAll("path").data(land.features).join("path")
         .attr("class", "country").attr("d", path);
+      drawCountryLabels(land.features, proj);   // ต้องอยู่ก่อน plot() หมุดข่าวจะได้อยู่บนสุด
       plot(proj);
     })
     .catch(() => plot(proj));
@@ -703,7 +790,13 @@ function zoomReset(){ ease(260).call(zoom.transform, d3.zoomIdentity); }
 
 if (MARKERS.length) show(MARKERS[0]);
 draw();
-let _t; addEventListener("resize", () => { clearTimeout(_t); _t = setTimeout(draw, 200); });
+
+let _t;
+const redraw = (ms) => { clearTimeout(_t); _t = setTimeout(draw, ms); };
+addEventListener("resize", () => redraw(200));
+// ตอนสคริปต์รันครั้งแรก บางทีเบราว์เซอร์ยังไม่รู้ความกว้างของแผนที่ (ได้ 0)
+// ให้วาดใหม่เมื่อรู้ขนาดจริง แทนที่จะหวังว่า layout จะพร้อมพอดี
+if (window.ResizeObserver) new ResizeObserver(() => redraw(120)).observe(svg.node());
 """
 
 
@@ -959,6 +1052,11 @@ h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
 .mk:hover .halo{{opacity:.34}}
 .mk-label{{font-family:'IBM Plex Sans Thai',sans-serif;font-size:10px;
   fill:var(--mute);pointer-events:none}}
+/* ชื่อประเทศคาดบนพื้นที่ประเทศ — ขอบเส้นไม่หนาขึ้นตอนซูม */
+.country-label{{font-family:'IBM Plex Sans Thai',sans-serif;font-weight:600;
+  fill:#8496B2;fill-opacity:.62;pointer-events:none;user-select:none;
+  paint-order:stroke;stroke:#0B111C;stroke-width:2px;stroke-opacity:.5;
+  stroke-linejoin:round;vector-effect:non-scaling-stroke}}
 #tip{{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;
   background:rgba(10,14,26,.95);border:1px solid var(--line);border-radius:7px;
   padding:7px 10px;font-size:.74rem;display:flex;flex-direction:column;gap:2px;z-index:5}}
