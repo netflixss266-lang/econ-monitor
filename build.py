@@ -51,6 +51,9 @@ FEEDS = [
     ("Google News",     "https://news.google.com/rss/search?q=ภัยพิบัติ+OR+น้ำท่วม+OR+แผ่นดินไหว&hl=th&gl=TH&ceid=TH:th", "th"),
     ("Google News",     "https://news.google.com/rss/search?q=consumer+trends+OR+retail+sales+when:1d&hl=en&gl=US&ceid=US:en", "en"),
     ("Google News",     "https://news.google.com/rss/search?q=climate+OR+wildfire+OR+flood+OR+earthquake+when:1d&hl=en&gl=US&ceid=US:en", "en"),
+    ("BBC Sci/Env",     "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", "en"),
+    ("The Guardian",    "https://www.theguardian.com/environment/rss",                 "en"),
+    ("The Guardian",    "https://www.theguardian.com/environment/climate-crisis/rss",  "en"),
 ]
 
 THAI_GOLD = "__THAIGOLD__"      # ไม่ใช่สัญลักษณ์ Yahoo — ดึงจากสมาคมค้าทองคำแทน
@@ -231,15 +234,32 @@ def age_label(dt):
     return f"{hrs // 24} วันที่แล้ว"
 
 
+def _widest(entries):
+    """เลือกรูปที่กว้างที่สุดจาก media:thumbnail / media:content
+    บางเจ้า (เช่น The Guardian) ไม่ใส่ type/medium มาด้วย จึงรับกรณีที่ไม่ระบุด้วย"""
+    best, best_w = None, -1
+    for m in entries or []:
+        url = m.get("url")
+        if not url:
+            continue
+        kind = (m.get("type") or "") + " " + (m.get("medium") or "")
+        if kind.strip() and "image" not in kind:
+            continue          # ข้าม video/audio ที่ระบุชนิดมาชัดเจน
+        try:
+            w = int(m.get("width") or 0)
+        except (TypeError, ValueError):
+            w = 0
+        if w > best_w:
+            best, best_w = url, w
+    return best
+
+
 def extract_image(e):
     """ดึงรูปประกอบข่าวจาก media:thumbnail / media:content / enclosure / <img> แรกใน summary"""
-    thumbs = e.get("media_thumbnail") or []
-    if thumbs and thumbs[0].get("url"):
-        return thumbs[0]["url"]
-
-    for m in e.get("media_content") or []:
-        if m.get("url") and ("image" in (m.get("type") or "") or m.get("medium") == "image"):
-            return m["url"]
+    for key in ("media_thumbnail", "media_content"):
+        url = _widest(e.get(key))
+        if url:
+            return url
 
     for lk in e.get("links") or []:
         if lk.get("rel") == "enclosure" and "image" in (lk.get("type") or ""):
@@ -616,45 +636,68 @@ let _t; addEventListener("resize", () => { clearTimeout(_t); _t = setTimeout(dra
 
 
 def render(news, markets, history):
-    econ = [i for i in news if i["cat"] == "econ"][:PER_CATEGORY]
-    poli = [i for i in news if i["cat"] == "poli"][:PER_CATEGORY]
-    biz = [i for i in news if i["cat"] == "biz"][:PER_CATEGORY]
-    env = [i for i in news if i["cat"] == "env"][:PER_CATEGORY]
-    latest = news[:8]
+    def pick(items, n):
+        """หน้าตาเน้นรูป → เลือกข่าวที่มีรูปก่อน แล้วค่อยเรียงตามเวลาเหมือนเดิม
+        (ทุกข่าวอยู่ในกรอบ 24 ชม.อยู่แล้ว ลำดับจึงไม่เพี้ยนมาก)"""
+        has = [i for i in items if i.get("image")]
+        rest = [i for i in items if not i.get("image")]
+        chosen = (has + rest)[:n]
+        chosen.sort(key=lambda x: x["dt"], reverse=True)
+        return chosen
+
+    econ = pick([i for i in news if i["cat"] == "econ"], PER_CATEGORY)
+    poli = pick([i for i in news if i["cat"] == "poli"], PER_CATEGORY)
+    biz = pick([i for i in news if i["cat"] == "biz"], PER_CATEGORY)
+    env = pick([i for i in news if i["cat"] == "env"], PER_CATEGORY)
+    # เรื่องเด่น = ข่าวใหม่สุดที่มีรูป (ถ้าไม่มีรูปเลยใช้ข่าวใหม่สุด)
+    top_story = next((i for i in news if i.get("image")), news[0] if news else None)
+    latest = pick([i for i in news if i is not top_story], 14)
     markers = build_markers(news)
     kws = top_keywords(news)
     maxf = max([f for _, f in kws], default=1)
     located = sum(1 for i in news if i["place"])
 
-    def card(it):
-        loc = f'<span class="loc">{html.escape(it["place"])}</span>' if it["place"] else ""
-        img = (f'<img class="thumb" src="{html.escape(it["image"])}" loading="lazy" alt=""'
-               f' onerror="this.remove()">') if it.get("image") else ""
-        speak_text = html.escape(f"{it['title']}. {it['summary']}", quote=True)
-        speak_lang = "th-TH" if it["lang"] == "th" else "en-US"
-        return f"""<div class="item">
-      {img}
-      <div class="item-body">
-        <div class="item-head"><span class="src">{html.escape(it['source'])}{loc}</span><span class="age">{it['age']}</span></div>
-        <a class="item-link" href="{html.escape(it['link'])}" target="_blank" rel="noopener">
-          <h3>{html.escape(it['title'])}</h3>
-          {f'<p>{html.escape(it["summary"])}</p>' if it['summary'] else ''}
-        </a>
-        <div class="item-foot">
-          <button class="speak" type="button" data-text="{speak_text}" data-lang="{speak_lang}">🔊 ฟังข่าว</button>
-          <a class="full" href="{html.escape(it['link'])}" target="_blank" rel="noopener">อ่านฉบับเต็ม →</a>
-        </div>
-      </div>
-    </div>"""
+    def speak_attrs(it):
+        text = html.escape(f"{it['title']}. {it['summary']}", quote=True)
+        lang = "th-TH" if it["lang"] == "th" else "en-US"
+        return f'data-text="{text}" data-lang="{lang}"'
 
-    def feed_row(it):
-        img = (f'<img class="feed-thumb" src="{html.escape(it["image"])}" loading="lazy" alt=""'
+    def poster(it):
+        # ไอคอนหมวดวางไว้ใต้รูปเสมอ ถ้ารูปโหลดไม่ขึ้นจะเห็นพื้นไล่สี+ไอคอนแทน
+        img = (f'<img src="{html.escape(it["image"])}" loading="lazy" alt=""'
                f' onerror="this.remove()">') if it.get("image") else ""
-        return f"""<a class="feed-row" href="{html.escape(it['link'])}" target="_blank" rel="noopener">
-      {img}
-      {cat_icon(it['cat'], 'ci-sm')}
-      <span class="feed-title">{html.escape(it['title'])}</span>
-      <span class="feed-age">{it['age']}</span></a>"""
+        loc = f'<span class="loc">{html.escape(it["place"])}</span>' if it["place"] else ""
+        return f"""<article class="poster">
+      <a class="poster-link" href="{html.escape(it['link'])}" target="_blank" rel="noopener">
+        <div class="poster-img pf-{it['cat']}">{cat_icon(it['cat'], 'ci-lg')}{img}
+          <span class="poster-cat">{cat_icon(it['cat'], 'ci-sm')}</span></div>
+        <div class="poster-body">
+          <h3>{html.escape(it['title'])}</h3>
+          <div class="poster-meta"><span class="src">{html.escape(it['source'])}{loc}</span><span class="age">{it['age']}</span></div>
+        </div>
+      </a>
+      <button class="speak poster-speak" type="button" title="ฟังข่าว" {speak_attrs(it)}>🔊</button>
+    </article>"""
+
+    def hero(it):
+        img = (f'<img class="hero-img" src="{html.escape(it["image"])}" alt=""'
+               f' onerror="this.remove()">') if it.get("image") else ""
+        place = f' · {html.escape(it["place"])}' if it["place"] else ""
+        return f"""<section class="hero pf-{it['cat']}">
+  {img}
+  <div class="hero-scrim"></div>
+  <div class="hero-body">
+    <div class="hero-badge">{cat_icon(it['cat'], 'ci-sm')}<span>{CAT_LABELS[it['cat']]}</span>
+      <span class="hero-sep">·</span><span>{html.escape(it['source'])}{place}</span>
+      <span class="hero-sep">·</span><span>{it['age']}</span></div>
+    <h2 class="hero-title">{html.escape(it['title'])}</h2>
+    {f'<p class="hero-sum">{html.escape(it["summary"])}</p>' if it['summary'] else ''}
+    <div class="hero-actions">
+      <a class="btn btn-main" href="{html.escape(it['link'])}" target="_blank" rel="noopener">▶ อ่านฉบับเต็ม</a>
+      <button class="btn btn-ghost speak" type="button" {speak_attrs(it)}>🔊 ฟังข่าว</button>
+    </div>
+  </div>
+</section>"""
 
     def tick(m):
         cls = "up" if m["pct"] > 0 else ("down" if m["pct"] < 0 else "flat")
@@ -671,13 +714,22 @@ def render(news, markets, history):
       <span class="hot-bars">{bars}</span>
       <span class="hot-n">{m['total']}</span></div>"""
 
-    def cat_section(cat, items):
-        label = CAT_LABELS[cat]
-        return f"""<section class="panel">
-    <div class="panel-head"><h2>{cat_icon(cat)}{label}</h2><span class="count">{len(items)}</span></div>
-    <div class="search-wrap"><input class="search" type="search" placeholder="ค้นหาข่าว{label}…" oninput="filterItems(this)"></div>
-    <div class="items">{''.join(card(i) for i in items) or '<div class="item"><p>ยังไม่มีข่าวในรอบนี้</p></div>'}</div>
-  </section>"""
+    def row_section(cat, items, label=None, badge=""):
+        label = label or CAT_LABELS[cat]
+        rid = f"row-{cat}"
+        body = ("".join(poster(i) for i in items)
+                or '<p class="row-empty">ยังไม่มีข่าวในรอบนี้</p>')
+        return f"""<section class="row">
+  <div class="row-head">
+    <h2>{cat_icon(cat)}{label}{badge}<span class="row-n">{len(items)}</span></h2>
+    <div class="row-tools">
+      <input class="search" type="search" placeholder="ค้นหา…" oninput="filterItems(this)">
+      <button class="row-nav" type="button" onclick="scrollRow('{rid}',-1)" aria-label="เลื่อนซ้าย">‹</button>
+      <button class="row-nav" type="button" onclick="scrollRow('{rid}',1)" aria-label="เลื่อนขวา">›</button>
+    </div>
+  </div>
+  <div class="row-track" id="{rid}">{body}</div>
+</section>"""
 
     def kw_chip(w, f):
         return (f'<span class="kw" style="font-size:{0.78 + (f/maxf)*0.85:.2f}rem;'
@@ -718,6 +770,15 @@ def render(news, markets, history):
 <meta name="apple-mobile-web-app-title" content="Econ Monitor">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+/* เล่นอินโทรครั้งเดียวต่อการเปิดเว็บ ไม่ให้เล่นซ้ำตอนหน้ารีเฟรชอัตโนมัติทุก 15 นาที */
+try{{
+  if(sessionStorage.getItem('introSeen') ||
+     matchMedia('(prefers-reduced-motion:reduce)').matches){{
+    document.documentElement.className += ' no-intro';
+  }} else {{ sessionStorage.setItem('introSeen','1'); }}
+}}catch(e){{ document.documentElement.className += ' no-intro'; }}
+</script>
 <style>
 :root{{
   --bg:#0A0E1A; --panel:#111726; --panel2:#0E1420; --line:#1E2637;
@@ -728,7 +789,8 @@ def render(news, markets, history):
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{background:var(--bg);color:var(--ink);
   font-family:'IBM Plex Sans Thai',system-ui,sans-serif;
-  font-size:15px;line-height:1.55;padding:20px;max-width:1560px;margin:0 auto}}
+  font-size:15px;line-height:1.55;padding:20px;max-width:1560px;margin:0 auto;
+  animation:pageIn .85s 1.9s backwards}}
 a{{color:inherit;text-decoration:none}}
 
 header{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:9px;
@@ -839,32 +901,102 @@ h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
 .search::placeholder{{color:var(--dim)}}
 .search:focus{{outline:none;border-color:var(--econ)}}
 
-.grid-cats{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
-  gap:16px;align-items:start;margin-bottom:16px}}
 .grid-side{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
 @media(max-width:700px){{.grid-side{{grid-template-columns:1fr}}}}
-.items{{max-height:620px;overflow-y:auto}}
-.item{{display:block;border-bottom:1px solid var(--line);transition:background .12s}}
-.item:hover{{background:#151C2C}}
-.item:last-child{{border-bottom:0}}
-.item.hidden{{display:none}}
-.item .thumb{{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--panel2)}}
-.item-body{{padding:13px 15px}}
-.item-head{{display:flex;justify-content:space-between;gap:10px;margin-bottom:5px}}
-.src{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--mute);
+
+/* ── เรื่องเด่น (billboard) ───────────────────────────── */
+.hero{{position:relative;display:flex;align-items:flex-end;overflow:hidden;
+  border-radius:14px;margin-bottom:30px;min-height:clamp(320px,44vw,510px)}}
+.hero-img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}}
+.hero-scrim{{position:absolute;inset:0;
+  background:linear-gradient(90deg,rgba(5,7,13,.95) 0%,rgba(5,7,13,.78) 40%,rgba(5,7,13,.28) 74%),
+             linear-gradient(0deg,rgba(5,7,13,.96) 0%,rgba(5,7,13,0) 58%)}}
+.hero-body{{position:relative;padding:clamp(18px,3vw,40px);max-width:780px}}
+.hero-badge{{display:flex;align-items:center;flex-wrap:wrap;gap:7px;
+  font-family:'IBM Plex Mono',monospace;font-size:.71rem;color:var(--mute)}}
+.hero-sep{{color:var(--dim)}}
+.hero-title{{font-size:clamp(1.35rem,3.1vw,2.55rem);font-weight:700;line-height:1.18;
+  margin:11px 0 12px;text-shadow:0 2px 20px rgba(0,0,0,.65)}}
+.hero-sum{{color:#C2CCDD;font-size:.92rem;line-height:1.6;max-width:640px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}}
+.hero-actions{{display:flex;flex-wrap:wrap;gap:10px;margin-top:17px}}
+.btn{{display:inline-flex;align-items:center;gap:7px;padding:9px 19px;border-radius:7px;
+  font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;
+  border:1px solid transparent;transition:background .16s}}
+.btn-main{{background:#fff;color:#0A0E1A}}
+.btn-main:hover{{background:#D7E0EF}}
+.btn-ghost{{background:rgba(175,192,220,.2);color:var(--ink);border-color:rgba(255,255,255,.15)}}
+.btn-ghost:hover{{background:rgba(175,192,220,.33)}}
+
+/* ── แถวข่าวแบบเลื่อนแนวนอน ───────────────────────────── */
+.row{{margin-bottom:28px}}
+.row-head{{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}}
+.row-head h2{{display:flex;align-items:center;gap:9px;font-size:1.05rem;font-weight:700}}
+.row-n{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--dim);font-weight:400}}
+.live{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.08em;
+  color:#fff;background:var(--down);border-radius:4px;padding:2px 6px}}
+.row-tools{{display:flex;align-items:center;gap:7px}}
+.row-tools .search{{width:150px}}
+.row-nav{{width:30px;height:30px;flex:none;border-radius:50%;cursor:pointer;font-size:1.05rem;
+  line-height:1;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line)}}
+.row-nav:hover{{background:rgba(255,255,255,.15)}}
+/* padding + margin ติดลบ เพื่อให้การ์ดที่ขยายตอน hover ไม่โดนตัดขอบ */
+.row-track{{display:flex;gap:12px;overflow-x:auto;scroll-behavior:smooth;
+  scroll-snap-type:x proximity;padding:24px 4px 28px;margin:-24px -4px -28px}}
+.row-track::-webkit-scrollbar{{height:0}}
+.row-empty{{color:var(--mute);font-size:.82rem;padding:22px 4px}}
+
+.poster{{position:relative;flex:0 0 288px;scroll-snap-align:start;background:var(--panel);
+  border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  transition:transform .28s cubic-bezier(.2,.7,.3,1),box-shadow .28s,border-color .28s}}
+.poster:hover{{transform:scale(1.07);z-index:3;border-color:#31415C;
+  box-shadow:0 18px 42px rgba(0,0,0,.62)}}
+.poster.hidden{{display:none}}
+.poster-img{{position:relative;display:grid;place-items:center;aspect-ratio:16/9}}
+.poster-img img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
+.poster-img .ci-lg{{width:42px;height:42px;opacity:.45}}
+.poster-cat{{position:absolute;left:9px;top:9px;z-index:2;display:grid;place-items:center;
+  width:24px;height:24px;border-radius:6px;background:rgba(5,7,13,.72)}}
+.poster-speak{{position:absolute;right:9px;top:9px;z-index:2;width:26px;height:26px;padding:0;
+  border-radius:6px;background:rgba(5,7,13,.72);opacity:0;transition:opacity .2s}}
+.poster:hover .poster-speak,.poster-speak:focus{{opacity:1}}
+.poster-body{{padding:11px 12px 13px}}
+.poster-body h3{{font-size:.89rem;font-weight:600;line-height:1.42;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}}
+.poster-meta{{display:flex;justify-content:space-between;gap:8px;margin-top:8px}}
+/* พื้นไล่สีตามหมวด ใช้ตอนข่าวไม่มีรูป */
+.pf-econ{{background:linear-gradient(135deg,rgba(76,141,255,.34),rgba(76,141,255,.05))}}
+.pf-poli{{background:linear-gradient(135deg,rgba(245,165,36,.34),rgba(245,165,36,.05))}}
+.pf-biz{{background:linear-gradient(135deg,rgba(45,212,191,.34),rgba(45,212,191,.05))}}
+.pf-env{{background:linear-gradient(135deg,rgba(74,222,128,.34),rgba(74,222,128,.05))}}
+.pf-mixed{{background:linear-gradient(135deg,rgba(155,138,251,.34),rgba(155,138,251,.05))}}
+
+.src{{font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--mute);
   text-transform:uppercase;letter-spacing:.05em}}
-.loc{{margin-left:8px;padding:1px 6px;border:1px solid var(--line);border-radius:4px;
+.loc{{margin-left:6px;padding:1px 5px;border:1px solid var(--line);border-radius:4px;
   color:var(--dim);text-transform:none;letter-spacing:0}}
-.age{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim)}}
-.item h3{{font-size:.92rem;font-weight:600;line-height:1.42;margin-bottom:4px}}
-.item p{{font-size:.78rem;color:var(--mute);line-height:1.5}}
-.item-foot{{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px}}
+.age{{font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--dim);white-space:nowrap}}
 .speak{{font-family:inherit;font-size:.7rem;color:var(--mute);background:var(--panel2);
   border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer}}
 .speak:hover{{color:var(--ink);border-color:var(--dim)}}
 .speak.playing{{color:var(--econ);border-color:var(--econ)}}
-.full{{font-size:.7rem;color:var(--dim)}}
-.full:hover{{color:var(--mute)}}
+
+/* ── อินโทรตอนเข้าเว็บ ─────────────────────────────────── */
+#intro{{position:fixed;inset:0;z-index:99;background:#05070D;display:grid;place-items:center;
+  animation:introFade .6s 1.95s forwards}}
+.intro-inner{{display:flex;flex-direction:column;align-items:center;gap:.35em;
+  font-weight:700;font-size:clamp(1.1rem,5.4vw,2.9rem);letter-spacing:.2em;text-indent:.2em;
+  color:#fff;text-shadow:0 0 34px rgba(76,141,255,.55),0 0 90px rgba(245,165,36,.28);
+  animation:introIn 1.05s cubic-bezier(.2,.7,.3,1) backwards,
+            introZoom .8s 1.72s ease-in forwards}}
+.intro-inner b{{font-size:.52em;letter-spacing:.62em;text-indent:.62em;
+  font-weight:500;color:var(--econ)}}
+@keyframes introIn{{from{{opacity:0;transform:scale(.84);filter:blur(13px);letter-spacing:.72em}}}}
+@keyframes introZoom{{to{{opacity:0;transform:scale(1.55)}}}}
+@keyframes introFade{{to{{opacity:0;visibility:hidden}}}}
+@keyframes pageIn{{from{{opacity:0;transform:translateY(15px)}}}}
+.no-intro #intro{{display:none}}
+.no-intro body{{animation:none}}
 
 .kws{{display:flex;flex-wrap:wrap;gap:7px 12px;padding:15px;align-items:baseline}}
 .kw{{font-weight:500;line-height:1.2}}
@@ -875,10 +1007,16 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 ::-webkit-scrollbar{{width:8px;height:8px}}
 ::-webkit-scrollbar-track{{background:transparent}}
 ::-webkit-scrollbar-thumb{{background:#222B3D;border-radius:4px}}
-@media(prefers-reduced-motion:reduce){{*{{animation:none!important;transition:none!important}}}}
+@media(prefers-reduced-motion:reduce){{
+  *{{animation:none!important;transition:none!important}}
+  #intro{{display:none!important}}   /* กัน overlay ค้างเมื่ออนิเมชันถูกปิด */
+  .row-track{{scroll-behavior:auto}}
+}}
 </style>
 </head>
 <body>
+
+<div id="intro" aria-hidden="true"><div class="intro-inner">ECON · POLITICS<b>MONITOR</b></div></div>
 
 <header>
   <h1>Econ · Politics Monitor</h1>
@@ -891,10 +1029,9 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
 <div class="ticker"><div class="ticker-track">{tick_row}{tick_row}</div></div>
 
-<section class="panel row-panel">
-  <div class="panel-head"><h2>ล่าสุด</h2><span class="count">LIVE</span></div>
-  <div class="feed">{''.join(feed_row(i) for i in latest)}</div>
-</section>
+{hero(top_story) if top_story else ''}
+
+{row_section("mixed", latest, "ล่าสุด", '<span class="live">LIVE</span>')}
 
 <section class="panel row-panel">
   <div class="panel-head">
@@ -916,12 +1053,10 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   <div id="hotspot-detail"></div>
 </section>
 
-<div class="grid-cats">
-  {cat_section("econ", econ)}
-  {cat_section("poli", poli)}
-  {cat_section("biz", biz)}
-  {cat_section("env", env)}
-</div>
+{row_section("econ", econ)}
+{row_section("poli", poli)}
+{row_section("biz", biz)}
+{row_section("env", env)}
 
 <div class="grid-side">
   <section class="panel">
@@ -946,28 +1081,42 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 <script>
 function filterItems(input){{
   const q = input.value.trim().toLowerCase();
-  const items = input.closest('section').querySelectorAll('.item');
-  items.forEach(it => {{
+  input.closest('section').querySelectorAll('.poster').forEach(it => {{
     const hit = !q || it.textContent.toLowerCase().includes(q);
     it.classList.toggle('hidden', !hit);
   }});
 }}
 
+function scrollRow(id, dir){{
+  const el = document.getElementById(id);
+  if (el) el.scrollBy({{ left: dir * Math.max(300, el.clientWidth * 0.8), behavior: 'smooth' }});
+}}
+
+// เอา overlay อินโทรออกจาก DOM หลังเล่นจบ
+(() => {{
+  const intro = document.getElementById('intro');
+  if (!intro) return;
+  if (document.documentElement.classList.contains('no-intro')) {{ intro.remove(); return; }}
+  setTimeout(() => intro.remove(), 2700);
+}})();
+
 if ('speechSynthesis' in window) {{
   let currentBtn = null;
+  const rest = b => {{ b.classList.remove('playing'); b.textContent = b.dataset.label; }};
   document.addEventListener('click', ev => {{
     const btn = ev.target.closest('.speak');
     if (!btn) return;
+    if (btn.dataset.label === undefined) btn.dataset.label = btn.textContent;
     const wasPlaying = btn.classList.contains('playing');
     speechSynthesis.cancel();
-    if (currentBtn) {{ currentBtn.classList.remove('playing'); currentBtn.textContent = '🔊 ฟังข่าว'; }}
+    if (currentBtn) rest(currentBtn);
     currentBtn = null;
     if (wasPlaying) return;
     const u = new SpeechSynthesisUtterance(btn.dataset.text);
     u.lang = btn.dataset.lang;
-    u.onend = u.onerror = () => {{ btn.classList.remove('playing'); btn.textContent = '🔊 ฟังข่าว'; currentBtn = null; }};
+    u.onend = u.onerror = () => {{ rest(btn); currentBtn = null; }};
     btn.classList.add('playing');
-    btn.textContent = '⏸ กำลังอ่าน…';
+    btn.textContent = btn.classList.contains('poster-speak') ? '⏸' : '⏸ กำลังอ่าน…';
     currentBtn = btn;
     speechSynthesis.speak(u);
   }});
