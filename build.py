@@ -25,6 +25,7 @@ TZ = timezone(timedelta(hours=7))          # Asia/Bangkok
 NOW = datetime.now(TZ)
 MAX_AGE_HOURS = 24
 PER_CATEGORY = 18
+PER_ROW = 14          # จำนวนการ์ดต่อแถว (แยกไทย/ต่างประเทศแล้วจึงลดลงจาก PER_CATEGORY)
 CACHE_FILE = "cache.json"
 HISTORY_FILE = "market_history.json"
 HISTORY_POINTS = 60     # 60 รอบ x 3 ชม. ≈ 7.5 วัน
@@ -326,6 +327,22 @@ CAT_LABELS = {
     "econ": "เศรษฐกิจ", "poli": "การเมือง",
     "biz": "ธุรกิจ", "env": "สิ่งแวดล้อม", "mixed": "ผสม",
 }
+
+SCOPES = [("th", "ข่าวไทย"), ("intl", "ข่าวต่างประเทศ")]
+
+
+def scope_of(it):
+    """แยกข่าวไทย / ต่างประเทศ
+
+    ใช้พิกัดที่จับได้เป็นหลัก เพราะสื่อไทยรายงานข่าวต่างประเทศเยอะ
+    และสื่อต่างชาติก็รายงานข่าวไทย — ดูแค่ภาษาจะแยกผิด
+    ถ้าจับพิกัดไม่ได้ค่อยเดาจากภาษาของแหล่งข่าว
+    """
+    if it["place"] == "ไทย":
+        return "th"
+    if it["place"]:
+        return "intl"
+    return "th" if it["lang"] == "th" else "intl"
 
 # ไอคอนประจำหมวด — เส้น stroke ใช้ currentColor จึงรับสีจาก .ic-* ได้
 CAT_ICONS = {
@@ -645,13 +662,23 @@ def render(news, markets, history):
         chosen.sort(key=lambda x: x["dt"], reverse=True)
         return chosen
 
-    econ = pick([i for i in news if i["cat"] == "econ"], PER_CATEGORY)
-    poli = pick([i for i in news if i["cat"] == "poli"], PER_CATEGORY)
-    biz = pick([i for i in news if i["cat"] == "biz"], PER_CATEGORY)
-    env = pick([i for i in news if i["cat"] == "env"], PER_CATEGORY)
+    for it in news:
+        it["scope"] = scope_of(it)
+
     # เรื่องเด่น = ข่าวใหม่สุดที่มีรูป (ถ้าไม่มีรูปเลยใช้ข่าวใหม่สุด)
     top_story = next((i for i in news if i.get("image")), news[0] if news else None)
-    latest = pick([i for i in news if i is not top_story], 14)
+    primary_scope = top_story["scope"] if top_story else "th"
+
+    groups = {}
+    for sc, _ in SCOPES:
+        pool = [i for i in news if i["scope"] == sc]
+        top = next((i for i in pool if i.get("image")), pool[0] if pool else None)
+        groups[sc] = {
+            "top": top,
+            "latest": pick([i for i in pool if i is not top], PER_ROW),
+            "cats": {c: pick([i for i in pool if i["cat"] == c], PER_ROW) for c in CAT_NAMES},
+            "n": len(pool),
+        }
     markers = build_markers(news)
     kws = top_keywords(news)
     maxf = max([f for _, f in kws], default=1)
@@ -679,11 +706,11 @@ def render(news, markets, history):
       <button class="speak poster-speak" type="button" title="ฟังข่าว" {speak_attrs(it)}>🔊</button>
     </article>"""
 
-    def hero(it):
+    def hero(it, scope, primary):
         img = (f'<img class="hero-img" src="{html.escape(it["image"])}" alt=""'
                f' onerror="this.remove()">') if it.get("image") else ""
         place = f' · {html.escape(it["place"])}' if it["place"] else ""
-        return f"""<section class="hero pf-{it['cat']}">
+        return f"""<section class="hero pf-{it['cat']}" data-scope="{scope}" data-primary="{1 if primary else 0}">
   {img}
   <div class="hero-scrim"></div>
   <div class="hero-body">
@@ -714,11 +741,11 @@ def render(news, markets, history):
       <span class="hot-bars">{bars}</span>
       <span class="hot-n">{m['total']}</span></div>"""
 
-    def row_section(cat, items, label=None, badge=""):
+    def row_section(cat, items, rid, label=None, badge=""):
+        if not items:
+            return ""          # ไม่ต้องโชว์แถวเปล่า
         label = label or CAT_LABELS[cat]
-        rid = f"row-{cat}"
-        body = ("".join(poster(i) for i in items)
-                or '<p class="row-empty">ยังไม่มีข่าวในรอบนี้</p>')
+        body = "".join(poster(i) for i in items)
         return f"""<section class="row">
   <div class="row-head">
     <h2>{cat_icon(cat)}{label}{badge}<span class="row-n">{len(items)}</span></h2>
@@ -734,6 +761,26 @@ def render(news, markets, history):
     def kw_chip(w, f):
         return (f'<span class="kw" style="font-size:{0.78 + (f/maxf)*0.85:.2f}rem;'
                 f'opacity:{0.45 + (f/maxf)*0.55:.2f}">{html.escape(w)}</span>')
+
+    heroes = "".join(
+        hero(g["top"], sc, sc == primary_scope)
+        for sc, _ in SCOPES if (g := groups[sc])["top"]
+    )
+
+    def scope_group(sc, label):
+        g = groups[sc]
+        rows = row_section("mixed", g["latest"], f"row-{sc}-latest",
+                           "ล่าสุด", '<span class="live">LIVE</span>')
+        rows += "".join(row_section(c, g["cats"][c], f"row-{sc}-{c}") for c in CAT_NAMES)
+        if not rows:
+            return ""
+        flag = "TH" if sc == "th" else "INTL"
+        return f"""<div class="scope-group" data-scope="{sc}">
+  <h2 class="scope-title">{label}<span class="scope-flag">{flag}</span></h2>
+  {rows}
+</div>"""
+
+    scope_groups = "".join(scope_group(sc, lb) for sc, lb in SCOPES)
 
     # ทำซ้ำ 2 ชุดในแทร็กเดียว ให้ marquee วนต่อเนื่องแบบไม่มีรอยต่อ
     tick_row = "".join(tick(m) for m in markets)
@@ -998,6 +1045,26 @@ h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
 .no-intro #intro{{display:none}}
 .no-intro body{{animation:none}}
 
+/* ── แท็บ ไทย / ต่างประเทศ ─────────────────────────────── */
+.tabs{{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;
+  border-bottom:1px solid var(--line);padding-bottom:2px}}
+.tab{{position:relative;font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;
+  color:var(--mute);background:none;border:0;padding:9px 16px 11px;border-radius:8px 8px 0 0;
+  transition:color .16s,background .16s}}
+.tab:hover{{color:var(--ink);background:rgba(255,255,255,.05)}}
+.tab.active{{color:var(--ink)}}
+.tab.active::after{{content:"";position:absolute;left:12px;right:12px;bottom:-3px;height:3px;
+  border-radius:3px 3px 0 0;background:linear-gradient(90deg,var(--econ),var(--poli))}}
+.tab-n{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;font-weight:400;
+  color:var(--dim);margin-left:6px}}
+.scope-title{{display:flex;align-items:center;gap:10px;font-size:1.18rem;font-weight:700;
+  margin:6px 0 14px}}
+.scope-title::after{{content:"";flex:1;height:1px;background:var(--line)}}
+.scope-flag{{font-size:.66rem;font-weight:500;letter-spacing:.08em;color:var(--dim);
+  font-family:'IBM Plex Mono',monospace;border:1px solid var(--line);
+  border-radius:5px;padding:2px 7px}}
+[hidden]{{display:none!important}}
+
 .kws{{display:flex;flex-wrap:wrap;gap:7px 12px;padding:15px;align-items:baseline}}
 .kw{{font-weight:500;line-height:1.2}}
 
@@ -1029,9 +1096,14 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
 <div class="ticker"><div class="ticker-track">{tick_row}{tick_row}</div></div>
 
-{hero(top_story) if top_story else ''}
+<nav class="tabs" role="tablist">
+  <button class="tab active" type="button" role="tab" data-scope="all" onclick="setScope('all')">ทั้งหมด<span class="tab-n">{len(news)}</span></button>
+  {''.join(f'''<button class="tab" type="button" role="tab" data-scope="{sc}" onclick="setScope('{sc}')">{lb}<span class="tab-n">{groups[sc]["n"]}</span></button>''' for sc, lb in SCOPES)}
+</nav>
 
-{row_section("mixed", latest, "ล่าสุด", '<span class="live">LIVE</span>')}
+{heroes}
+
+{scope_groups}
 
 <section class="panel row-panel">
   <div class="panel-head">
@@ -1052,11 +1124,6 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
   <div id="hotspot-detail"></div>
 </section>
-
-{row_section("econ", econ)}
-{row_section("poli", poli)}
-{row_section("biz", biz)}
-{row_section("env", env)}
 
 <div class="grid-side">
   <section class="panel">
@@ -1091,6 +1158,25 @@ function scrollRow(id, dir){{
   const el = document.getElementById(id);
   if (el) el.scrollBy({{ left: dir * Math.max(300, el.clientWidth * 0.8), behavior: 'smooth' }});
 }}
+
+function setScope(s){{
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.scope === s));
+  document.querySelectorAll('.scope-group').forEach(g =>
+    g.hidden = !(s === 'all' || g.dataset.scope === s));
+  // แท็บ "ทั้งหมด" โชว์เรื่องเด่นอันเดียว (ข่าวใหม่สุด) ไม่ใช่ทั้งสองฝั่ง
+  document.querySelectorAll('.hero').forEach(h =>
+    h.hidden = !(s === 'all' ? h.dataset.primary === '1' : h.dataset.scope === s));
+  try {{ sessionStorage.setItem('scope', s); }} catch(e) {{}}
+}}
+
+// จำแท็บที่เลือกไว้ ไม่ให้เด้งกลับตอนหน้ารีเฟรชอัตโนมัติ
+(() => {{
+  let s = 'all';
+  try {{ s = sessionStorage.getItem('scope') || 'all'; }} catch(e) {{}}
+  if (!document.querySelector(`.tab[data-scope="${{s}}"]`)) s = 'all';
+  setScope(s);
+}})();
 
 // เอา overlay อินโทรออกจาก DOM หลังเล่นจบ
 (() => {{
