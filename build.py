@@ -614,7 +614,7 @@ function show(d){
 }
 
 const MAX_N = d3.max(MARKERS, d => d.total) || 1;
-let markerSel = null, labelSel = null, viewW = 0;
+let markerSel = null, labelSel = null, viewW = 0, drawn = false;
 
 const NAME_FIX = {
   "United States of America": "United States",
@@ -755,7 +755,8 @@ function plot(proj){
 function draw(){
   const box = svg.node().getBoundingClientRect();
   const W = box.width, H = box.height;
-  if (!W || !H) return;   // ยังวัดขนาดไม่ได้ เดี๋ยว ResizeObserver เรียกซ้ำให้เอง
+  if (!W || !H) return;   // ยังวัดขนาดไม่ได้ เดี๋ยวมีคนเรียกซ้ำให้เอง
+  drawn = true;
   viewW = W;
   svg.attr("viewBox", `0 0 ${W} ${H}`);
   gMap.selectAll("*").remove();
@@ -789,13 +790,20 @@ function zoomBy(f){ ease(220).call(zoom.scaleBy, f); }
 function zoomReset(){ ease(260).call(zoom.transform, d3.zoomIdentity); }
 
 if (MARKERS.length) show(MARKERS[0]);
-draw();
 
 let _t;
 const redraw = (ms) => { clearTimeout(_t); _t = setTimeout(draw, ms); };
+
+// ตอนสคริปต์รันครั้งแรก บางครั้งเบราว์เซอร์ยังไม่รู้ความกว้างของแผนที่ (วัดได้ 0)
+// จึงลองใหม่เป็นระยะจนกว่าจะวาดสำเร็จ — ใช้ตัวจับเวลาล้วน ไม่พึ่ง API
+// ที่ผูกกับรอบการวาดภาพ (rAF/ResizeObserver) ซึ่งอาจไม่ทำงานในบางสภาพแวดล้อม
+(function ensureDrawn(tries){
+  draw();
+  if (!drawn && tries > 0) setTimeout(() => ensureDrawn(tries - 1), 150);
+})(24);
+
+addEventListener("load", () => redraw(60));
 addEventListener("resize", () => redraw(200));
-// ตอนสคริปต์รันครั้งแรก บางทีเบราว์เซอร์ยังไม่รู้ความกว้างของแผนที่ (ได้ 0)
-// ให้วาดใหม่เมื่อรู้ขนาดจริง แทนที่จะหวังว่า layout จะพร้อมพอดี
 if (window.ResizeObserver) new ResizeObserver(() => redraw(120)).observe(svg.node());
 """
 
