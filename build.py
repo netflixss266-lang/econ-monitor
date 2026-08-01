@@ -212,6 +212,37 @@ def relevance(it, primary, secondary):
     return min(100, direct + min(side, 24))
 
 
+# โดเมนบริษัทไว้ดึงโลโก้ — ตัวที่ไม่มีโลโก้จะใช้อักษรย่อแทน
+TICKER_DOMAIN = {
+    "SCB": "scb.co.th", "KTB": "krungthai.com", "TTB": "ttbbank.com",
+    "BAY": "krungsri.com", "TISCO": "tisco.co.th", "GULF": "gulf.co.th",
+    "CPALL": "cpall.co.th", "AAPL": "apple.com", "MSFT": "microsoft.com",
+    "NVDA": "nvidia.com", "AMZN": "amazon.com", "GOOG": "abc.xyz",
+    "WMT": "walmart.com", "COST": "costco.com", "COKE": "cokeconsolidated.com",
+    "BRK.B": "brk.com", "JEPQ": "jpmorgan.com",
+}
+
+
+def fetch_logos():
+    """เก็บเฉพาะโลโก้ที่มีจริง (บางโดเมนคืน 404 พร้อมรูปลูกโลกกลางๆ มา)"""
+    def one(item):
+        label, dom = item
+        url = f"https://www.google.com/s2/favicons?domain={dom}&sz=64"
+        try:
+            r = requests.get(url, headers=BROWSER_UA, timeout=10)
+            return (label, url) if r.status_code == 200 else (label, None)
+        except Exception:
+            return label, None
+
+    out = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for label, url in pool.map(one, TICKER_DOMAIN.items()):
+            if url:
+                out[label] = url
+    print(f"  ✓ โลโก้ {len(out)}/{len(TICKER_DOMAIN)} สินทรัพย์")
+    return out
+
+
 def yahoo_session():
     """Yahoo ต้องมี cookie + crumb ก่อน ถึงจะเรียกข้อมูลพื้นฐานได้ (ไม่งั้น 401)"""
     s = requests.Session()
@@ -987,7 +1018,7 @@ if (window.ResizeObserver) new ResizeObserver(() => redraw(120)).observe(svg.nod
 """
 
 
-def render(news, markets, charts=None):
+def render(news, markets, charts=None, logos=None):
     def pick(items, n):
         """หน้าตาเน้นรูป → เลือกข่าวที่มีรูปก่อน แล้วค่อยเรียงตามเวลาเหมือนเดิม
         (ทุกข่าวอยู่ในกรอบ 24 ชม.อยู่แล้ว ลำดับจึงไม่เพี้ยนมาก)"""
@@ -1152,6 +1183,7 @@ def render(news, markets, charts=None):
                       "fund": m.get("fund") or {}, "news": m.get("news") or []}
          for m in markets}, ensure_ascii=False)
     charts_json = json.dumps(charts or {}, ensure_ascii=False)
+    logos_json = json.dumps(logos or {}, ensure_ascii=False)
     page_desc = f"ข่าวเศรษฐกิจ-การเมือง {len(news)} ข่าวใน 24 ชม. จาก {len(FEEDS)} แหล่ง อัปเดต {NOW.strftime('%d %b %Y %H:%M')} น."
     favicon = ("data:image/svg+xml,"
                "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
@@ -1269,6 +1301,11 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .tmodal-x{{flex:none;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:1.2rem;
   line-height:1;color:var(--mute);background:transparent;border:1px solid var(--line)}}
 .tmodal-x:hover{{color:var(--ink);background:rgba(255,255,255,.07)}}
+.backbtn{{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:9px;
+  cursor:pointer;color:var(--mute);background:var(--panel);border:1px solid var(--line)}}
+.backbtn svg{{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;
+  stroke-linecap:round;stroke-linejoin:round}}
+.backbtn:hover{{color:var(--ink);border-color:var(--dim)}}
 .tmodal-note{{padding:10px 18px;font-size:.71rem;line-height:1.5;color:var(--dim);
   border-bottom:1px solid var(--line)}}
 .tmodal-note strong{{color:var(--mute);font-weight:600}}
@@ -1320,14 +1357,29 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   padding:6px 0}}
 .cgroup{{padding:9px 14px 5px;font-family:'IBM Plex Mono',monospace;font-size:.62rem;
   letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}}
-.citem{{display:flex;justify-content:space-between;gap:8px;width:100%;padding:7px 14px;
+.citem{{display:flex;align-items:center;gap:8px;width:100%;padding:7px 14px;
   cursor:pointer;background:none;border:0;color:var(--mute);font-family:inherit;
   font-size:.79rem;text-align:left}}
+.citem .cname{{flex:1;min-width:0}}
+/* โลโก้สินทรัพย์ — ถ้าไม่มีรูปจะเหลืออักษรย่อที่วางไว้ข้างล่าง */
+.clogo{{position:relative;flex:none;display:grid;place-items:center;
+  width:20px;height:20px;border-radius:5px;overflow:hidden;
+  background:#1B2434;font-family:'IBM Plex Mono',monospace;font-size:.56rem;
+  font-weight:600;color:var(--mute)}}
+.clogo img{{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+  background:#fff}}
 .citem:hover{{background:#151C2C;color:var(--ink)}}
 .citem.on{{background:#182133;color:var(--ink);box-shadow:inset 2px 0 0 var(--brass)}}
 .citem span:last-child{{font-family:'IBM Plex Mono',monospace;font-size:.7rem}}
 .cmodal-chart{{flex:1;min-width:0;display:flex;flex-direction:column;padding:10px 14px 8px}}
 #cchart{{flex:1;min-height:0}}
+/* ปุ่มช่วงเวลา + ชนิดกราฟ อยู่มุมขวาล่างของกราฟ */
+.cbottom{{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
+  flex-wrap:wrap;margin-top:4px}}
+.cctrl{{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}}
+.map-modal-body{{flex:1;display:flex;flex-direction:column;min-height:0}}
+.map-modal-body .map-wrap{{flex:1;height:auto;min-height:0}}
+.map-modal-body #hotspot-detail{{max-height:210px}}
 #cchart svg{{width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}}
 .c-grid line{{stroke:#1B2434;stroke-width:1;shape-rendering:crispEdges}}
 .c-axis text{{fill:var(--dim);font-family:'IBM Plex Mono',monospace;font-size:10px}}
@@ -1357,6 +1409,13 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   text-align:right;white-space:nowrap}}
 .calc-v small{{display:block;font-size:.6rem;font-weight:400;color:var(--dim)}}
 .calc-na{{color:var(--dim)}}
+.calc-on-able{{cursor:pointer}}
+.calc-on-able:hover{{background:#151C2C}}
+.calc-on-able::after{{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:transparent}}
+.calc-on-able{{position:relative}}
+.calc-on-able.on{{background:#182133}}
+.calc-on-able.on::after{{background:var(--brass)}}
 .calc-note{{padding:8px 13px;font-size:.6rem;line-height:1.5;color:var(--dim);
   border-bottom:1px solid var(--line)}}
 .cnews-head{{padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel2);
@@ -1566,9 +1625,18 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .no-intro #intro{{display:none}}
 .no-intro body{{animation:none}}
 
-/* ── แท็บ ไทย / ต่างประเทศ ─────────────────────────────── */
-.tabs{{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;
-  border-bottom:1px solid var(--line);padding-bottom:2px}}
+/* ── เมนูพับเก็บได้ ─────────────────────────────────────── */
+.navbar{{margin-bottom:18px;border-bottom:1px solid var(--line);padding-bottom:2px}}
+.burger{{display:flex;flex-direction:column;justify-content:center;gap:4px;
+  width:42px;height:36px;padding:0 11px;margin-bottom:6px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line);border-radius:9px}}
+.burger span{{display:block;height:2px;border-radius:2px;background:var(--mute);
+  transition:transform .2s,opacity .2s}}
+.burger:hover span{{background:var(--ink)}}
+.burger[aria-expanded="true"] span:nth-child(1){{transform:translateY(6px) rotate(45deg)}}
+.burger[aria-expanded="true"] span:nth-child(2){{opacity:0}}
+.burger[aria-expanded="true"] span:nth-child(3){{transform:translateY(-6px) rotate(-45deg)}}
+.tabs{{display:flex;gap:6px;flex-wrap:wrap}}
 .tab{{position:relative;font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;
   color:var(--mute);background:none;border:0;padding:9px 16px 11px;border-radius:8px 8px 0 0;
   transition:color .16s,background .16s}}
@@ -1578,10 +1646,18 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   border-radius:3px 3px 0 0;background:linear-gradient(90deg,var(--econ),var(--poli))}}
 .tab[draggable]{{cursor:grab}}
 .tab.dragging{{opacity:.4;cursor:grabbing}}
-.tab-chart{{display:inline-flex;align-items:center;gap:7px;color:var(--brass)}}
-.tab-chart svg{{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
-  stroke-linecap:round}}
-.tab-chart:hover{{color:var(--cream)}}
+.tab-icon{{display:inline-flex;align-items:center;gap:7px;color:var(--brass)}}
+.tab-icon svg{{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}}
+.tab-icon:hover{{color:var(--cream)}}
+
+/* หัวข้อกลุ่มข่าว พับเก็บได้ */
+.scope-title{{cursor:pointer;user-select:none}}
+.scope-caret{{width:14px;height:14px;flex:none;fill:none;stroke:currentColor;
+  stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;color:var(--dim);
+  transition:transform .2s}}
+.scope-group.folded .scope-caret{{transform:rotate(-90deg)}}
+.scope-group.folded .row{{display:none}}
 .tab-n{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;font-weight:400;
   color:var(--dim);margin-left:6px}}
 .scope-title{{display:flex;align-items:center;gap:10px;font-size:1.18rem;font-weight:700;
@@ -1642,19 +1718,44 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
 </header>
 
+<div id="mmodal" class="tmodal" hidden>
+  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="แผนที่ข่าว">
+    <div class="cmodal-head">
+      <button type="button" class="backbtn" onclick="closeMap()" aria-label="ย้อนกลับ">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="cmodal-title"><h3>แผนที่ข่าว</h3>
+        <div class="cmodal-price">{len(markers)} พื้นที่ · คลิกจุดเพื่อดูข่าว · ซูมได้</div>
+      </div>
+    </div>
+    <div class="map-modal-body">
+      <div class="map-wrap">
+        <svg id="map"></svg>
+        <div id="tip"></div>
+        <div class="zoom-ctl">
+          <button type="button" onclick="zoomBy(1.6)" aria-label="ซูมเข้า">+</button>
+          <button type="button" onclick="zoomBy(1/1.6)" aria-label="ซูมออก">−</button>
+          <button type="button" onclick="zoomReset()" aria-label="รีเซ็ตแผนที่">⟲</button>
+        </div>
+        <div class="legend">
+          {''.join(f'<span>{cat_icon(c, "ci-sm")}{CAT_LABELS[c]}</span>' for c in CAT_NAMES + ["mixed"])}
+        </div>
+      </div>
+      <div id="hotspot-detail"></div>
+    </div>
+  </div>
+</div>
+
 <div id="cmodal" class="tmodal" hidden>
   <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="กราฟราคา">
     <div class="cmodal-head">
+      <button type="button" class="backbtn" onclick="closeCharts()" aria-label="ย้อนกลับ">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
       <div class="cmodal-title">
         <h3 id="cmodal-name">—</h3>
         <div class="cmodal-price"><span id="cmodal-p"></span><span id="cmodal-c"></span></div>
       </div>
-      <div class="tfbar" id="cmodal-tf"></div>
-      <div class="tfbar ctype">
-        <button class="tfbtn on" type="button" data-ct="candle" onclick="pickType('candle')">แท่งเทียน</button>
-        <button class="tfbtn" type="button" data-ct="line" onclick="pickType('line')">เส้น</button>
-      </div>
-      <button type="button" class="tmodal-x" onclick="closeCharts()" aria-label="ปิด">×</button>
     </div>
 
     <div class="tickers cmodal-tape">
@@ -1665,8 +1766,16 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
       <div class="cmodal-list" id="cmodal-list"></div>
       <div class="cmodal-chart">
         <div id="cchart"></div>
-        <div id="creadout" class="creadout"></div>
-        <p class="cmodal-note">ล้อเมาส์/นิ้วเพื่อซูม · ลากเพื่อเลื่อน · ดับเบิลคลิกเพื่อรีเซ็ต</p>
+        <div class="cbottom">
+          <div id="creadout" class="creadout"></div>
+          <div class="cctrl">
+            <div class="tfbar" id="cmodal-tf"></div>
+            <div class="tfbar ctype">
+              <button class="tfbtn on" type="button" data-ct="candle" onclick="pickType('candle')">แท่งเทียน</button>
+              <button class="tfbtn" type="button" data-ct="line" onclick="pickType('line')">เส้น</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="cmodal-side">
         <div class="cnews-head">ค่าคำนวณ</div>
@@ -1678,36 +1787,24 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
 </div>
 
-<nav class="tabs" id="tabs" role="tablist" title="ลากเพื่อสลับลำดับได้">
-  <button class="tab active" type="button" role="tab" draggable="true" data-id="all" data-scope="all" onclick="setScope('all')">ทั้งหมด<span class="tab-n">{len(news)}</span></button>
-  {''.join(f'''<button class="tab" type="button" role="tab" draggable="true" data-id="{sc}" data-scope="{sc}" onclick="setScope('{sc}')">{lb}<span class="tab-n">{groups[sc]["n"]}</span></button>''' for sc, lb in SCOPES)}
-  <button class="tab tab-chart" type="button" draggable="true" data-id="chart" onclick="openCharts()">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>กราฟราคา</button>
-</nav>
+<div class="navbar">
+  <button class="burger" type="button" onclick="toggleNav()" aria-expanded="false"
+          aria-controls="tabs" aria-label="เมนู">
+    <span></span><span></span><span></span>
+  </button>
+  <nav class="tabs" id="tabs" role="tablist" title="ลากเพื่อสลับลำดับได้" hidden>
+    <button class="tab active" type="button" role="tab" draggable="true" data-id="all" data-scope="all" onclick="setScope('all')">หน้าแรก<span class="tab-n">{len(news)}</span></button>
+    {''.join(f'''<button class="tab" type="button" role="tab" draggable="true" data-id="{sc}" data-scope="{sc}" onclick="setScope('{sc}')">{lb}<span class="tab-n">{groups[sc]["n"]}</span></button>''' for sc, lb in SCOPES)}
+    <button class="tab tab-icon" type="button" draggable="true" data-id="chart" onclick="openCharts()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>กราฟราคา</button>
+    <button class="tab tab-icon" type="button" draggable="true" data-id="map" onclick="openMap()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg>แผนที่ข่าว</button>
+  </nav>
+</div>
 
 {heroes}
 
 {latest_blocks}
-
-<section class="panel row-panel">
-  <div class="panel-head">
-    <h2>แผนที่ข่าว</h2>
-    <span class="count">{len(markers)} พื้นที่ · คลิกจุด · ซูมได้</span>
-  </div>
-  <div class="map-wrap">
-    <svg id="map"></svg>
-    <div id="tip"></div>
-    <div class="zoom-ctl">
-      <button type="button" onclick="zoomBy(1.6)" aria-label="ซูมเข้า">+</button>
-      <button type="button" onclick="zoomBy(1/1.6)" aria-label="ซูมออก">−</button>
-      <button type="button" onclick="zoomReset()" aria-label="รีเซ็ตแผนที่">⟲</button>
-    </div>
-    <div class="legend">
-      {''.join(f'<span>{cat_icon(c, "ci-sm")}{CAT_LABELS[c]}</span>' for c in CAT_NAMES + ["mixed"])}
-    </div>
-  </div>
-  <div id="hotspot-detail"></div>
-</section>
 
 {category_blocks}
 
@@ -1730,7 +1827,8 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 <script>window.__MARKERS__ = {markers_json}; window.__ICONS__ = {icons_json};
-window.__TNEWS__ = {tnews_json}; window.__CHARTS__ = {charts_json};</script>
+window.__TNEWS__ = {tnews_json}; window.__CHARTS__ = {charts_json};
+window.__LOGOS__ = {logos_json};</script>
 <script>{MAP_JS}</script>
 <script>
 function filterItems(input){{
@@ -1793,7 +1891,23 @@ addEventListener('keydown', ev => {{
 // ── กราฟแท่งเทียน ────────────────────────────────────────
 const CHARTS = window.__CHARTS__ || {{}};
 const CH_TF = ['1D','1M','3M','6M','1Y','3Y','5Y'];
+const LOGOS = window.__LOGOS__ || {{}};
+
+// อักษรย่ออยู่ข้างหลังเสมอ ถ้าโลโก้โหลดไม่ขึ้นก็ยังเห็นตัวย่อ
+function assetLogo(label){{
+  const ini = label.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '•';
+  const img = LOGOS[label]
+    ? `<img src="${{esc(LOGOS[label])}}" alt="" loading="lazy" onerror="this.remove()">` : '';
+  return `<span class="clogo">${{ini}}${{img}}</span>`;
+}}
 let chCur = null, chTf = '3M', chCache = {{}}, chData = null, chZoom = null, chType = 'candle';
+let chLevels = {{}}, chOverlays = new Set();
+const OV_STYLE = {{
+  fair:   {{color: 'var(--biz)',   label: 'ราคาที่แท้จริง'}},
+  target: {{color: 'var(--mixed)', label: 'เป้าหมาย'}},
+  base:   {{color: 'var(--poli)',  label: 'ราคาฐาน'}},
+  trend:  {{color: 'var(--econ)',  label: 'เทรนด์'}},
+}};
 
 function pickType(t){{
   chType = t;
@@ -1831,8 +1945,15 @@ function renderCalc(){{
   // มูลค่าเหมาะสมแบบ Graham ใช้ได้เฉพาะหุ้นที่มีกำไรและมูลค่าตามบัญชีเป็นบวก
   const gr = (f.eps > 0 && f.bvps > 0) ? Math.sqrt(22.5 * f.eps * f.bvps) : null;
 
-  const row = (label, sub, value, cls, vsub) =>
-    `<div class="calc-row"><span class="calc-k">${{label}}<small>${{sub}}</small></span>` +
+  // เก็บค่าไว้ให้กราฟวาดเส้นทับ (คลิกที่แถวเพื่อเปิด/ปิด)
+  chLevels = {{
+    fair: gr, target: f.target != null ? f.target : null, base: base,
+    trend: {{first: closes[0], slope: linSlope(closes)}},
+  }};
+
+  const row = (label, sub, value, cls, vsub, key) =>
+    `<div class="calc-row${{key ? ' calc-on-able' : ''}}"${{key ? ` data-ov="${{key}}"` : ''}}>` +
+    `<span class="calc-k">${{label}}<small>${{sub}}</small></span>` +
     `<span class="calc-v ${{cls || ''}}">${{value}}${{vsub ? `<small>${{vsub}}</small>` : ''}}</span></div>`;
 
   box.innerHTML =
@@ -1840,15 +1961,28 @@ function renderCalc(){{
         f.pe != null ? '' : 'calc-na', f.fpe != null ? 'ล่วงหน้า ' + fmt(f.fpe) : '') +
     row('ราคาที่แท้จริง', gr ? 'สูตร Graham √(22.5×EPS×BVPS)' : 'ต้องมีกำไรและมูลค่าตามบัญชี',
         gr ? fmt(gr) : '—', gr ? (gr > last ? 'up' : 'down') : 'calc-na',
-        gr ? ((gr / last - 1) * 100).toFixed(1) + '% เทียบราคาปัจจุบัน' : '') +
+        gr ? ((gr / last - 1) * 100).toFixed(1) + '% เทียบราคาปัจจุบัน' : '',
+        gr ? 'fair' : '') +
     row('เป้าหมายนักวิเคราะห์', 'ค่าเฉลี่ยจากโบรกฯ', f.target != null ? fmt(f.target) : '—',
-        f.target != null ? (f.target > last ? 'up' : 'down') : 'calc-na') +
+        f.target != null ? (f.target > last ? 'up' : 'down') : 'calc-na', '',
+        f.target != null ? 'target' : '') +
     row('เทรนด์', 'ความชันราคาปิดช่วง ' + chTf, tr[0], tr[1],
-        (total >= 0 ? '+' : '') + total.toFixed(1) + '%') +
+        (total >= 0 ? '+' : '') + total.toFixed(1) + '%', 'trend') +
     row('ราคาฐาน', 'เฉลี่ยจุดต่ำสุด 20% ล่าง ' + chTf, fmt(base), '',
-        ((last / base - 1) * 100).toFixed(1) + '% เหนือฐาน') +
-    '<p class="calc-note">คำนวณจากราคาย้อนหลังและข้อมูลพื้นฐานเท่าที่ดึงได้ ' +
+        ((last / base - 1) * 100).toFixed(1) + '% เหนือฐาน', 'base') +
+    '<p class="calc-note">คลิกแถวที่กดได้เพื่อวางเส้นทับบนกราฟ · ' +
+    'คำนวณจากราคาย้อนหลังและข้อมูลพื้นฐานเท่าที่ดึงได้ ' +
     'เป็นค่าประกอบการพิจารณา ไม่ใช่คำแนะนำการลงทุน</p>';
+
+  box.querySelectorAll('.calc-on-able').forEach(r => {{
+    r.classList.toggle('on', chOverlays.has(r.dataset.ov));
+    r.addEventListener('click', () => {{
+      const k = r.dataset.ov;
+      chOverlays.has(k) ? chOverlays.delete(k) : chOverlays.add(k);
+      r.classList.toggle('on', chOverlays.has(k));
+      renderChart();
+    }});
+  }});
 }}
 
 function openCharts(){{
@@ -1864,7 +1998,8 @@ function openCharts(){{
       if (!rows.length) continue;
       html += `<div class="cgroup">${{title}}</div>` + rows.map(([l, d]) =>
         `<button class="citem" type="button" data-label="${{esc(l)}}" onclick="pickChart('${{esc(l)}}')">
-           <span>${{esc(l)}}</span><span class="${{d.dir}}">${{d.pct}}</span></button>`).join('');
+           ${{assetLogo(l)}}<span class="cname">${{esc(l)}}</span>
+           <span class="${{d.dir}}">${{d.pct}}</span></button>`).join('');
     }}
     document.getElementById('cmodal-list').innerHTML = html;
     document.getElementById('cmodal-tf').innerHTML = CH_TF.map(t =>
@@ -1996,6 +2131,32 @@ function renderChart(){{
         .attr('y', d => y(Math.max(d[1], d[4])))
         .attr('height', d => Math.max(1, Math.abs(y(d[1]) - y(d[4]))));
     }}
+    // เส้นค่าคำนวณที่ผู้ใช้เปิดไว้
+    const ovs = [];
+    for (const k of chOverlays) {{
+      const st = OV_STYLE[k];
+      if (k === 'trend') {{
+        const t = chLevels.trend;
+        if (!t) continue;
+        ovs.push({{k, st, y1: t.first + t.slope * i0, y2: t.first + t.slope * i1, line: true}});
+      }} else if (chLevels[k] != null) {{
+        ovs.push({{k, st, y1: chLevels[k], y2: chLevels[k]}});
+      }}
+    }}
+    const og = gC.selectAll('g.ov').data(ovs, d => d.k).join(
+      en => {{ const s = en.append('g').attr('class', 'ov');
+               s.append('line'); s.append('text'); return s; }});
+    og.select('line')
+      .attr('x1', zx(i0)).attr('x2', zx(i1))
+      .attr('y1', d => y(d.y1)).attr('y2', d => y(d.y2))
+      .attr('stroke', d => d.st.color).attr('stroke-width', 1.5)
+      .attr('stroke-dasharray', d => d.line ? '6 4' : '4 4');
+    og.select('text')
+      .attr('x', zx(i0) + 5).attr('y', d => y(d.y1) - 4)
+      .attr('fill', d => d.st.color).attr('font-size', 10)
+      .attr('font-family', "'IBM Plex Mono',monospace")
+      .text(d => d.st.label);
+
     svg.node().__view = {{zx, i0, i1}};
   }}
 
@@ -2039,6 +2200,50 @@ function setScope(s){{
     h.hidden = !(s === 'all' ? h.dataset.primary === '1' : h.dataset.scope === s));
   try {{ sessionStorage.setItem('scope', s); }} catch(e) {{}}
 }}
+
+// ── เมนูพับเก็บ / แผนที่ / พับหัวข้อกลุ่มข่าว ─────────────
+function toggleNav(force){{
+  const nav = document.getElementById('tabs');
+  const b = document.querySelector('.burger');
+  const open = force !== undefined ? force : nav.hidden;
+  nav.hidden = !open;
+  b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  try {{ localStorage.setItem('navOpen', open ? '1' : '0'); }} catch(e) {{}}
+}}
+try {{ if (localStorage.getItem('navOpen') === '1') toggleNav(true); }} catch(e) {{}}
+
+function openMap(){{
+  document.getElementById('mmodal').hidden = false;
+  document.body.style.overflow = 'hidden';
+  draw();                       // แผนที่เพิ่งมีขนาดตอนนี้ ต้องวาดใหม่
+}}
+function closeMap(){{
+  document.getElementById('mmodal').hidden = true;
+  document.body.style.overflow = '';
+}}
+document.getElementById('mmodal').addEventListener('click', ev => {{
+  if (ev.target.id === 'mmodal') closeMap();
+}});
+
+// พับ/กางกลุ่มข่าวไทย-ต่างประเทศ แล้วจำไว้
+document.querySelectorAll('.scope-group').forEach(g => {{
+  const t = g.querySelector('.scope-title');
+  if (!t) return;
+  const key = 'fold-' + g.dataset.scope + '-' + (g.querySelector('.row-track') || {{}}).id;
+  t.insertAdjacentHTML('afterbegin',
+    '<svg class="scope-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>');
+  t.setAttribute('role', 'button');
+  t.setAttribute('tabindex', '0');
+  try {{ if (localStorage.getItem(key) === '1') g.classList.add('folded'); }} catch(e) {{}}
+  const flip = () => {{
+    g.classList.toggle('folded');
+    try {{ localStorage.setItem(key, g.classList.contains('folded') ? '1' : '0'); }} catch(e) {{}}
+  }};
+  t.addEventListener('click', flip);
+  t.addEventListener('keydown', ev => {{
+    if (ev.key === 'Enter' || ev.key === ' ') {{ ev.preventDefault(); flip(); }}
+  }});
+}});
 
 // ── ลากสลับลำดับแท็บได้เอง แล้วจำลำดับไว้ ────────────────
 (() => {{
@@ -2159,14 +2364,15 @@ if __name__ == "__main__":
         print(f"จับคู่ข่าวกับสินทรัพย์ได้ {linked} รายการ")
     save_cache(news, markets)
 
-    charts = {}
+    charts, logos = {}, {}
     if markets:
         print("ดึงข้อมูลพื้นฐาน...")
         fetch_fundamentals(markets)
+        logos = fetch_logos()
         print("ดึงข้อมูลแท่งเทียน...")
         charts = build_charts(markets)
     print()
 
     with open("index.html", "w", encoding="utf-8") as f:
-        f.write(render(news, markets, charts))
+        f.write(render(news, markets, charts, logos))
     print(f"เสร็จ · index.html · {NOW.strftime('%H:%M')} น.")
