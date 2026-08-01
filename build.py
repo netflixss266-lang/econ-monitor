@@ -1175,7 +1175,7 @@ def render(news, markets):
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Econ Monitor">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
 <script>
 /* เล่นอินโทรครั้งเดียวต่อการเปิดเว็บ ไม่ให้เล่นซ้ำตอนหน้ารีเฟรชอัตโนมัติทุก 15 นาที */
 try{{
@@ -1191,6 +1191,7 @@ try{{
   --ink:#E7ECF5; --mute:#7A879C; --dim:#4E5A70;
   --econ:#4C8DFF; --poli:#F5A524; --biz:#2DD4BF; --env:#4ADE80; --mixed:#9B8AFB;
   --up:#3FB68B; --down:#E5484D;
+  --brass:#C6A961; --cream:#F4EFE3;
 }}
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{background:var(--bg);color:var(--ink);
@@ -1201,8 +1202,20 @@ a{{color:inherit;text-decoration:none}}
 
 header{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:9px;
   padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--line)}}
-h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
-@media(max-width:600px){{h1{{font-size:1.45rem}}}}
+/* โลโก้ EPM — ตัวอักษรเซริฟแบบคลาสสิกอังกฤษ + เส้นทองเรียบๆ แบบสมัยใหม่ */
+.logo{{display:flex;flex-direction:column;align-items:center;gap:9px;font-weight:400}}
+.logo-mark{{font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-weight:700;
+  font-size:clamp(2.5rem,7.4vw,3.7rem);line-height:.94;
+  letter-spacing:.16em;text-indent:.16em;color:var(--cream)}}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){{
+  .logo-mark{{background:linear-gradient(176deg,#FBF7EE 8%,var(--cream) 46%,var(--brass) 128%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}}
+}}
+.logo-rule{{width:min(250px,64vw);height:1px;
+  background:linear-gradient(90deg,transparent,var(--brass) 24%,var(--brass) 76%,transparent);
+  opacity:.72}}
+.logo-sub{{font-size:clamp(.55rem,1.55vw,.71rem);font-weight:500;
+  letter-spacing:.4em;text-indent:.4em;text-transform:uppercase;color:var(--mute)}}
 .stamp{{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;
   font-family:'IBM Plex Mono',monospace;font-size:.76rem;color:var(--mute)}}
 .pulse{{width:7px;height:7px;border-radius:50%;background:var(--up);
@@ -1444,14 +1457,18 @@ h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
 /* ── อินโทรตอนเข้าเว็บ ─────────────────────────────────── */
 #intro{{position:fixed;inset:0;z-index:99;background:#05070D;display:grid;place-items:center;
   animation:introFade .6s 1.95s forwards}}
-.intro-inner{{display:flex;flex-direction:column;align-items:center;gap:.35em;
-  font-weight:700;font-size:clamp(1.1rem,5.4vw,2.9rem);letter-spacing:.2em;text-indent:.2em;
-  color:#fff;text-shadow:0 0 34px rgba(76,141,255,.55),0 0 90px rgba(245,165,36,.28);
+.intro-inner{{display:flex;flex-direction:column;align-items:center;gap:14px;
   animation:introIn 1.05s cubic-bezier(.2,.7,.3,1) backwards,
             introZoom .8s 1.72s ease-in forwards}}
-.intro-inner b{{font-size:.52em;letter-spacing:.62em;text-indent:.62em;
-  font-weight:500;color:var(--econ)}}
-@keyframes introIn{{from{{opacity:0;transform:scale(.84);filter:blur(13px);letter-spacing:.72em}}}}
+.intro-mark{{font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-weight:700;
+  font-size:clamp(3rem,12vw,5.6rem);line-height:.94;letter-spacing:.17em;text-indent:.17em;
+  color:var(--cream);
+  text-shadow:0 0 40px rgba(198,169,97,.42),0 0 110px rgba(198,169,97,.18)}}
+.intro-rule{{width:min(300px,58vw);height:1px;
+  background:linear-gradient(90deg,transparent,var(--brass) 24%,var(--brass) 76%,transparent)}}
+.intro-inner b{{font-size:clamp(.58rem,2vw,.8rem);letter-spacing:.44em;text-indent:.44em;
+  font-weight:500;text-transform:uppercase;color:var(--brass)}}
+@keyframes introIn{{from{{opacity:0;transform:scale(.84);filter:blur(13px)}}}}
 @keyframes introZoom{{to{{opacity:0;transform:scale(1.55)}}}}
 @keyframes introFade{{to{{opacity:0;visibility:hidden}}}}
 @keyframes pageIn{{from{{opacity:0;transform:translateY(15px)}}}}
@@ -1496,7 +1513,9 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 </head>
 <body>
 
-<div id="intro" aria-hidden="true"><div class="intro-inner">ECON · POLITICS<b>MONITOR</b></div></div>
+<div id="intro" aria-hidden="true"><div class="intro-inner">
+  <span class="intro-mark">EPM</span><span class="intro-rule"></span>
+  <b>Economics · Politics · Monitor</b></div></div>
 
 <div id="tmodal" class="tmodal" hidden>
   <div class="tmodal-box" role="dialog" aria-modal="true" aria-labelledby="tmodal-name">
@@ -1514,7 +1533,11 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 </div>
 
 <header>
-  <h1>Econ · Politics Monitor</h1>
+  <h1 class="logo">
+    <span class="logo-mark">EPM</span>
+    <span class="logo-rule"></span>
+    <span class="logo-sub">Economics · Politics · Monitor</span>
+  </h1>
   <div class="stamp">
     <span class="pulse"></span>
     <span>อัปเดต {NOW.strftime('%d %b %Y · %H:%M')} น.</span>
