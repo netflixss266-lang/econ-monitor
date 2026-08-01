@@ -819,146 +819,10 @@ function show(d){
 }
 
 const MAX_N = d3.max(MARKERS, d => d.total) || 1;
-let markerSel = null, labelSel = null, viewW = 0, drawn = false;
-
-const NAME_FIX = {
-  "United States of America": "United States",
-  "Dem. Rep. Congo": "DR Congo",
-  "Central African Rep.": "C. African Rep.",
-  "Bosnia and Herz.": "Bosnia & Herz.",
-  "Falkland Is.": "Falkland Is.",
-  "Eq. Guinea": "Eq. Guinea",
-};
-
-// ── ชื่อประเทศคาดยาวไปตามรูปร่างประเทศ (สไตล์ HOI4) ──────────
-function ringsOf(geom){
-  if (geom.type === "Polygon") return [geom.coordinates[0]];
-  if (geom.type === "MultiPolygon") return geom.coordinates.map(p => p[0]);
-  return [];
-}
-
-/* ยิงเส้นตรงจาก (cx,cy) ไปตามทิศ (ux,uy) แล้วหาช่วงที่ยัง "อยู่ในแผ่นดิน"
-   ใช้กฎ even-odd: จุดตัดที่เรียงแล้วจะจับคู่เป็นช่วงใน 0-1, 2-3, ...
-   เลือกช่วงที่ยาวที่สุดเสมอ — ประเทศเว้าแหว่งอย่างนอร์เวย์ จุดกึ่งกลางรูปร่าง
-   อาจตกอยู่บนแผ่นดินแค่แถบบางๆ ถ้ายึดช่วงนั้นตัวหนังสือจะหดจนใช้ไม่ได้ */
-function spanInside(pts, cx, cy, ux, uy){
-  const ts = [];
-  for (let i = 0, n = pts.length; i < n; i++) {
-    const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % n];
-    const ex = x2 - x1, ey = y2 - y1;
-    // แก้ระบบสมการ  C + t*U = A + s*E  ด้วยกฎของคราเมอร์
-    const den = uy * ex - ux * ey;
-    if (Math.abs(den) < 1e-12) continue;          // ขอบขนานกับเส้น
-    const dx = x1 - cx, dy = y1 - cy;
-    const s = (ux * dy - uy * dx) / den;          // ตำแหน่งบนขอบ [0,1)
-    if (s < 0 || s >= 1) continue;
-    ts.push((ex * dy - ey * dx) / den);           // ตำแหน่งบนเส้น
-  }
-  if (ts.length < 2) return null;
-  ts.sort((a, b) => a - b);
-  let pick = null;
-  for (let i = 0; i + 1 < ts.length; i += 2) {
-    const a = ts[i], b = ts[i + 1];
-    if (!pick || b - a > pick.len) pick = { len: b - a, mid: (a + b) / 2 };
-  }
-  return pick;
-}
-
-function pointInRing(pts, x, y){
-  let inside = false;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const [xi, yi] = pts[i], [xj, yj] = pts[j];
-    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
-  }
-  return inside;
-}
-
-function labelSpec(feature, proj){
-  // ใช้เฉพาะผืนแผ่นดินที่ใหญ่สุด ไม่ให้เกาะเล็กเกาะน้อยดึงตำแหน่งเพี้ยน
-  let best = null, bestArea = 0;
-  for (const ring of ringsOf(feature.geometry)) {
-    const pts = [];
-    for (const c of ring) {
-      const p = proj(c);
-      if (p && isFinite(p[0]) && isFinite(p[1])) pts.push(p);
-    }
-    if (pts.length < 4) continue;
-    const a = Math.abs(d3.polygonArea(pts));
-    if (a > bestArea) { bestArea = a; best = pts; }
-  }
-  if (!best) return null;
-
-  const [cx, cy] = d3.polygonCentroid(best);
-  // หาแกนหลักของรูปร่างด้วย PCA แล้ววางตัวอักษรไปตามแกนนั้น
-  let sxx = 0, syy = 0, sxy = 0;
-  for (const [x, y] of best) {
-    const dx = x - cx, dy = y - cy;
-    sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
-  }
-  const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy);
-  const ca = Math.cos(ang), sa = Math.sin(ang);
-  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
-  for (const [x, y] of best) {
-    const dx = x - cx, dy = y - cy;
-    const u = dx * ca + dy * sa, v = -dx * sa + dy * ca;
-    if (u < u0) u0 = u; if (u > u1) u1 = u;
-    if (v < v0) v0 = v; if (v > v1) v1 = v;
-  }
-  let deg = ang * 180 / Math.PI;
-  if (deg > 90) deg -= 180; else if (deg < -90) deg += 180;   // กันตัวหนังสือกลับหัว
-
-  const major = u1 - u0, minor = v1 - v0;
-  // ประเทศที่รูปร่างค่อนข้างกลม แกนหลักจะสุ่มทิศ เอียงมากจะดูแปลก
-  // ยิ่งรูปร่างยาวเรียว (เช่น ชิลี) ยิ่งปล่อยให้เอียงได้เต็มที่
-  const ratio = major / Math.max(minor, 1e-6);
-  const limit = ratio > 1.95 ? 90 : (ratio > 1.4 ? 45 : 22);
-  deg = Math.max(-limit, Math.min(limit, deg));
-  const name = (NAME_FIX[feature.properties.name] || feature.properties.name).toUpperCase();
-
-  // วัดความยาวที่ "อยู่ในเขตประเทศจริง" ตามแนวที่จะวางตัวอักษร
-  // (กรอบสี่เหลี่ยมของรูปร่างมักกินเลยชายฝั่ง ตัวหนังสือเลยล้นออกนอกประเทศ)
-  const rad = deg * Math.PI / 180;
-  const ux = Math.cos(rad), uy = Math.sin(rad);
-  const along = spanInside(best, cx, cy, ux, uy);
-  if (!along) return null;
-  const ax = cx + ux * along.mid, ay = cy + uy * along.mid;   // กึ่งกลางของช่วงในแผ่นดิน
-  const across = spanInside(best, ax, ay, -uy, ux);           // ความหนาตรงจุดนั้น
-  const thick = across ? across.len : minor;
-
-  const span = Math.max(1, along.len * 0.86);   // เว้นขอบซ้าย-ขวาไว้เล็กน้อย
-  // กันเหนียว: ถ้ายังวางไม่ลงในเขตประเทศจริง ไม่ต้องแสดงชื่อดีกว่าปล่อยให้ล้น
-  const h = span / 2;
-  if (!pointInRing(best, ax, ay) ||
-      !pointInRing(best, ax - ux * h, ay - uy * h) ||
-      !pointInRing(best, ax + ux * h, ay + uy * h)) return null;
-  // ตัวอักษรต้องไม่สูงเกินความหนาของประเทศ และต้องไม่ถูกบีบแนวนอน
-  // (ประมาณความกว้างจริงของตัวพิมพ์ใหญ่ ≈ 0.62 เท่าของขนาดฟอนต์ต่อตัว)
-  // ปล่อยให้ยืดออกได้อย่างเดียว จะได้หน้าตาคาดยาวแบบ HOI4
-  const fs = Math.max(2.4, Math.min(thick * 0.6, span / (0.62 * name.length)));
-  return { cx: ax, cy: ay, deg, major: along.len, minor: thick, span, fs, name };
-}
-
-function drawCountryLabels(features, proj){
-  const specs = features.map(f => labelSpec(f, proj)).filter(Boolean);
-  labelSel = gMap.append("g").attr("class", "clabels")
-    .selectAll("text").data(specs).join("text")
-      .attr("class", "country-label")
-      .attr("transform", d => `translate(${d.cx},${d.cy}) rotate(${d.deg})`)
-      .attr("text-anchor", "middle")
-      .attr("dominant-baseline", "central")
-      .attr("textLength", d => d.span)
-      .attr("lengthAdjust", "spacingAndGlyphs")
-      .style("font-size", d => d.fs + "px")
-      .text(d => d.name);
-}
+let markerSel = null, drawn = false;
 
 // จุดยิ่งซูมยิ่งแยกจากกัน แต่ขนาดหมุด/ตัวอักษรคงเดิม (scale สวนกับ k)
 function rescale(k){
-  if (labelSel) {
-    // ชื่อประเทศยืด-หดไปกับแผนที่ จึงโชว์เฉพาะช่วงที่อ่านออก
-    labelSel.style("display", d =>
-      (d.fs * k >= 6 && d.major * k <= viewW * 2.4) ? null : "none");
-  }
   if (!markerSel) return;
   markerSel.attr("transform", d => `translate(${d._x},${d._y}) scale(${1 / k})`);
   markerSel.selectAll("text.mk-label")
@@ -1014,10 +878,9 @@ function draw(){
   const W = box.width, H = box.height;
   if (!W || !H) return;   // ยังวัดขนาดไม่ได้ เดี๋ยวมีคนเรียกซ้ำให้เอง
   drawn = true;
-  viewW = W;
   svg.attr("viewBox", `0 0 ${W} ${H}`);
   gMap.selectAll("*").remove();
-  markerSel = labelSel = null;
+  markerSel = null;
 
   const proj = d3.geoNaturalEarth1()
     .fitSize([W, H * 1.28], { type: "Sphere" })
@@ -1035,7 +898,6 @@ function draw(){
       const land = topojson.feature(topo, topo.objects.countries);
       gMap.append("g").selectAll("path").data(land.features).join("path")
         .attr("class", "country").attr("d", path);
-      drawCountryLabels(land.features, proj);   // ต้องอยู่ก่อน plot() หมุดข่าวจะได้อยู่บนสุด
       plot(proj);
     })
     .catch(() => plot(proj));
@@ -1192,11 +1054,7 @@ def render(news, markets, charts=None):
         for sc, _ in SCOPES if (g := groups[sc])["top"]
     )
 
-    def scope_group(sc, label):
-        g = groups[sc]
-        rows = row_section("mixed", g["latest"], f"row-{sc}-latest",
-                           "ล่าสุด", '<span class="live">LIVE</span>')
-        rows += "".join(row_section(c, g["cats"][c], f"row-{sc}-{c}") for c in CAT_NAMES)
+    def scope_block(sc, label, rows):
         if not rows:
             return ""
         flag = "TH" if sc == "th" else "INTL"
@@ -1205,13 +1063,22 @@ def render(news, markets, charts=None):
   {rows}
 </div>"""
 
-    scope_groups = "".join(scope_group(sc, lb) for sc, lb in SCOPES)
+    # แยกเป็นสองก้อน เพราะแผนที่กับแถบราคามาคั่นระหว่างข่าวล่าสุดกับข่าวรายหมวด
+    latest_blocks = "".join(
+        scope_block(sc, lb, row_section("mixed", groups[sc]["latest"], f"row-{sc}-latest",
+                                        "ล่าสุด", '<span class="live">LIVE</span>'))
+        for sc, lb in SCOPES)
+    category_blocks = "".join(
+        scope_block(sc, lb, "".join(row_section(c, groups[sc]["cats"][c], f"row-{sc}-{c}")
+                                    for c in CAT_NAMES))
+        for sc, lb in SCOPES)
 
     next_run = (NOW + timedelta(hours=3)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
     icons_json = json.dumps({c: cat_icon(c, "ci-sm") for c in CAT_NAMES}, ensure_ascii=False)
     tnews_json = json.dumps(
-        {m["label"]: {"price": m["price"], "pct": m["pct_str"], "group": m.get("group", "intl"),
+        {m["label"]: {"price": m["price"], "pct": m["pct_str"], "pctv": round(m["pct"], 4),
+                      "group": m.get("group", "intl"),
                       "dir": "up" if m["pct"] > 0 else ("down" if m["pct"] < 0 else "flat"),
                       "news": m.get("news") or []}
          for m in markets}, ensure_ascii=False)
@@ -1292,7 +1159,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   box-shadow:0 0 0 0 rgba(63,182,139,.6);animation:p 2.4s infinite}}
 @keyframes p{{70%{{box-shadow:0 0 0 9px rgba(63,182,139,0)}}100%{{box-shadow:0 0 0 0 rgba(63,182,139,0)}}}}
 
-/* แถบราคาเลื่อนไปทางซ้ายต่อเนื่องแบบรายการทีวี (ชี้เมาส์ค้างไว้เพื่อหยุด) */
+/* แถบราคาเลื่อนไปทางซ้ายต่อเนื่องแบบรายการทีวี — วิ่งตลอด ไม่หยุดตอนชี้เมาส์ */
 .tickers{{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}}
 .ticker-row{{display:flex;align-items:stretch;gap:8px;min-width:0}}
 .ticker-tag{{flex:none;display:flex;align-items:center;padding:0 12px;border-radius:10px;
@@ -1302,7 +1169,6 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .ticker{{flex:1;min-width:0;overflow:hidden;border:1px solid var(--line);
   border-radius:10px;background:var(--panel)}}
 .ticker-track{{display:flex;width:max-content;animation:marquee linear infinite}}
-.ticker:hover .ticker-track{{animation-play-state:paused}}
 @keyframes marquee{{from{{transform:translateX(0)}}to{{transform:translateX(-50%)}}}}
 @media(prefers-reduced-motion:reduce){{
   .ticker{{overflow-x:auto}}
@@ -1367,9 +1233,9 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   stroke-linecap:round}}
 .chart-hint{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim)}}
 
-.cmodal-box{{width:min(1180px,100%);height:min(760px,92vh);display:flex;flex-direction:column;
-  background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;
-  box-shadow:0 30px 80px rgba(0,0,0,.6)}}
+#cmodal{{padding:0}}
+.cmodal-box{{width:100%;height:100%;display:flex;flex-direction:column;
+  background:var(--panel);border:0;border-radius:0;overflow:hidden}}
 .cmodal-head{{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
   padding:13px 16px;border-bottom:1px solid var(--line);background:var(--panel2)}}
 .cmodal-title{{min-width:150px}}
@@ -1404,13 +1270,30 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .creadout b{{color:var(--ink);font-weight:500}}
 .cmodal-note{{font-size:.65rem;color:var(--dim);margin-top:3px}}
 .cempty{{display:grid;place-items:center;height:100%;color:var(--mute);font-size:.85rem}}
-@media(max-width:720px){{
-  .cmodal-body{{flex-direction:column}}
+
+/* แถบข่าวของสินทรัพย์นั้น อยู่ข้างกราฟ */
+.cmodal-news{{width:310px;flex:none;display:flex;flex-direction:column;
+  border-left:1px solid var(--line)}}
+.cnews-head{{padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel2);
+  font-size:.72rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--mute)}}
+.cnews-list{{flex:1;overflow-y:auto}}
+.cnews-row{{display:flex;gap:9px;align-items:flex-start;padding:9px 13px;
+  border-bottom:1px solid var(--line)}}
+.cnews-row:hover{{background:#151C2C}}
+.cnews-row .score{{min-width:44px;padding:3px 6px;font-size:.68rem}}
+.cnews-t{{flex:1;min-width:0;font-size:.78rem;line-height:1.38}}
+.cnews-m{{display:block;margin-top:3px;font-family:'IBM Plex Mono',monospace;
+  font-size:.6rem;color:var(--dim);text-transform:uppercase}}
+@media(max-width:1100px){{.cmodal-news{{width:260px}}}}
+@media(max-width:860px){{
+  .cmodal-body{{flex-direction:column;overflow-y:auto}}
   .cmodal-list{{width:auto;display:flex;overflow-x:auto;border-right:0;
     border-bottom:1px solid var(--line);padding:6px}}
   .cgroup{{display:none}}
   .citem{{width:auto;white-space:nowrap}}
-  .citem span:last-child{{display:none}}
+  .cmodal-chart{{min-height:340px}}
+  .cmodal-news{{width:auto;border-left:0;border-top:1px solid var(--line)}}
 }}
 .t-label{{color:var(--ink);font-weight:600;letter-spacing:.03em}}
 .t-price{{color:var(--ink);font-weight:500}}
@@ -1452,11 +1335,6 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .mk:hover .halo{{opacity:.34}}
 .mk-label{{font-family:'IBM Plex Sans Thai',sans-serif;font-size:10px;
   fill:var(--mute);pointer-events:none}}
-/* ชื่อประเทศคาดบนพื้นที่ประเทศ — ขอบเส้นไม่หนาขึ้นตอนซูม */
-.country-label{{font-family:'IBM Plex Sans Thai',sans-serif;font-weight:600;
-  fill:#8496B2;fill-opacity:.62;pointer-events:none;user-select:none;
-  paint-order:stroke;stroke:#0B111C;stroke-width:2px;stroke-opacity:.5;
-  stroke-linejoin:round;vector-effect:non-scaling-stroke}}
 #tip{{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;
   background:rgba(10,14,26,.95);border:1px solid var(--line);border-radius:7px;
   padding:7px 10px;font-size:.74rem;display:flex;flex-direction:column;gap:2px;z-index:5}}
@@ -1672,19 +1550,6 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
 </header>
 
-<div class="chart-bar">
-  <button class="chart-open" type="button" onclick="openCharts()">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
-    กราฟราคา
-  </button>
-  <span class="chart-hint">แท่งเทียน · 1D–5Y · ซูม/เลื่อนได้</span>
-</div>
-
-<div class="tickers">
-  {ticker_row("th", "ไทย")}
-  {ticker_row("intl", "ต่างประเทศ")}
-</div>
-
 <div id="cmodal" class="tmodal" hidden>
   <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="กราฟราคา">
     <div class="cmodal-head">
@@ -1702,6 +1567,10 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
         <div id="creadout" class="creadout"></div>
         <p class="cmodal-note">ล้อเมาส์/นิ้วเพื่อซูม · ลากเพื่อเลื่อน · ดับเบิลคลิกเพื่อรีเซ็ต</p>
       </div>
+      <div class="cmodal-news">
+        <div class="cnews-head">ข่าวที่เกี่ยวข้อง</div>
+        <div class="cnews-list" id="cnews-list"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1713,7 +1582,7 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
 {heroes}
 
-{scope_groups}
+{latest_blocks}
 
 <section class="panel row-panel">
   <div class="panel-head">
@@ -1734,6 +1603,21 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
   <div id="hotspot-detail"></div>
 </section>
+
+<div class="chart-bar">
+  <button class="chart-open" type="button" onclick="openCharts()">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+    กราฟราคา
+  </button>
+  <span class="chart-hint">แท่งเทียน · 1D–5Y · ซูม/เลื่อนได้</span>
+</div>
+
+<div class="tickers">
+  {ticker_row("th", "ไทย")}
+  {ticker_row("intl", "ต่างประเทศ")}
+</div>
+
+{category_blocks}
 
 <div class="grid-side">
   <section class="panel">
@@ -1826,7 +1710,9 @@ function openCharts(){{
     const groups = {{th: 'ไทย', intl: 'ต่างประเทศ'}};
     let html = '';
     for (const [g, title] of Object.entries(groups)) {{
-      const rows = Object.entries(TNEWS).filter(([l]) => CHARTS[l] && (TNEWS[l].group || 'intl') === g);
+      const rows = Object.entries(TNEWS)
+        .filter(([l]) => CHARTS[l] && (TNEWS[l].group || 'intl') === g)
+        .sort((a, b) => (b[1].pctv ?? 0) - (a[1].pctv ?? 0));   // บวกมากสุดอยู่บน
       if (!rows.length) continue;
       html += `<div class="cgroup">${{title}}</div>` + rows.map(([l, d]) =>
         `<button class="citem" type="button" data-label="${{esc(l)}}" onclick="pickChart('${{esc(l)}}')">
@@ -1860,6 +1746,12 @@ async function pickChart(label){{
     const c = document.getElementById('cmodal-c');
     c.textContent = d.pct; c.className = d.dir;
   }}
+  document.getElementById('cnews-list').innerHTML = (d?.news || []).length
+    ? d.news.map(n => `<a class="cnews-row" href="${{esc(n.link)}}" target="_blank" rel="noopener">
+        <span class="score ${{scoreClass(n.score)}}">${{n.score}}%</span>
+        <span class="cnews-t">${{esc(n.title)}}
+          <span class="cnews-m">${{esc(n.source)}} · ${{esc(n.age)}}</span></span></a>`).join('')
+    : '<p class="tmodal-empty">ยังไม่มีข่าวที่เกี่ยวข้อง</p>';
   if (!chCache[label]) {{
     document.getElementById('cchart').innerHTML = '<div class="cempty">กำลังโหลด…</div>';
     try {{
