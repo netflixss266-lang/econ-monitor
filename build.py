@@ -212,6 +212,66 @@ def relevance(it, primary, secondary):
     return min(100, direct + min(side, 24))
 
 
+def yahoo_session():
+    """Yahoo ต้องมี cookie + crumb ก่อน ถึงจะเรียกข้อมูลพื้นฐานได้ (ไม่งั้น 401)"""
+    s = requests.Session()
+    s.headers.update(BROWSER_UA)
+    try:
+        s.get("https://fc.yahoo.com", timeout=10)
+        crumb = s.get("https://query1.finance.yahoo.com/v1/test/getcrumb",
+                      timeout=10).text.strip()
+        return (s, crumb) if crumb and "<" not in crumb else (None, None)
+    except Exception as ex:
+        print(f"  ! ขอ crumb ไม่สำเร็จ: {ex}")
+        return None, None
+
+
+def fetch_fundamentals(markets):
+    """ดึง PE / กำไรต่อหุ้น / มูลค่าตามบัญชี มาให้หน้ากราฟใช้คำนวณ
+
+    ดัชนี ค่าเงิน ทองคำ และคริปโต ไม่มีค่าพวกนี้ตามธรรมชาติ — ปล่อยว่างไว้
+    """
+    sess, crumb = yahoo_session()
+    if not sess:
+        return
+    symbols = {label: sym for label, sym, _ in TICKERS if sym != THAI_GOLD}
+
+    def one(m):
+        sym = symbols.get(m["label"])
+        if not sym:
+            return m, None
+        try:
+            r = sess.get(f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
+                         params={"modules": "defaultKeyStatistics,summaryDetail,financialData",
+                                 "crumb": crumb}, timeout=12)
+            if r.status_code != 200:
+                return m, None
+            res = r.json()["quoteSummary"]["result"][0]
+
+            def val(mod, key):
+                v = (res.get(mod) or {}).get(key)
+                v = v.get("raw") if isinstance(v, dict) else v
+                return round(v, 4) if isinstance(v, (int, float)) else None
+
+            return m, {
+                "pe": val("summaryDetail", "trailingPE"),
+                "fpe": val("summaryDetail", "forwardPE"),
+                "eps": val("defaultKeyStatistics", "trailingEps"),
+                "bvps": val("defaultKeyStatistics", "bookValue"),
+                "target": val("financialData", "targetMeanPrice"),
+            }
+        except Exception:
+            return m, None
+
+    got = 0
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for m, f in pool.map(one, markets):
+            if f and any(v is not None for v in f.values()):
+                m["fund"] = f
+                got += 1
+    print(f"  ✓ ข้อมูลพื้นฐาน {got}/{len(markets)} สินทรัพย์")
+
+
 CHART_DIR = "chart"
 CHART_RANGES = [          # (ชื่อปุ่ม, range, interval)
     ("1D", "1d", "5m"), ("1M", "1mo", "1d"), ("3M", "3mo", "1d"),
@@ -948,9 +1008,18 @@ def render(news, markets, charts=None):
     for sc, _ in SCOPES:
         pool = [i for i in news if i["scope"] == sc]
         top = next((i for i in pool if i.get("image")), pool[0] if pool else None)
+        rest = [i for i in pool if i is not top]
+        # แถวล่าสุดฝั่งต่างประเทศ เอาข่าวจากสำนักข่าวต่างประเทศจริงๆ ก่อน
+        # ไม่ใช่สื่อไทยที่รายงานเรื่องต่างประเทศ (ถ้าไม่พอค่อยเติมจากที่เหลือ)
+        if sc == "intl":
+            foreign = [i for i in rest if i["lang"] != "th"]
+            latest = pick(foreign, PER_ROW)
+            if len(latest) < PER_ROW:
+                latest = pick(foreign + [i for i in rest if i["lang"] == "th"], PER_ROW)
+        else:
+            latest = pick(rest, PER_ROW)
         groups[sc] = {
-            "top": top,
-            "latest": pick([i for i in pool if i is not top], PER_ROW),
+            "top": top, "latest": latest,
             "cats": {c: pick([i for i in pool if i["cat"] == c], PER_ROW) for c in CAT_NAMES},
             "n": len(pool),
         }
@@ -1080,7 +1149,7 @@ def render(news, markets, charts=None):
         {m["label"]: {"price": m["price"], "pct": m["pct_str"], "pctv": round(m["pct"], 4),
                       "group": m.get("group", "intl"),
                       "dir": "up" if m["pct"] > 0 else ("down" if m["pct"] < 0 else "flat"),
-                      "news": m.get("news") or []}
+                      "fund": m.get("fund") or {}, "news": m.get("news") or []}
          for m in markets}, ensure_ascii=False)
     charts_json = json.dumps(charts or {}, ensure_ascii=False)
     page_desc = f"ข่าวเศรษฐกิจ-การเมือง {len(news)} ข่าวใน 24 ชม. จาก {len(FEEDS)} แหล่ง อัปเดต {NOW.strftime('%d %b %Y %H:%M')} น."
@@ -1271,9 +1340,25 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cmodal-note{{font-size:.65rem;color:var(--dim);margin-top:3px}}
 .cempty{{display:grid;place-items:center;height:100%;color:var(--mute);font-size:.85rem}}
 
-/* แถบข่าวของสินทรัพย์นั้น อยู่ข้างกราฟ */
-.cmodal-news{{width:310px;flex:none;display:flex;flex-direction:column;
-  border-left:1px solid var(--line)}}
+.ctype{{flex:none}}
+.cmodal-tape{{margin:0;padding:7px 10px;gap:6px;border-bottom:1px solid var(--line);
+  background:#0C1220}}
+.cmodal-tape .ticker{{background:transparent;border-color:#1A2333}}
+
+/* ค่าคำนวณ + ข่าว อยู่คอลัมน์ขวาของกราฟ */
+.cmodal-side{{width:310px;flex:none;display:flex;flex-direction:column;
+  border-left:1px solid var(--line);min-height:0}}
+.calc{{flex:none;max-height:44%;overflow-y:auto}}
+.calc-row{{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding:8px 13px;border-bottom:1px solid var(--line)}}
+.calc-k{{font-size:.74rem;color:var(--mute)}}
+.calc-k small{{display:block;font-size:.6rem;color:var(--dim);font-family:'IBM Plex Mono',monospace}}
+.calc-v{{font-family:'IBM Plex Mono',monospace;font-size:.86rem;font-weight:500;
+  text-align:right;white-space:nowrap}}
+.calc-v small{{display:block;font-size:.6rem;font-weight:400;color:var(--dim)}}
+.calc-na{{color:var(--dim)}}
+.calc-note{{padding:8px 13px;font-size:.6rem;line-height:1.5;color:var(--dim);
+  border-bottom:1px solid var(--line)}}
 .cnews-head{{padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel2);
   font-size:.72rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
   color:var(--mute)}}
@@ -1285,7 +1370,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cnews-t{{flex:1;min-width:0;font-size:.78rem;line-height:1.38}}
 .cnews-m{{display:block;margin-top:3px;font-family:'IBM Plex Mono',monospace;
   font-size:.6rem;color:var(--dim);text-transform:uppercase}}
-@media(max-width:1100px){{.cmodal-news{{width:260px}}}}
+@media(max-width:1100px){{.cmodal-side{{width:264px}}}}
 @media(max-width:860px){{
   .cmodal-body{{flex-direction:column;overflow-y:auto}}
   .cmodal-list{{width:auto;display:flex;overflow-x:auto;border-right:0;
@@ -1293,7 +1378,8 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   .cgroup{{display:none}}
   .citem{{width:auto;white-space:nowrap}}
   .cmodal-chart{{min-height:340px}}
-  .cmodal-news{{width:auto;border-left:0;border-top:1px solid var(--line)}}
+  .cmodal-side{{width:auto;border-left:0;border-top:1px solid var(--line)}}
+  .calc{{max-height:none}}
 }}
 .t-label{{color:var(--ink);font-weight:600;letter-spacing:.03em}}
 .t-price{{color:var(--ink);font-weight:500}}
@@ -1490,6 +1576,12 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .tab.active{{color:var(--ink)}}
 .tab.active::after{{content:"";position:absolute;left:12px;right:12px;bottom:-3px;height:3px;
   border-radius:3px 3px 0 0;background:linear-gradient(90deg,var(--econ),var(--poli))}}
+.tab[draggable]{{cursor:grab}}
+.tab.dragging{{opacity:.4;cursor:grabbing}}
+.tab-chart{{display:inline-flex;align-items:center;gap:7px;color:var(--brass)}}
+.tab-chart svg{{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round}}
+.tab-chart:hover{{color:var(--cream)}}
 .tab-n{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;font-weight:400;
   color:var(--dim);margin-left:6px}}
 .scope-title{{display:flex;align-items:center;gap:10px;font-size:1.18rem;font-weight:700;
@@ -1558,7 +1650,16 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
         <div class="cmodal-price"><span id="cmodal-p"></span><span id="cmodal-c"></span></div>
       </div>
       <div class="tfbar" id="cmodal-tf"></div>
+      <div class="tfbar ctype">
+        <button class="tfbtn on" type="button" data-ct="candle" onclick="pickType('candle')">แท่งเทียน</button>
+        <button class="tfbtn" type="button" data-ct="line" onclick="pickType('line')">เส้น</button>
+      </div>
       <button type="button" class="tmodal-x" onclick="closeCharts()" aria-label="ปิด">×</button>
+    </div>
+
+    <div class="tickers cmodal-tape">
+      {ticker_row("th", "ไทย")}
+      {ticker_row("intl", "ต่างประเทศ")}
     </div>
     <div class="cmodal-body">
       <div class="cmodal-list" id="cmodal-list"></div>
@@ -1567,7 +1668,9 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
         <div id="creadout" class="creadout"></div>
         <p class="cmodal-note">ล้อเมาส์/นิ้วเพื่อซูม · ลากเพื่อเลื่อน · ดับเบิลคลิกเพื่อรีเซ็ต</p>
       </div>
-      <div class="cmodal-news">
+      <div class="cmodal-side">
+        <div class="cnews-head">ค่าคำนวณ</div>
+        <div class="calc" id="ccalc"></div>
         <div class="cnews-head">ข่าวที่เกี่ยวข้อง</div>
         <div class="cnews-list" id="cnews-list"></div>
       </div>
@@ -1575,9 +1678,11 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
 </div>
 
-<nav class="tabs" role="tablist">
-  <button class="tab active" type="button" role="tab" data-scope="all" onclick="setScope('all')">ทั้งหมด<span class="tab-n">{len(news)}</span></button>
-  {''.join(f'''<button class="tab" type="button" role="tab" data-scope="{sc}" onclick="setScope('{sc}')">{lb}<span class="tab-n">{groups[sc]["n"]}</span></button>''' for sc, lb in SCOPES)}
+<nav class="tabs" id="tabs" role="tablist" title="ลากเพื่อสลับลำดับได้">
+  <button class="tab active" type="button" role="tab" draggable="true" data-id="all" data-scope="all" onclick="setScope('all')">ทั้งหมด<span class="tab-n">{len(news)}</span></button>
+  {''.join(f'''<button class="tab" type="button" role="tab" draggable="true" data-id="{sc}" data-scope="{sc}" onclick="setScope('{sc}')">{lb}<span class="tab-n">{groups[sc]["n"]}</span></button>''' for sc, lb in SCOPES)}
+  <button class="tab tab-chart" type="button" draggable="true" data-id="chart" onclick="openCharts()">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>กราฟราคา</button>
 </nav>
 
 {heroes}
@@ -1603,19 +1708,6 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
   <div id="hotspot-detail"></div>
 </section>
-
-<div class="chart-bar">
-  <button class="chart-open" type="button" onclick="openCharts()">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
-    กราฟราคา
-  </button>
-  <span class="chart-hint">แท่งเทียน · 1D–5Y · ซูม/เลื่อนได้</span>
-</div>
-
-<div class="tickers">
-  {ticker_row("th", "ไทย")}
-  {ticker_row("intl", "ต่างประเทศ")}
-</div>
 
 {category_blocks}
 
@@ -1701,7 +1793,63 @@ addEventListener('keydown', ev => {{
 // ── กราฟแท่งเทียน ────────────────────────────────────────
 const CHARTS = window.__CHARTS__ || {{}};
 const CH_TF = ['1D','1M','3M','6M','1Y','3Y','5Y'];
-let chCur = null, chTf = '3M', chCache = {{}}, chData = null, chZoom = null;
+let chCur = null, chTf = '3M', chCache = {{}}, chData = null, chZoom = null, chType = 'candle';
+
+function pickType(t){{
+  chType = t;
+  document.querySelectorAll('.ctype .tfbtn').forEach(b => b.classList.toggle('on', b.dataset.ct === t));
+  renderChart();
+}}
+
+// ความชันเฉลี่ยของชุดตัวเลข (least squares) ใช้บอกทิศทางเทรนด์
+function linSlope(ys){{
+  const n = ys.length;
+  if (n < 2) return 0;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (let i = 0; i < n; i++) {{ sx += i; sy += ys[i]; sxx += i * i; sxy += i * ys[i]; }}
+  const den = n * sxx - sx * sx;
+  return den ? (n * sxy - sx * sy) / den : 0;
+}}
+
+function renderCalc(){{
+  const box = document.getElementById('ccalc');
+  const rows = (chData?.tf || {{}})[chTf] || [];
+  const f = (TNEWS[chCur] || {{}}).fund || {{}};
+  if (!rows.length) {{ box.innerHTML = ''; return; }}
+  const closes = rows.map(r => r[4]);
+  const last = closes[closes.length - 1];
+  const fmt = n => d3.format(Math.abs(n) >= 1000 ? ',.0f' : ',.2f')(n);
+
+  const total = closes[0] ? linSlope(closes) * (closes.length - 1) / closes[0] * 100 : 0;
+  const tr = total > 3 ? ['ขาขึ้น', 'up'] : total < -3 ? ['ขาลง', 'down'] : ['ออกข้าง', 'flat'];
+
+  // ราคาฐาน = ค่าเฉลี่ยของจุดต่ำสุด 20% ล่างในกรอบเวลานี้
+  const lows = rows.map(r => r[3]).slice().sort((a, b) => a - b);
+  const k = Math.max(1, Math.round(lows.length * 0.2));
+  const base = lows.slice(0, k).reduce((a, b) => a + b, 0) / k;
+
+  // มูลค่าเหมาะสมแบบ Graham ใช้ได้เฉพาะหุ้นที่มีกำไรและมูลค่าตามบัญชีเป็นบวก
+  const gr = (f.eps > 0 && f.bvps > 0) ? Math.sqrt(22.5 * f.eps * f.bvps) : null;
+
+  const row = (label, sub, value, cls, vsub) =>
+    `<div class="calc-row"><span class="calc-k">${{label}}<small>${{sub}}</small></span>` +
+    `<span class="calc-v ${{cls || ''}}">${{value}}${{vsub ? `<small>${{vsub}}</small>` : ''}}</span></div>`;
+
+  box.innerHTML =
+    row('P/E', 'ย้อนหลัง 12 เดือน', f.pe != null ? fmt(f.pe) : '—',
+        f.pe != null ? '' : 'calc-na', f.fpe != null ? 'ล่วงหน้า ' + fmt(f.fpe) : '') +
+    row('ราคาที่แท้จริง', gr ? 'สูตร Graham √(22.5×EPS×BVPS)' : 'ต้องมีกำไรและมูลค่าตามบัญชี',
+        gr ? fmt(gr) : '—', gr ? (gr > last ? 'up' : 'down') : 'calc-na',
+        gr ? ((gr / last - 1) * 100).toFixed(1) + '% เทียบราคาปัจจุบัน' : '') +
+    row('เป้าหมายนักวิเคราะห์', 'ค่าเฉลี่ยจากโบรกฯ', f.target != null ? fmt(f.target) : '—',
+        f.target != null ? (f.target > last ? 'up' : 'down') : 'calc-na') +
+    row('เทรนด์', 'ความชันราคาปิดช่วง ' + chTf, tr[0], tr[1],
+        (total >= 0 ? '+' : '') + total.toFixed(1) + '%') +
+    row('ราคาฐาน', 'เฉลี่ยจุดต่ำสุด 20% ล่าง ' + chTf, fmt(base), '',
+        ((last / base - 1) * 100).toFixed(1) + '% เหนือฐาน') +
+    '<p class="calc-note">คำนวณจากราคาย้อนหลังและข้อมูลพื้นฐานเท่าที่ดึงได้ ' +
+    'เป็นค่าประกอบการพิจารณา ไม่ใช่คำแนะนำการลงทุน</p>';
+}}
 
 function openCharts(){{
   const modal = document.getElementById('cmodal');
@@ -1767,7 +1915,8 @@ function renderChart(){{
   const avail = CH_TF.filter(t => (chData?.tf || {{}})[t]?.length);
   if (!avail.length) {{ host.innerHTML = '<div class="cempty">ไม่มีข้อมูลกราฟ</div>'; return; }}
   if (!avail.includes(chTf)) chTf = avail.includes('3M') ? '3M' : avail[0];
-  document.querySelectorAll('.tfbtn').forEach(b => {{
+  // เจาะเฉพาะปุ่มช่วงเวลา ไม่งั้นจะไปปิดปุ่มเลือกชนิดกราฟที่ใช้คลาสเดียวกัน
+  document.querySelectorAll('#cmodal-tf .tfbtn').forEach(b => {{
     b.classList.toggle('on', b.dataset.tf === chTf);
     b.disabled = !avail.includes(b.dataset.tf);
     b.style.opacity = avail.includes(b.dataset.tf) ? '' : '.35';
@@ -1825,18 +1974,28 @@ function renderChart(){{
       .attr('x', d => zx(d)).attr('y', 15).attr('text-anchor', 'middle')
       .text(d => fmtT(rows[d][0]));
 
-    const bw = Math.max(1, Math.min(18, (zx(1) - zx(0)) * 0.68));
-    const g = gC.selectAll('g.cd').data(vis, d => d[0]).join(
-      en => {{ const s = en.append('g').attr('class', 'cd');
-               s.append('line'); s.append('rect'); return s; }});
-    g.attr('class', d => 'cd ' + (d[4] >= d[1] ? 'c-up' : 'c-down'))
-     .attr('transform', (d, k) => `translate(${{zx(i0 + k)}},0)`);
-    g.select('line').attr('x1', 0).attr('x2', 0)
-      .attr('y1', d => y(d[2])).attr('y2', d => y(d[3])).attr('stroke-width', 1);
-    g.select('rect')
-      .attr('x', -bw / 2).attr('width', bw)
-      .attr('y', d => y(Math.max(d[1], d[4])))
-      .attr('height', d => Math.max(1, Math.abs(y(d[1]) - y(d[4]))));
+    if (chType === 'line') {{
+      gC.selectAll('g.cd').remove();
+      const path = d3.line().x((d, k) => zx(i0 + k)).y(d => y(d[4]))(vis);
+      const up = vis[vis.length - 1][4] >= vis[0][4];
+      gC.selectAll('path.cline').data([0]).join('path').attr('class', 'cline')
+        .attr('d', path).attr('fill', 'none').attr('stroke-width', 1.7)
+        .attr('stroke', up ? 'var(--up)' : 'var(--down)');
+    }} else {{
+      gC.selectAll('path.cline').remove();
+      const bw = Math.max(1, Math.min(18, (zx(1) - zx(0)) * 0.68));
+      const g = gC.selectAll('g.cd').data(vis, d => d[0]).join(
+        en => {{ const s = en.append('g').attr('class', 'cd');
+                 s.append('line'); s.append('rect'); return s; }});
+      g.attr('class', d => 'cd ' + (d[4] >= d[1] ? 'c-up' : 'c-down'))
+       .attr('transform', (d, k) => `translate(${{zx(i0 + k)}},0)`);
+      g.select('line').attr('x1', 0).attr('x2', 0)
+        .attr('y1', d => y(d[2])).attr('y2', d => y(d[3])).attr('stroke-width', 1);
+      g.select('rect')
+        .attr('x', -bw / 2).attr('width', bw)
+        .attr('y', d => y(Math.max(d[1], d[4])))
+        .attr('height', d => Math.max(1, Math.abs(y(d[1]) - y(d[4]))));
+    }}
     svg.node().__view = {{zx, i0, i1}};
   }}
 
@@ -1846,6 +2005,7 @@ function renderChart(){{
   svg.call(chZoom).on('dblclick.zoom', null);
   svg.on('dblclick', () => svg.call(chZoom.transform, d3.zoomIdentity));
   draw(d3.zoomTransform(svg.node()));
+  renderCalc();
 
   const out = document.getElementById('creadout');
   svg.on('mousemove', ev => {{
@@ -1879,6 +2039,46 @@ function setScope(s){{
     h.hidden = !(s === 'all' ? h.dataset.primary === '1' : h.dataset.scope === s));
   try {{ sessionStorage.setItem('scope', s); }} catch(e) {{}}
 }}
+
+// ── ลากสลับลำดับแท็บได้เอง แล้วจำลำดับไว้ ────────────────
+(() => {{
+  const bar = document.getElementById('tabs');
+  if (!bar) return;
+  const KEY = 'tabOrder';
+  const save = () => {{
+    try {{ localStorage.setItem(KEY,
+      JSON.stringify([...bar.children].map(t => t.dataset.id))); }} catch(e) {{}}
+  }};
+  try {{
+    const saved = JSON.parse(localStorage.getItem(KEY) || '[]');
+    saved.forEach(id => {{
+      const el = bar.querySelector(`.tab[data-id="${{id}}"]`);
+      if (el) bar.appendChild(el);          // เรียงตามที่เคยจัดไว้
+    }});
+  }} catch(e) {{}}
+
+  let src = null;
+  bar.addEventListener('dragstart', ev => {{
+    src = ev.target.closest('.tab');
+    if (!src) return;
+    src.classList.add('dragging');
+    ev.dataTransfer.effectAllowed = 'move';
+    try {{ ev.dataTransfer.setData('text/plain', src.dataset.id); }} catch(e) {{}}
+  }});
+  bar.addEventListener('dragend', () => {{
+    if (src) src.classList.remove('dragging');
+    src = null; save();
+  }});
+  bar.addEventListener('dragover', ev => {{
+    ev.preventDefault();
+    const over = ev.target.closest('.tab');
+    if (!over || !src || over === src) return;
+    const r = over.getBoundingClientRect();
+    const after = ev.clientX > r.left + r.width / 2;
+    bar.insertBefore(src, after ? over.nextSibling : over);
+  }});
+  bar.addEventListener('drop', ev => ev.preventDefault());
+}})();
 
 // จำแท็บที่เลือกไว้ ไม่ให้เด้งกลับตอนหน้ารีเฟรชอัตโนมัติ
 (() => {{
@@ -1961,6 +2161,8 @@ if __name__ == "__main__":
 
     charts = {}
     if markets:
+        print("ดึงข้อมูลพื้นฐาน...")
+        fetch_fundamentals(markets)
         print("ดึงข้อมูลแท่งเทียน...")
         charts = build_charts(markets)
     print()
