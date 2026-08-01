@@ -63,24 +63,39 @@ FEEDS = [
 
 THAI_GOLD = "__THAIGOLD__"      # ไม่ใช่สัญลักษณ์ Yahoo — ดึงจากสมาคมค้าทองคำแทน
 
+# (ชื่อที่แสดง, สัญลักษณ์ Yahoo, แถว)  — แถว th = สินทรัพย์ไทย, intl = ต่างประเทศ
 TICKERS = [
-    ("SET",       "^SET.BK"),
-    ("S&P 500",   "^GSPC"),
-    ("NASDAQ",    "^IXIC"),
-    ("USD/THB",   "THB=X"),
-    ("GOLD USD",  "GC=F"),
-    ("GOLD THB",  THAI_GOLD),
-    ("BITCOIN",   "BTC-USD"),
-    ("COKE",      "COKE"),
-    ("COST",      "COST"),
-    ("WMT",       "WMT"),
-    ("JEPQ",      "JEPQ"),
-    ("MSFT",      "MSFT"),
-    ("AMZN",      "AMZN"),
-    ("NVDA",      "NVDA"),
-    ("BRK.B",     "BRK-B"),
-    ("GOOG",      "GOOG"),
-    ("AAPL",      "AAPL"),
+    ("SET",       "^SET.BK",  "th"),
+    ("USD/THB",   "THB=X",    "th"),
+    ("GOLD THB",  THAI_GOLD,  "th"),
+    # ธนาคารไทย 6 อันดับแรกตามมูลค่าตลาด
+    ("SCB",       "SCB.BK",   "th"),
+    ("KBANK",     "KBANK.BK", "th"),
+    ("BBL",       "BBL.BK",   "th"),
+    ("KTB",       "KTB.BK",   "th"),
+    ("TTB",       "TTB.BK",   "th"),
+    ("BAY",       "BAY.BK",   "th"),
+    # พลังงาน/สาธารณูปโภคไทย 5 อันดับแรก
+    ("PTT",       "PTT.BK",   "th"),
+    ("GULF",      "GULF.BK",  "th"),
+    ("PTTEP",     "PTTEP.BK", "th"),
+    ("OR",        "OR.BK",    "th"),
+    ("GPSC",      "GPSC.BK",  "th"),
+
+    ("S&P 500",   "^GSPC",    "intl"),
+    ("NASDAQ",    "^IXIC",    "intl"),
+    ("GOLD USD",  "GC=F",     "intl"),
+    ("BITCOIN",   "BTC-USD",  "intl"),
+    ("COKE",      "COKE",     "intl"),
+    ("COST",      "COST",     "intl"),
+    ("WMT",       "WMT",      "intl"),
+    ("JEPQ",      "JEPQ",     "intl"),
+    ("MSFT",      "MSFT",     "intl"),
+    ("AMZN",      "AMZN",     "intl"),
+    ("NVDA",      "NVDA",     "intl"),
+    ("BRK.B",     "BRK-B",    "intl"),
+    ("GOOG",      "GOOG",     "intl"),
+    ("AAPL",      "AAPL",     "intl"),
 ]
 
 # คำที่ใช้จับว่าข่าวไหน "เกี่ยวข้อง" กับสินทรัพย์ตัวไหน
@@ -90,6 +105,10 @@ _US_EQUITY = ["wall street", "s&p", "nasdaq", "fed", "tariff", "earnings",
               "หุ้นสหรัฐ", "วอลล์สตรีท", "ตลาดหุ้นสหรัฐ", "ภาษีทรัมป์"]
 _GOLD = ["safe haven", "สินทรัพย์ปลอดภัย", "เงินเฟ้อ", "inflation",
          "ดอกเบี้ย", "interest rate", "ดอลลาร์"]
+_TH_BANK = ["ธนาคาร", "แบงก์", "สินเชื่อ", "หนี้เสีย", "npl", "ธปท", "แบงก์ชาติ",
+            "ดอกเบี้ย", "หุ้นไทย", "ตลาดหลักทรัพย์", "กำไรไตรมาส"]
+_TH_ENERGY = ["พลังงาน", "น้ำมัน", "ไฟฟ้า", "ก๊าซ", "โรงกลั่น", "ราคาน้ำมัน",
+              "opec", "หุ้นไทย", "ตลาดหลักทรัพย์", "กำไรไตรมาส"]
 
 TICKER_TERMS = {
     "SET":      (["set index", "ตลาดหลักทรัพย์", "หุ้นไทย", "ตลาดหุ้นไทย"],
@@ -118,6 +137,22 @@ TICKER_TERMS = {
     "BRK.B":    (["berkshire", "buffett", "บัฟเฟตต์", "เบิร์กเชียร์"], _US_EQUITY + ["insurance", "ลงทุน"]),
     "GOOG":     (["alphabet", "google", "กูเกิล", "gemini"], _US_EQUITY + ["ai", "เอไอ", "โฆษณา", "search"]),
     "AAPL":     (["apple", "แอปเปิล", "iphone", "ไอโฟน"], _US_EQUITY + ["ชิป", "chip", "สมาร์ทโฟน"]),
+
+    # ธนาคารไทย — เลี่ยงคำที่กว้างเกิน เช่น "กรุงเทพ" (ชนกับกรุงเทพมหานคร)
+    # และ "bay" (ชนกับ Bay Area) จึงใช้ชื่อเต็มหรือชื่อย่อที่เจาะจงแทน
+    "SCB":      (["scb", "scbx", "ไทยพาณิชย์"], _TH_BANK),
+    "KBANK":    (["kbank", "กสิกรไทย", "กสิกร"], _TH_BANK),
+    "BBL":      (["bbl", "ธนาคารกรุงเทพ"], _TH_BANK),
+    "KTB":      (["ktb", "กรุงไทย"], _TH_BANK),
+    "TTB":      (["ttb", "ทีเอ็มบีธนชาต", "ทหารไทยธนชาต"], _TH_BANK),
+    "BAY":      (["กรุงศรีอยุธยา", "ธนาคารกรุงศรี", "กรุงศรี", "krungsri"], _TH_BANK),
+
+    # พลังงาน/สาธารณูปโภคไทย
+    "PTT":      (["ptt", "ปตท."], _TH_ENERGY),
+    "GULF":     (["กัลฟ์", "gulf development", "gulf energy"], _TH_ENERGY),
+    "PTTEP":    (["pttep", "ปตท.สผ"], _TH_ENERGY + ["ขุดเจาะ", "ปิโตรเลียม", "สำรวจ"]),
+    "OR":       (["โออาร์", "pttor", "ptt oil"], _TH_ENERGY + ["ค้าปลีก", "สถานีบริการ"]),
+    "GPSC":     (["gpsc", "โกลบอล เพาเวอร์"], _TH_ENERGY),
 }
 RELEVANCE_FLOOR = 4      # ต่ำกว่านี้ถือว่าไม่เกี่ยว ไม่ต้องแสดง
 RELEVANCE_MAX = 10       # จำนวนข่าวต่อสินทรัพย์
@@ -592,7 +627,7 @@ def fetch_thai_gold(got):
 
 def fetch_markets():
     out, got = [], {}
-    for label, sym in TICKERS:
+    for label, sym, group in TICKERS:
         try:
             if sym == THAI_GOLD:
                 price, pct = fetch_thai_gold(got)
@@ -608,8 +643,8 @@ def fetch_markets():
                 pct = (price - prev) / prev * 100 if prev else 0
             got[label] = price
             decimals = 0 if price >= 10000 else 2
-            out.append({"label": label, "price": f"{price:,.{decimals}f}", "raw_price": price,
-                        "pct": pct, "pct_str": f"{pct:+.2f}%"})
+            out.append({"label": label, "group": group, "price": f"{price:,.{decimals}f}",
+                        "raw_price": price, "pct": pct, "pct_str": f"{pct:+.2f}%"})
             print(f"  ✓ {label}")
         except Exception as ex:
             print(f"  ! {label}: {ex}")
@@ -663,7 +698,7 @@ def save_cache(news, markets):
 def update_history(markets):
     """เก็บราคาย้อนหลังต่อ ticker ไว้วาด sparkline"""
     history = load_json(HISTORY_FILE)
-    labels = {label for label, _ in TICKERS}
+    labels = {label for label, _, _ in TICKERS}
     for stale in set(history) - labels:      # ทิ้งประวัติของ ticker ที่ถอด/เปลี่ยนชื่อไปแล้ว
         del history[stale]
     ts = NOW.isoformat()
@@ -673,20 +708,6 @@ def update_history(markets):
         del h[:-HISTORY_POINTS]
     save_json(HISTORY_FILE, history)
     return history
-
-
-def sparkline_svg(points, color):
-    if len(points) < 2:
-        return ""
-    lo, hi = min(points), max(points)
-    span = (hi - lo) or (abs(hi) or 1)
-    w, h, pad = 60, 20, 2
-    step = (w - pad * 2) / (len(points) - 1)
-    coords = [(pad + i * step, pad + (1 - (v - lo) / span) * (h - pad * 2))
-              for i, v in enumerate(points)]
-    d = "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in coords)
-    return (f'<svg class="spark" viewBox="0 0 {w} {h}" preserveAspectRatio="none">'
-            f'<path d="{d}" fill="none" stroke="{color}" stroke-width="1.6"/></svg>')
 
 
 def top_keywords(items, n=14):
@@ -973,7 +994,7 @@ if (window.ResizeObserver) new ResizeObserver(() => redraw(120)).observe(svg.nod
 """
 
 
-def render(news, markets, history):
+def render(news, markets):
     def pick(items, n):
         """หน้าตาเน้นรูป → เลือกข่าวที่มีรูปก่อน แล้วค่อยเรียงตามเวลาเหมือนเดิม
         (ทุกข่าวอยู่ในกรอบ 24 ชม.อยู่แล้ว ลำดับจึงไม่เพี้ยนมาก)"""
@@ -1047,16 +1068,27 @@ def render(news, markets, history):
   </div>
 </section>"""
 
-    def tick(m):
+    def tick(m, dup=False):
         cls = "up" if m["pct"] > 0 else ("down" if m["pct"] < 0 else "flat")
-        color = {"up": "var(--up)", "down": "var(--down)", "flat": "var(--mute)"}[cls]
-        pts = [p["p"] for p in history.get(m["label"], [])]
-        spark = sparkline_svg(pts, color)
         n = len(m.get("news") or [])
-        return f"""<button class="tick" type="button" data-label="{html.escape(m['label'], quote=True)}"
+        # ชุดที่สองมีไว้ให้ marquee วนต่อเนื่อง ไม่ต้องให้ screen reader/แป้น Tab อ่านซ้ำ
+        extra = ' dup" tabindex="-1" aria-hidden="true' if dup else ''
+        return f"""<button class="tick{extra}" type="button" data-label="{html.escape(m['label'], quote=True)}"
       title="ดูข่าวที่เกี่ยวข้องกับ {html.escape(m['label'], quote=True)}">
       <span class="t-label">{html.escape(m['label'])}<span class="t-n">{n}</span></span>
-      <span class="t-price">{m['price']}</span>{spark}<span class="t-pct {cls}">{m['pct_str']}</span></button>"""
+      <span class="t-price">{m['price']}</span><span class="t-pct {cls}">{m['pct_str']}</span></button>"""
+
+    def ticker_row(group, title):
+        items = [m for m in markets if m.get("group") == group]
+        if not items:
+            return ""
+        body = "".join(tick(m) for m in items) + "".join(tick(m, True) for m in items)
+        # ความเร็วคงที่ต่อการ์ด ไม่ว่าแถวไหนจะมีกี่ตัว
+        dur = max(16, round(len(items) * 2.6))
+        return f"""<div class="ticker-row">
+    <span class="ticker-tag">{title}</span>
+    <div class="ticker"><div class="ticker-track" style="animation-duration:{dur}s">{body}</div></div>
+  </div>"""
 
     def hot_row(m, i):
         bars = "".join(f'<i class="hb-{c}" style="flex:{m[c]}"></i>' for c in CAT_NAMES if m[c])
@@ -1106,8 +1138,6 @@ def render(news, markets, history):
 
     scope_groups = "".join(scope_group(sc, lb) for sc, lb in SCOPES)
 
-    # ทำซ้ำ 2 ชุดในแทร็กเดียว ให้ marquee วนต่อเนื่องแบบไม่มีรอยต่อ
-    tick_row = "".join(tick(m) for m in markets)
     next_run = (NOW + timedelta(hours=3)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
     icons_json = json.dumps({c: cat_icon(c, "ci-sm") for c in CAT_NAMES}, ensure_ascii=False)
@@ -1180,15 +1210,21 @@ h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
 @keyframes p{{70%{{box-shadow:0 0 0 9px rgba(63,182,139,0)}}100%{{box-shadow:0 0 0 0 rgba(63,182,139,0)}}}}
 
 /* แถบราคาเลื่อนไปทางซ้ายต่อเนื่องแบบรายการทีวี (ชี้เมาส์ค้างไว้เพื่อหยุด) */
-.ticker{{overflow:hidden;border:1px solid var(--line);
-  border-radius:10px;background:var(--panel);margin-bottom:16px}}
-.ticker-track{{display:flex;width:max-content;animation:marquee 90s linear infinite}}
+.tickers{{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}}
+.ticker-row{{display:flex;align-items:stretch;gap:8px;min-width:0}}
+.ticker-tag{{flex:none;display:flex;align-items:center;padding:0 12px;border-radius:10px;
+  background:var(--panel2);border:1px solid var(--line);
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--mute);white-space:nowrap}}
+.ticker{{flex:1;min-width:0;overflow:hidden;border:1px solid var(--line);
+  border-radius:10px;background:var(--panel)}}
+.ticker-track{{display:flex;width:max-content;animation:marquee linear infinite}}
 .ticker:hover .ticker-track{{animation-play-state:paused}}
 @keyframes marquee{{from{{transform:translateX(0)}}to{{transform:translateX(-50%)}}}}
 @media(prefers-reduced-motion:reduce){{
   .ticker{{overflow-x:auto}}
   .ticker-track{{animation:none;width:auto}}
-  .ticker-track .tick:nth-child(n+{len(markets) + 1}){{display:none}}
+  .ticker-track .dup{{display:none}}
 }}
 .tick{{flex:0 0 auto;min-width:132px;padding:11px 16px;text-align:left;
   border:0;border-right:1px solid var(--line);background:none;color:inherit;
@@ -1240,7 +1276,6 @@ h1{{font-size:1.85rem;font-weight:700;letter-spacing:-.015em}}
 .t-price{{font-family:'IBM Plex Mono',monospace;font-size:.95rem;font-weight:500}}
 .t-pct{{font-family:'IBM Plex Mono',monospace;font-size:.74rem}}
 .up{{color:var(--up)}} .down{{color:var(--down)}} .flat{{color:var(--mute)}}
-.spark{{width:60px;height:20px;display:block}}
 
 .panel{{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}}
 .panel-head{{display:flex;align-items:center;justify-content:space-between;
@@ -1487,7 +1522,10 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
 </header>
 
-<div class="ticker"><div class="ticker-track">{tick_row}{tick_row}</div></div>
+<div class="tickers">
+  {ticker_row("th", "ไทย")}
+  {ticker_row("intl", "ต่างประเทศ")}
+</div>
 
 <nav class="tabs" role="tablist">
   <button class="tab active" type="button" role="tab" data-scope="all" onclick="setScope('all')">ทั้งหมด<span class="tab-n">{len(news)}</span></button>
@@ -1586,7 +1624,7 @@ function closeTicker(){{
   document.body.style.overflow = '';
 }}
 
-document.querySelector('.ticker').addEventListener('click', ev => {{
+document.querySelector('.tickers').addEventListener('click', ev => {{
   const t = ev.target.closest('.tick');
   if (t) openTicker(t.dataset.label);
 }});
@@ -1678,7 +1716,9 @@ if __name__ == "__main__":
         print("  ⚠ ดึงราคาตลาดไม่ได้เลยรอบนี้ ใช้ cache รอบก่อนแทน")
         markets = cache.get("markets", [])
 
-    history = update_history(markets) if markets else load_json(HISTORY_FILE)
+    # แถบราคาไม่มีกราฟแล้ว แต่ยังเก็บราคาย้อนหลังไว้ต่อเนื่อง เผื่อนำกลับมาใช้ภายหลัง
+    if markets:
+        update_history(markets)
     if markets and news:
         attach_ticker_news(markets, news)
         linked = sum(len(m.get("news") or []) for m in markets)
@@ -1686,5 +1726,5 @@ if __name__ == "__main__":
     save_cache(news, markets)
 
     with open("index.html", "w", encoding="utf-8") as f:
-        f.write(render(news, markets, history))
+        f.write(render(news, markets))
     print(f"เสร็จ · index.html · {NOW.strftime('%H:%M')} น.")
