@@ -8,6 +8,7 @@ Econ/Politics Monitor — dashboard ข่าวเศรษฐกิจ / ก�
 รัน:      python3 build.py
 """
 
+import os
 import re
 import html
 import json
@@ -68,19 +69,19 @@ TICKERS = [
     ("SET",       "^SET.BK",  "th"),
     ("USD/THB",   "THB=X",    "th"),
     ("GOLD THB",  THAI_GOLD,  "th"),
-    # ธนาคารไทย 6 อันดับแรกตามมูลค่าตลาด
+    # ธนาคาร/การเงินไทย
     ("SCB",       "SCB.BK",   "th"),
     ("KBANK",     "KBANK.BK", "th"),
     ("BBL",       "BBL.BK",   "th"),
     ("KTB",       "KTB.BK",   "th"),
     ("TTB",       "TTB.BK",   "th"),
     ("BAY",       "BAY.BK",   "th"),
-    # พลังงาน/สาธารณูปโภคไทย 5 อันดับแรก
+    ("TISCO",     "TISCO.BK", "th"),
+    # พลังงาน + ค้าปลีกไทย
     ("PTT",       "PTT.BK",   "th"),
     ("GULF",      "GULF.BK",  "th"),
-    ("PTTEP",     "PTTEP.BK", "th"),
     ("OR",        "OR.BK",    "th"),
-    ("GPSC",      "GPSC.BK",  "th"),
+    ("CPALL",     "CPALL.BK", "th"),
 
     ("S&P 500",   "^GSPC",    "intl"),
     ("NASDAQ",    "^IXIC",    "intl"),
@@ -148,11 +149,13 @@ TICKER_TERMS = {
     "BAY":      (["กรุงศรีอยุธยา", "ธนาคารกรุงศรี", "กรุงศรี", "krungsri"], _TH_BANK),
 
     # พลังงาน/สาธารณูปโภคไทย
+    "TISCO":    (["tisco", "ทิสโก้"], _TH_BANK),
     "PTT":      (["ptt", "ปตท."], _TH_ENERGY),
     "GULF":     (["กัลฟ์", "gulf development", "gulf energy"], _TH_ENERGY),
-    "PTTEP":    (["pttep", "ปตท.สผ"], _TH_ENERGY + ["ขุดเจาะ", "ปิโตรเลียม", "สำรวจ"]),
     "OR":       (["โออาร์", "pttor", "ptt oil"], _TH_ENERGY + ["ค้าปลีก", "สถานีบริการ"]),
-    "GPSC":     (["gpsc", "โกลบอล เพาเวอร์"], _TH_ENERGY),
+    "CPALL":    (["cpall", "cp all", "ซีพี ออลล์", "ซีพีออลล์", "เซเว่น", "7-eleven"],
+                 ["ค้าปลีก", "retail", "ร้านสะดวกซื้อ", "หุ้นไทย", "ตลาดหลักทรัพย์",
+                  "กำไรไตรมาส", "บริโภค"]),
 }
 RELEVANCE_FLOOR = 4      # ต่ำกว่านี้ถือว่าไม่เกี่ยว ไม่ต้องแสดง
 RELEVANCE_MAX = 10       # จำนวนข่าวต่อสินทรัพย์
@@ -207,6 +210,72 @@ def relevance(it, primary, secondary):
     if not direct:
         return min(9, side)      # ไม่ได้พูดถึงตัวนี้เลย → อยู่ในแถบแดงเสมอ
     return min(100, direct + min(side, 24))
+
+
+CHART_DIR = "chart"
+CHART_RANGES = [          # (ชื่อปุ่ม, range, interval)
+    ("1D", "1d", "5m"), ("1M", "1mo", "1d"), ("3M", "3mo", "1d"),
+    ("6M", "6mo", "1d"), ("1Y", "1y", "1d"), ("3Y", "3y", "1wk"),
+    ("5Y", "5y", "1wk"),
+]
+
+
+def chart_slug(label):
+    """ชื่อไฟล์ที่ปลอดภัย เช่น 'S&P 500' → 'sp500', 'BRK.B' → 'brkb'"""
+    return re.sub(r"[^a-z0-9]+", "", label.lower()) or "x"
+
+
+def fetch_candles(sym, rng, interval):
+    r = requests.get(
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
+        params={"range": rng, "interval": interval},
+        headers={"User-Agent": "Mozilla/5.0"}, timeout=15,
+    )
+    res = r.json()["chart"]["result"][0]
+    ts = res.get("timestamp") or []
+    q = res["indicators"]["quote"][0]
+    out = []
+    for i, t in enumerate(ts):
+        o, h, lo, c = q["open"][i], q["high"][i], q["low"][i], q["close"][i]
+        if None in (o, h, lo, c):
+            continue
+        out.append([t, round(o, 4), round(h, 4), round(lo, 4), round(c, 4)])
+    return out
+
+
+def build_charts(markets):
+    """เขียนไฟล์แท่งเทียนแยกรายสินทรัพย์ไว้ให้หน้าเว็บโหลดตอนเปิดกราฟ
+
+    แยกเป็นไฟล์ย่อยแทนที่จะฝังใน index.html เพราะข้อมูลรวมกันหลายเมกะไบต์
+    """
+    os.makedirs(CHART_DIR, exist_ok=True)
+    symbols = {label: sym for label, sym, _ in TICKERS if sym != THAI_GOLD}
+    jobs = [(m, tf, rng, iv) for m in markets if m["label"] in symbols
+            for tf, rng, iv in CHART_RANGES]
+    if not jobs:
+        return {}
+
+    def run(job):
+        m, tf, rng, iv = job
+        try:
+            return m["label"], tf, fetch_candles(symbols[m["label"]], rng, iv)
+        except Exception:
+            return m["label"], tf, None
+
+    frames = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for label, tf, candles in pool.map(run, jobs):
+            if candles:
+                frames.setdefault(label, {})[tf] = candles
+
+    index = {}
+    for label, tfs in frames.items():
+        slug = chart_slug(label)
+        save_json(f"{CHART_DIR}/{slug}.json", {"label": label, "tf": tfs})
+        index[label] = slug
+    total = sum(len(c) for tfs in frames.values() for c in tfs.values())
+    print(f"  ✓ กราฟ {len(index)} สินทรัพย์ · {total:,} แท่งเทียน")
+    return index
 
 
 def attach_ticker_news(markets, news):
@@ -643,8 +712,10 @@ def fetch_markets():
                 pct = (price - prev) / prev * 100 if prev else 0
             got[label] = price
             decimals = 0 if price >= 10000 else 2
+            chg = price - price / (1 + pct / 100) if pct else 0.0
             out.append({"label": label, "group": group, "price": f"{price:,.{decimals}f}",
-                        "raw_price": price, "pct": pct, "pct_str": f"{pct:+.2f}%"})
+                        "raw_price": price, "pct": pct, "pct_str": f"{pct:+.2f}%",
+                        "chg_str": f"{abs(chg):,.{decimals}f}"})
             print(f"  ✓ {label}")
         except Exception as ex:
             print(f"  ! {label}: {ex}")
@@ -994,7 +1065,7 @@ if (window.ResizeObserver) new ResizeObserver(() => redraw(120)).observe(svg.nod
 """
 
 
-def render(news, markets):
+def render(news, markets, charts=None):
     def pick(items, n):
         """หน้าตาเน้นรูป → เลือกข่าวที่มีรูปก่อน แล้วค่อยเรียงตามเวลาเหมือนเดิม
         (ทุกข่าวอยู่ในกรอบ 24 ชม.อยู่แล้ว ลำดับจึงไม่เพี้ยนมาก)"""
@@ -1070,13 +1141,11 @@ def render(news, markets):
 
     def tick(m, dup=False):
         cls = "up" if m["pct"] > 0 else ("down" if m["pct"] < 0 else "flat")
-        n = len(m.get("news") or [])
+        arrow = "▲" if m["pct"] > 0 else ("▼" if m["pct"] < 0 else "▬")
         # ชุดที่สองมีไว้ให้ marquee วนต่อเนื่อง ไม่ต้องให้ screen reader/แป้น Tab อ่านซ้ำ
         extra = ' dup" tabindex="-1" aria-hidden="true' if dup else ''
         return f"""<button class="tick{extra}" type="button" data-label="{html.escape(m['label'], quote=True)}"
-      title="ดูข่าวที่เกี่ยวข้องกับ {html.escape(m['label'], quote=True)}">
-      <span class="t-label">{html.escape(m['label'])}<span class="t-n">{n}</span></span>
-      <span class="t-price">{m['price']}</span><span class="t-pct {cls}">{m['pct_str']}</span></button>"""
+      title="ดูข่าวที่เกี่ยวข้องกับ {html.escape(m['label'], quote=True)}"><span class="t-label">{html.escape(m['label'])}</span> <span class="t-price">{m['price']}</span> <span class="t-chg {cls}">{arrow} {m.get('chg_str', '—')}</span> <span class="t-pct {cls}">{m['pct_str']}</span></button>"""
 
     def ticker_row(group, title):
         items = [m for m in markets if m.get("group") == group]
@@ -1084,7 +1153,7 @@ def render(news, markets):
             return ""
         body = "".join(tick(m) for m in items) + "".join(tick(m, True) for m in items)
         # ความเร็วคงที่ต่อการ์ด ไม่ว่าแถวไหนจะมีกี่ตัว
-        dur = max(16, round(len(items) * 2.6))
+        dur = max(12, round(len(items) * 1.7))
         return f"""<div class="ticker-row">
     <span class="ticker-tag">{title}</span>
     <div class="ticker"><div class="ticker-track" style="animation-duration:{dur}s">{body}</div></div>
@@ -1142,10 +1211,11 @@ def render(news, markets):
     markers_json = json.dumps(markers, ensure_ascii=False)
     icons_json = json.dumps({c: cat_icon(c, "ci-sm") for c in CAT_NAMES}, ensure_ascii=False)
     tnews_json = json.dumps(
-        {m["label"]: {"price": m["price"], "pct": m["pct_str"],
+        {m["label"]: {"price": m["price"], "pct": m["pct_str"], "group": m.get("group", "intl"),
                       "dir": "up" if m["pct"] > 0 else ("down" if m["pct"] < 0 else "flat"),
                       "news": m.get("news") or []}
          for m in markets}, ensure_ascii=False)
+    charts_json = json.dumps(charts or {}, ensure_ascii=False)
     page_desc = f"ข่าวเศรษฐกิจ-การเมือง {len(news)} ข่าวใน 24 ชม. จาก {len(FEEDS)} แหล่ง อัปเดต {NOW.strftime('%d %b %Y %H:%M')} น."
     favicon = ("data:image/svg+xml,"
                "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
@@ -1239,14 +1309,14 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   .ticker-track{{animation:none;width:auto}}
   .ticker-track .dup{{display:none}}
 }}
-.tick{{flex:0 0 auto;min-width:132px;padding:11px 16px;text-align:left;
+/* การ์ดราคาแบบบรรทัดเดียว: ชื่อ · ราคา · ส่วนต่าง · % (อย่างแถบหุ้นทีวี) */
+.tick{{flex:0 0 auto;padding:9px 16px;white-space:nowrap;
   border:0;border-right:1px solid var(--line);background:none;color:inherit;
-  font-family:inherit;cursor:pointer;display:flex;flex-direction:column;gap:2px;
-  transition:background .15s}}
+  font-family:'IBM Plex Mono',monospace;font-size:.8rem;cursor:pointer;
+  display:flex;align-items:baseline;gap:7px;transition:background .15s}}
 .tick:hover{{background:rgba(255,255,255,.06)}}
 .tick:focus-visible{{outline:2px solid var(--econ);outline-offset:-2px}}
-.t-n{{margin-left:6px;padding:0 5px;border-radius:20px;background:#1E2637;
-  color:var(--mute);font-size:.6rem;font-family:'IBM Plex Mono',monospace}}
+.t-chg{{font-size:.76rem}}
 
 /* ── หน้าต่างข่าวที่เกี่ยวข้องกับสินทรัพย์ ─────────────────── */
 .tmodal{{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;
@@ -1285,9 +1355,66 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .score.mid{{color:#FFD27A;background:rgba(245,165,36,.14);border:1px solid rgba(245,165,36,.38)}}
 .score.low{{color:#FFA9AC;background:rgba(229,72,77,.14);border:1px solid rgba(229,72,77,.38)}}
 .tmodal-empty{{padding:26px 18px;color:var(--mute);font-size:.85rem;text-align:center}}
-.t-label{{font-size:.68rem;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}}
-.t-price{{font-family:'IBM Plex Mono',monospace;font-size:.95rem;font-weight:500}}
-.t-pct{{font-family:'IBM Plex Mono',monospace;font-size:.74rem}}
+
+/* ── หน้ากราฟแท่งเทียน ─────────────────────────────────── */
+.chart-bar{{display:flex;align-items:center;gap:12px;margin-bottom:8px}}
+.chart-open{{display:inline-flex;align-items:center;gap:8px;padding:8px 15px;border-radius:9px;
+  font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--ink);
+  background:linear-gradient(180deg,#1A2334,#141B29);border:1px solid #2A3548;
+  transition:border-color .16s,background .16s}}
+.chart-open:hover{{border-color:var(--brass);background:#1E2839}}
+.chart-open svg{{width:15px;height:15px;fill:none;stroke:var(--brass);stroke-width:2;
+  stroke-linecap:round}}
+.chart-hint{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim)}}
+
+.cmodal-box{{width:min(1180px,100%);height:min(760px,92vh);display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+  box-shadow:0 30px 80px rgba(0,0,0,.6)}}
+.cmodal-head{{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:13px 16px;border-bottom:1px solid var(--line);background:var(--panel2)}}
+.cmodal-title{{min-width:150px}}
+.cmodal-title h3{{font-size:1.05rem;font-weight:700}}
+.cmodal-price{{display:flex;gap:9px;font-family:'IBM Plex Mono',monospace;font-size:.78rem}}
+.tfbar{{display:flex;gap:4px;flex:1;flex-wrap:wrap}}
+.tfbtn{{padding:5px 11px;border-radius:7px;cursor:pointer;font-family:'IBM Plex Mono',monospace;
+  font-size:.72rem;color:var(--mute);background:transparent;border:1px solid var(--line)}}
+.tfbtn:hover{{color:var(--ink)}}
+.tfbtn.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:600}}
+.cmodal-body{{flex:1;display:flex;min-height:0}}
+.cmodal-list{{width:190px;flex:none;overflow-y:auto;border-right:1px solid var(--line);
+  padding:6px 0}}
+.cgroup{{padding:9px 14px 5px;font-family:'IBM Plex Mono',monospace;font-size:.62rem;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}}
+.citem{{display:flex;justify-content:space-between;gap:8px;width:100%;padding:7px 14px;
+  cursor:pointer;background:none;border:0;color:var(--mute);font-family:inherit;
+  font-size:.79rem;text-align:left}}
+.citem:hover{{background:#151C2C;color:var(--ink)}}
+.citem.on{{background:#182133;color:var(--ink);box-shadow:inset 2px 0 0 var(--brass)}}
+.citem span:last-child{{font-family:'IBM Plex Mono',monospace;font-size:.7rem}}
+.cmodal-chart{{flex:1;min-width:0;display:flex;flex-direction:column;padding:10px 14px 8px}}
+#cchart{{flex:1;min-height:0}}
+#cchart svg{{width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}}
+.c-grid line{{stroke:#1B2434;stroke-width:1;shape-rendering:crispEdges}}
+.c-axis text{{fill:var(--dim);font-family:'IBM Plex Mono',monospace;font-size:10px}}
+.c-up{{fill:var(--up);stroke:var(--up)}}
+.c-down{{fill:var(--down);stroke:var(--down)}}
+.c-cross{{stroke:#4E5A70;stroke-width:1;stroke-dasharray:3 3;pointer-events:none}}
+.creadout{{min-height:19px;font-family:'IBM Plex Mono',monospace;font-size:.7rem;
+  color:var(--mute);display:flex;gap:12px;flex-wrap:wrap}}
+.creadout b{{color:var(--ink);font-weight:500}}
+.cmodal-note{{font-size:.65rem;color:var(--dim);margin-top:3px}}
+.cempty{{display:grid;place-items:center;height:100%;color:var(--mute);font-size:.85rem}}
+@media(max-width:720px){{
+  .cmodal-body{{flex-direction:column}}
+  .cmodal-list{{width:auto;display:flex;overflow-x:auto;border-right:0;
+    border-bottom:1px solid var(--line);padding:6px}}
+  .cgroup{{display:none}}
+  .citem{{width:auto;white-space:nowrap}}
+  .citem span:last-child{{display:none}}
+}}
+.t-label{{color:var(--ink);font-weight:600;letter-spacing:.03em}}
+.t-price{{color:var(--ink);font-weight:500}}
+.t-pct{{font-size:.76rem}}
 .up{{color:var(--up)}} .down{{color:var(--down)}} .flat{{color:var(--mute)}}
 
 .panel{{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}}
@@ -1545,9 +1672,38 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
 </header>
 
+<div class="chart-bar">
+  <button class="chart-open" type="button" onclick="openCharts()">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+    กราฟราคา
+  </button>
+  <span class="chart-hint">แท่งเทียน · 1D–5Y · ซูม/เลื่อนได้</span>
+</div>
+
 <div class="tickers">
   {ticker_row("th", "ไทย")}
   {ticker_row("intl", "ต่างประเทศ")}
+</div>
+
+<div id="cmodal" class="tmodal" hidden>
+  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="กราฟราคา">
+    <div class="cmodal-head">
+      <div class="cmodal-title">
+        <h3 id="cmodal-name">—</h3>
+        <div class="cmodal-price"><span id="cmodal-p"></span><span id="cmodal-c"></span></div>
+      </div>
+      <div class="tfbar" id="cmodal-tf"></div>
+      <button type="button" class="tmodal-x" onclick="closeCharts()" aria-label="ปิด">×</button>
+    </div>
+    <div class="cmodal-body">
+      <div class="cmodal-list" id="cmodal-list"></div>
+      <div class="cmodal-chart">
+        <div id="cchart"></div>
+        <div id="creadout" class="creadout"></div>
+        <p class="cmodal-note">ล้อเมาส์/นิ้วเพื่อซูม · ลากเพื่อเลื่อน · ดับเบิลคลิกเพื่อรีเซ็ต</p>
+      </div>
+    </div>
+  </div>
 </div>
 
 <nav class="tabs" role="tablist">
@@ -1598,7 +1754,7 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 <script>window.__MARKERS__ = {markers_json}; window.__ICONS__ = {icons_json};
-window.__TNEWS__ = {tnews_json};</script>
+window.__TNEWS__ = {tnews_json}; window.__CHARTS__ = {charts_json};</script>
 <script>{MAP_JS}</script>
 <script>
 function filterItems(input){{
@@ -1656,6 +1812,169 @@ document.getElementById('tmodal').addEventListener('click', ev => {{
 }});
 addEventListener('keydown', ev => {{
   if (ev.key === 'Escape' && !document.getElementById('tmodal').hidden) closeTicker();
+}});
+
+// ── กราฟแท่งเทียน ────────────────────────────────────────
+const CHARTS = window.__CHARTS__ || {{}};
+const CH_TF = ['1D','1M','3M','6M','1Y','3Y','5Y'];
+let chCur = null, chTf = '3M', chCache = {{}}, chData = null, chZoom = null;
+
+function openCharts(){{
+  const modal = document.getElementById('cmodal');
+  if (!Object.keys(CHARTS).length) return;
+  if (!document.getElementById('cmodal-list').childElementCount) {{
+    const groups = {{th: 'ไทย', intl: 'ต่างประเทศ'}};
+    let html = '';
+    for (const [g, title] of Object.entries(groups)) {{
+      const rows = Object.entries(TNEWS).filter(([l]) => CHARTS[l] && (TNEWS[l].group || 'intl') === g);
+      if (!rows.length) continue;
+      html += `<div class="cgroup">${{title}}</div>` + rows.map(([l, d]) =>
+        `<button class="citem" type="button" data-label="${{esc(l)}}" onclick="pickChart('${{esc(l)}}')">
+           <span>${{esc(l)}}</span><span class="${{d.dir}}">${{d.pct}}</span></button>`).join('');
+    }}
+    document.getElementById('cmodal-list').innerHTML = html;
+    document.getElementById('cmodal-tf').innerHTML = CH_TF.map(t =>
+      `<button class="tfbtn" type="button" data-tf="${{t}}" onclick="pickTf('${{t}}')">${{t}}</button>`).join('');
+  }}
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  pickChart(chCur || Object.keys(CHARTS)[0]);
+}}
+
+function closeCharts(){{
+  document.getElementById('cmodal').hidden = true;
+  document.body.style.overflow = '';
+}}
+
+function pickTf(tf){{ chTf = tf; renderChart(); }}
+
+async function pickChart(label){{
+  if (!CHARTS[label]) return;
+  chCur = label;
+  document.querySelectorAll('.citem').forEach(b =>
+    b.classList.toggle('on', b.dataset.label === label));
+  const d = TNEWS[label];
+  document.getElementById('cmodal-name').textContent = label;
+  if (d) {{
+    document.getElementById('cmodal-p').textContent = d.price;
+    const c = document.getElementById('cmodal-c');
+    c.textContent = d.pct; c.className = d.dir;
+  }}
+  if (!chCache[label]) {{
+    document.getElementById('cchart').innerHTML = '<div class="cempty">กำลังโหลด…</div>';
+    try {{
+      chCache[label] = await fetch('{CHART_DIR}/' + CHARTS[label] + '.json').then(r => r.json());
+    }} catch (e) {{ chCache[label] = {{tf: {{}}}}; }}
+  }}
+  chData = chCache[label];
+  renderChart();
+}}
+
+function renderChart(){{
+  const host = document.getElementById('cchart');
+  const avail = CH_TF.filter(t => (chData?.tf || {{}})[t]?.length);
+  if (!avail.length) {{ host.innerHTML = '<div class="cempty">ไม่มีข้อมูลกราฟ</div>'; return; }}
+  if (!avail.includes(chTf)) chTf = avail.includes('3M') ? '3M' : avail[0];
+  document.querySelectorAll('.tfbtn').forEach(b => {{
+    b.classList.toggle('on', b.dataset.tf === chTf);
+    b.disabled = !avail.includes(b.dataset.tf);
+    b.style.opacity = avail.includes(b.dataset.tf) ? '' : '.35';
+  }});
+
+  const rows = chData.tf[chTf];
+  const W = host.clientWidth || 700, H = host.clientHeight || 360;
+  const m = {{t: 10, r: 56, b: 22, l: 8}};
+  const iw = Math.max(50, W - m.l - m.r), ih = Math.max(50, H - m.t - m.b);
+  host.innerHTML = '';
+  const svg = d3.select(host).append('svg').attr('viewBox', `0 0 ${{W}} ${{H}}`);
+  const root = svg.append('g').attr('transform', `translate(${{m.l}},${{m.t}})`);
+  root.append('clipPath').attr('id', 'cclip').append('rect')
+      .attr('width', iw).attr('height', ih);
+
+  const x0 = d3.scaleLinear().domain([-0.6, rows.length - 0.4]).range([0, iw]);
+  const y = d3.scaleLinear().range([ih, 0]);
+  const gGrid = root.append('g').attr('class', 'c-grid');
+  const gY = root.append('g').attr('class', 'c-axis').attr('transform', `translate(${{iw}},0)`);
+  const gX = root.append('g').attr('class', 'c-axis').attr('transform', `translate(0,${{ih}})`);
+  const gC = root.append('g').attr('clip-path', 'url(#cclip)');
+  const cross = root.append('line').attr('class', 'c-cross').attr('y1', 0).attr('y2', ih)
+      .style('display', 'none');
+
+  // เวลาแบบตัวเลขดัชนี ไม่ใช่เวลาจริง เพื่อไม่ให้มีช่องว่างวันหยุด
+  const fmtT = ts => {{
+    const dt = new Date(ts * 1000);
+    return chTf === '1D'
+      ? dt.toLocaleTimeString('th-TH', {{hour: '2-digit', minute: '2-digit'}})
+      : dt.toLocaleDateString('th-TH', {{day: '2-digit', month: 'short',
+          year: ['3Y', '5Y', '1Y'].includes(chTf) ? '2-digit' : undefined}});
+  }};
+
+  function draw(t){{
+    const zx = t.rescaleX(x0);
+    const i0 = Math.max(0, Math.floor(zx.invert(0)));
+    const i1 = Math.min(rows.length - 1, Math.ceil(zx.invert(iw)));
+    const vis = rows.slice(i0, i1 + 1);
+    if (!vis.length) return;
+    const lo = d3.min(vis, d => d[3]), hi = d3.max(vis, d => d[2]);
+    const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.02 || 1;
+    y.domain([lo - pad, hi + pad]);
+
+    const ticks = y.ticks(6);
+    gGrid.selectAll('line').data(ticks).join('line')
+      .attr('x1', 0).attr('x2', iw).attr('y1', y).attr('y2', y);
+    gY.selectAll('text').data(ticks).join('text')
+      .attr('x', 6).attr('y', y).attr('dy', '.32em')
+      .text(d => d3.format(d >= 1000 ? ',.0f' : ',.2f')(d));
+
+    const step = Math.max(1, Math.round((i1 - i0) / 6));
+    const xt = [];
+    for (let i = i0; i <= i1; i += step) xt.push(i);
+    gX.selectAll('text').data(xt).join('text')
+      .attr('x', d => zx(d)).attr('y', 15).attr('text-anchor', 'middle')
+      .text(d => fmtT(rows[d][0]));
+
+    const bw = Math.max(1, Math.min(18, (zx(1) - zx(0)) * 0.68));
+    const g = gC.selectAll('g.cd').data(vis, d => d[0]).join(
+      en => {{ const s = en.append('g').attr('class', 'cd');
+               s.append('line'); s.append('rect'); return s; }});
+    g.attr('class', d => 'cd ' + (d[4] >= d[1] ? 'c-up' : 'c-down'))
+     .attr('transform', (d, k) => `translate(${{zx(i0 + k)}},0)`);
+    g.select('line').attr('x1', 0).attr('x2', 0)
+      .attr('y1', d => y(d[2])).attr('y2', d => y(d[3])).attr('stroke-width', 1);
+    g.select('rect')
+      .attr('x', -bw / 2).attr('width', bw)
+      .attr('y', d => y(Math.max(d[1], d[4])))
+      .attr('height', d => Math.max(1, Math.abs(y(d[1]) - y(d[4]))));
+    svg.node().__view = {{zx, i0, i1}};
+  }}
+
+  chZoom = d3.zoom().scaleExtent([1, 30])
+    .translateExtent([[0, 0], [iw, ih]]).extent([[0, 0], [iw, ih]])
+    .on('zoom', ev => draw(ev.transform));
+  svg.call(chZoom).on('dblclick.zoom', null);
+  svg.on('dblclick', () => svg.call(chZoom.transform, d3.zoomIdentity));
+  draw(d3.zoomTransform(svg.node()));
+
+  const out = document.getElementById('creadout');
+  svg.on('mousemove', ev => {{
+    const v = svg.node().__view; if (!v) return;
+    const px = d3.pointer(ev, root.node())[0];
+    const i = Math.round(v.zx.invert(px));
+    const r = rows[Math.max(v.i0, Math.min(v.i1, i))];
+    if (!r) return;
+    cross.style('display', null).attr('x1', v.zx(rows.indexOf(r))).attr('x2', v.zx(rows.indexOf(r)));
+    const f = n => d3.format(n >= 1000 ? ',.0f' : ',.2f')(n);
+    out.innerHTML = `<span>${{fmtT(r[0])}}</span><span>เปิด <b>${{f(r[1])}}</b></span>` +
+      `<span>สูง <b>${{f(r[2])}}</b></span><span>ต่ำ <b>${{f(r[3])}}</b></span>` +
+      `<span>ปิด <b>${{f(r[4])}}</b></span>`;
+  }}).on('mouseleave', () => {{ cross.style('display', 'none'); out.innerHTML = ''; }});
+}}
+
+document.getElementById('cmodal').addEventListener('click', ev => {{
+  if (ev.target.id === 'cmodal') closeCharts();
+}});
+addEventListener('keydown', ev => {{
+  if (ev.key === 'Escape' && !document.getElementById('cmodal').hidden) closeCharts();
 }});
 
 function setScope(s){{
@@ -1745,9 +2064,15 @@ if __name__ == "__main__":
     if markets and news:
         attach_ticker_news(markets, news)
         linked = sum(len(m.get("news") or []) for m in markets)
-        print(f"จับคู่ข่าวกับสินทรัพย์ได้ {linked} รายการ\n")
+        print(f"จับคู่ข่าวกับสินทรัพย์ได้ {linked} รายการ")
     save_cache(news, markets)
 
+    charts = {}
+    if markets:
+        print("ดึงข้อมูลแท่งเทียน...")
+        charts = build_charts(markets)
+    print()
+
     with open("index.html", "w", encoding="utf-8") as f:
-        f.write(render(news, markets))
+        f.write(render(news, markets, charts))
     print(f"เสร็จ · index.html · {NOW.strftime('%H:%M')} น.")
