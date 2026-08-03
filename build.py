@@ -517,10 +517,48 @@ CATEGORIES = [
     ("econ", KW_ECON), ("poli", KW_POLI), ("biz", KW_BIZ), ("env", KW_ENV),
 ]
 
+# ข่าวอาชญากรรม/อุบัติเหตุ มักติดเข้ามาในหมวดการเมืองผ่านคำอย่าง "ทหาร" "กฎหมาย"
+# (เช่น ข่าวลอบยิงทหารพราน หรือคดีในศาล) — กันไว้ไม่ให้ปนกับข่าวการเมืองจริง
+KW_CRIME = [
+    "ฆาตกรรม", "ฆ่า", "ยิงดับ", "ลอบยิง", "กราดยิง", "มือปืน", "ข่มขืน", "ล่วงละเมิด",
+    "ชิงทรัพย์", "ปล้น", "ลักทรัพย์", "โจรกรรม", "ยาเสพติด", "ยาบ้า", "ไอซ์",
+    "ไฟไหม้", "เพลิงไหม้", "วางเพลิง", "ระเบิดพลีชีพ",
+    "อุบัติเหตุ", "รถชน", "รถคว่ำ", "เมาแล้วขับ", "ซิ่ง", "จมน้ำ", "ตกตึก",
+    "ทะเลาะวิวาท", "แก๊งคอลเซ็นเตอร์", "หลอกลวง", "ต้มตุ๋น", "พนันออนไลน์",
+    "ศพ", "ดับสลด", "สลด", "คดีข่มขืน", "ล่าตัว", "รวบตัว", "จับกุม",
+    "murder", "homicide", "stabbing", "shooting", "gunman", "arson", "robbery",
+    "burglary", "rape", "kidnap", "car crash", "drink driving", "manhunt",
+]
+# ข่าวจะเป็น "การเมือง" ได้ ต้องมีคำที่ชี้สถาบัน/ตัวแสดงทางการเมืองชัดเจนอย่างน้อยหนึ่งคำ
+# ไม่งั้นข่าวพยากรณ์อากาศ งานมหาวิทยาลัย หรือเหตุยิงกันในพื้นที่ จะหลุดเข้ามาด้วย
+KW_POLI_STRONG = [
+    "รัฐบาล", "นายกรัฐมนตรี", "นายกฯ", "รัฐมนตรี", "ครม.", "รัฐสภา", "สภาผู้แทน",
+    "ส.ส.", "สส.", "ส.ว.", "สว.", "วุฒิสภา", "ฝ่ายค้าน", "พรรค", "ปชน.", "ภท.", "ปชป.",
+    "เลือกตั้ง", "อภิปราย", "รัฐธรรมนูญ", "ยุบพรรค", "กกต.", "ศาลรัฐธรรมนูญ", "ป.ป.ช.",
+    "นโยบายรัฐ", "ประธานาธิบดี", "ผู้นำประเทศ", "ทูต", "เจรจา", "ข้อตกลง", "คว่ำบาตร",
+    "ประชุมสุดยอด", "หยุดยิง", "สงคราม", "กองทัพ", "ทำเนียบ", "กระทรวง", "มติ ครม.",
+    "government", "parliament", "election", "president", "prime minister",
+    "minister", "senate", "congress", "sanction", "diplomat", "treaty",
+    "ceasefire", "summit", "war", "coup", "referendum", "cabinet",
+]
+_CRIME_C = _compile_terms(KW_CRIME)
+_POLI_STRONG_C = _compile_terms(KW_POLI_STRONG)
 
-def classify(text):
-    t = text.lower()
-    scores = {cat: sum(1 for k in kws if k.lower() in t) for cat, kws in CATEGORIES}
+
+def classify(title, summary=""):
+    """หัวข้อข่าวบอกว่าข่าวนั้น "เกี่ยวกับอะไร" ได้ตรงกว่าเนื้อข่าว
+    จึงให้น้ำหนักคำในหัวข้อมากกว่า ไม่งั้นรายงานราคาหุ้นที่เนื้อข่าวเอ่ยถึง
+    การเจรจาระหว่างประเทศ จะถูกจัดเป็นข่าวการเมือง"""
+    th, sm = title.lower(), (summary or "").lower()
+    scores = {}
+    for cat, kws in CATEGORIES:
+        scores[cat] = sum(3 for k in kws if k.lower() in th) \
+            + sum(1 for k in kws if k.lower() not in th and k.lower() in sm)
+
+    # ข่าวการเมืองต้องมีคำที่ชี้สถาบัน/ตัวแสดงทางการเมือง "ในหัวข้อ"
+    # กันข่าวอาชญากรรม อุบัติเหตุ พยากรณ์อากาศ ไม่ให้หลุดเข้าหมวดนี้
+    if scores["poli"] and not any(_hit(p, th) for p in _POLI_STRONG_C):
+        scores["poli"] = 0
     best = max(scores, key=scores.get)
     return best if scores[best] > 0 else None
 
@@ -659,7 +697,7 @@ def fetch_news():
                 raw_summary = e.get("summary", "") or ""
                 summary = clean(raw_summary)[:320]
                 blob = title + " " + summary
-                cat = classify(blob)
+                cat = classify(title, summary)
                 if not cat:
                     continue
 
@@ -1154,19 +1192,22 @@ def render(news, markets, charts=None, logos=None):
         for sc, _ in SCOPES if (g := groups[sc])["top"]
     )
 
-    def scope_block(sc, label, rows):
+    def scope_block(sc, label, rows, live=False):
         if not rows:
             return ""
         flag = "TH" if sc == "th" else "INTL"
+        # ป้าย LIVE อยู่บนหัวข้อ จะได้ยังเห็นตอนพับกลุ่มเก็บ
+        badge = '<span class="live live-dot">LIVE</span>' if live else ""
         return f"""<div class="scope-group" data-scope="{sc}">
-  <h2 class="scope-title">{label}<span class="scope-flag">{flag}</span></h2>
+  <h2 class="scope-title">{label}<span class="scope-flag">{flag}</span>{badge}</h2>
   {rows}
 </div>"""
 
     # แยกเป็นสองก้อน เพราะแผนที่กับแถบราคามาคั่นระหว่างข่าวล่าสุดกับข่าวรายหมวด
     latest_blocks = "".join(
         scope_block(sc, lb, row_section("mixed", groups[sc]["latest"], f"row-{sc}-latest",
-                                        "ล่าสุด", '<span class="live">LIVE</span>'))
+                                        "ล่าสุด", '<span class="live">LIVE</span>'),
+                    live=True)
         for sc, lb in SCOPES)
     category_blocks = "".join(
         scope_block(sc, lb, "".join(row_section(c, groups[sc]["cats"][c], f"row-{sc}-{c}")
@@ -1558,6 +1599,15 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .row-n{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--dim);font-weight:400}}
 .live{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.08em;
   color:#fff;background:var(--down);border-radius:4px;padding:2px 6px}}
+/* ป้าย LIVE บนหัวข้อกลุ่ม — เห็นชัดแม้ตอนพับเก็บ */
+.live-dot{{display:inline-flex;align-items:center;gap:5px;font-size:.62rem;
+  font-weight:700;padding:3px 9px;
+  box-shadow:0 0 0 0 rgba(229,72,77,.55);animation:livePulse 2.2s infinite}}
+.live-dot::before{{content:"";width:6px;height:6px;border-radius:50%;background:#fff}}
+@keyframes livePulse{{
+  70%{{box-shadow:0 0 0 8px rgba(229,72,77,0)}}
+  100%{{box-shadow:0 0 0 0 rgba(229,72,77,0)}}
+}}
 .row-tools{{display:flex;align-items:center;gap:7px}}
 .row-tools .search{{width:150px}}
 .row-nav{{width:30px;height:30px;flex:none;border-radius:50%;cursor:pointer;font-size:1.05rem;
