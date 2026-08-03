@@ -303,6 +303,48 @@ def fetch_fundamentals(markets):
     print(f"  ✓ ข้อมูลพื้นฐาน {got}/{len(markets)} สินทรัพย์")
 
 
+# จักรวาลหุ้นสำหรับเมนูค้นหาในหน้ากราฟ — หุ้นหลักของตลาดไทยและสหรัฐ
+# (ไม่ได้ครอบคลุมทุกตัวในตลาด เพราะต้องดึงข้อมูลใหม่ทุก 3 ชม.)
+UNIVERSE_TH = """
+ADVANC AOT AWC BANPU BBL BCP BDMS BEM BGRIF BH BJC BLA BTS CBG CENTEL CPALL CPF
+CPN CRC DELTA EA EGCO GLOBAL GPSC GULF HMPRO INTUCH IRPC IVL KBANK KCE KKP KTB
+KTC LH MINT MTC OR OSP PTT PTTEP PTTGC RATCH SAWAD SCB SCC SCGP STA STGT TISCO
+TCAP THG TIDLOR TOA TOP TQM TRUE TTB TU TVO VGI WHA AAV AMATA ASP BAM BCH BCPG
+BPP CHG CK CKP COM7 DOHOME EPG ESSO GUNKUL ICHI JMART JMT KEX M MEGA NEX ORI PLANB
+PRM PSH QH RBF RS SIRI SPALI SPRC SSP STARK SUPER SYNEX TASCO THANI TKN TPIPP TTA
+""".split()
+
+UNIVERSE_US = """
+AAPL MSFT NVDA AMZN GOOG GOOGL META TSLA BRK-B LLY AVGO JPM V UNH XOM MA PG JNJ
+HD COST ABBV MRK CVX ADBE WMT PEP KO CRM BAC AMD NFLX TMO ACN LIN MCD CSCO ABT
+DHR WFC TXN DIS INTC VZ PM INTU CAT AMGN CMCSA IBM NOW UNP GE NKE COP SPGI RTX
+LOW HON UPS NEE BA MS AXP T ELV SBUX BLK PLD GS DE MDT LMT SYK ISRG ADI TJX BKNG
+MDLZ GILD CVS ADP VRTX C SCHW MMC ZTS CI SO REGN AMT PGR BSX EOG CB DUK SLB MO
+BDX ITW APD NOC CSX FDX MU WM TGT PNC USB EMR AON ORLY MCK HUM PSA MAR MCO SHW
+AJG ROP AFL TRV SRE PCAR OXY DXCM CTAS MSI PSX GM F DAL UAL AAL CCL RCL ABNB
+UBER LYFT SQ PYPL SHOP SNOW PLTR COIN RIVN LCID SOFI HOOD DKNG ROKU SPOT ZM
+""".split()
+
+
+def universe_symbols():
+    """(สัญลักษณ์ Yahoo, ชื่อที่แสดง, ตลาด) ของทุกตัวในเมนูค้นหา"""
+    out = []
+    seen = set()
+    for label, sym, group in TICKERS:          # ตัวที่อยู่ในแถบราคาอยู่แล้ว
+        if sym != THAI_GOLD and label not in seen:
+            seen.add(label)
+            out.append((sym, label, group))
+    for t in UNIVERSE_TH:
+        if t not in seen:
+            seen.add(t)
+            out.append((t + ".BK", t, "th"))
+    for t in UNIVERSE_US:
+        if t not in seen:
+            seen.add(t)
+            out.append((t, t.replace("-", "."), "intl"))
+    return out
+
+
 CHART_DIR = "chart"
 CHART_RANGES = [          # (ชื่อปุ่ม, range, interval)
     ("1D", "1d", "5m"), ("1M", "1mo", "1d"), ("3M", "3mo", "1d"),
@@ -334,38 +376,39 @@ def fetch_candles(sym, rng, interval):
     return out
 
 
-def build_charts(markets):
+def build_charts():
     """เขียนไฟล์แท่งเทียนแยกรายสินทรัพย์ไว้ให้หน้าเว็บโหลดตอนเปิดกราฟ
 
-    แยกเป็นไฟล์ย่อยแทนที่จะฝังใน index.html เพราะข้อมูลรวมกันหลายเมกะไบต์
+    แยกเป็นไฟล์ย่อยแทนที่จะฝังใน index.html เพราะข้อมูลรวมกันหลายสิบเมกะไบต์
     """
     os.makedirs(CHART_DIR, exist_ok=True)
-    symbols = {label: sym for label, sym, _ in TICKERS if sym != THAI_GOLD}
-    jobs = [(m, tf, rng, iv) for m in markets if m["label"] in symbols
+    uni = universe_symbols()
+    jobs = [(sym, label, tf, rng, iv) for sym, label, _ in uni
             for tf, rng, iv in CHART_RANGES]
-    if not jobs:
-        return {}
 
     def run(job):
-        m, tf, rng, iv = job
+        sym, label, tf, rng, iv = job
         try:
-            return m["label"], tf, fetch_candles(symbols[m["label"]], rng, iv)
+            return label, tf, fetch_candles(sym, rng, iv)
         except Exception:
-            return m["label"], tf, None
+            return label, tf, None
 
     frames = {}
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=10) as pool:
         for label, tf, candles in pool.map(run, jobs):
             if candles:
                 frames.setdefault(label, {})[tf] = candles
 
     index = {}
-    for label, tfs in frames.items():
+    for sym, label, group in uni:
+        tfs = frames.get(label)
+        if not tfs:
+            continue
         slug = chart_slug(label)
         save_json(f"{CHART_DIR}/{slug}.json", {"label": label, "tf": tfs})
-        index[label] = slug
+        index[label] = {"s": slug, "g": group}
     total = sum(len(c) for tfs in frames.values() for c in tfs.values())
-    print(f"  ✓ กราฟ {len(index)} สินทรัพย์ · {total:,} แท่งเทียน")
+    print(f"  ✓ กราฟ {len(index)}/{len(uni)} สินทรัพย์ · {total:,} แท่งเทียน")
     return index
 
 
@@ -725,11 +768,11 @@ def fetch_news():
 CAT_NAMES = [c for c, _ in CATEGORIES]
 
 CAT_LABELS = {
-    "econ": "เศรษฐกิจ", "poli": "การเมือง",
-    "biz": "ธุรกิจ", "env": "สิ่งแวดล้อม", "mixed": "ผสม",
+    "econ": "ECONOMY", "poli": "POLITICS",
+    "biz": "BUSINESS", "env": "ENVIRONMENT", "mixed": "MIXED",
 }
 
-SCOPES = [("th", "ข่าวไทย"), ("intl", "ข่าวต่างประเทศ")]
+SCOPES = [("th", "THAI NEWS"), ("intl", "INTERNATIONAL NEWS")]
 
 
 def scope_of(it):
@@ -938,7 +981,7 @@ const COLOR = { econ:"#4C8DFF", poli:"#F5A524", biz:"#2DD4BF", env:"#4ADE80", mi
 
 function show(d){
   detail.html(
-    `<div class="hd-top"><h4>${d.place}</h4><span>${d.total} ข่าว</span></div>` +
+    `<div class="hd-top"><h4>${d.place}</h4><span>${d.total} stories</span></div>` +
     d.stories.map(s =>
       `<a class="hd-row" href="${s.link}" target="_blank" rel="noopener">
          ${s.image ? `<img class="hd-thumb" src="${s.image}" loading="lazy" alt="" onerror="this.remove()">` : ""}
@@ -993,7 +1036,7 @@ function plot(proj){
       tip.style("opacity", 1)
          .style("left", (mx + 14) + "px")
          .style("top", (my - 8) + "px")
-         .html(`<strong>${d.place}</strong><span>${d.total} ข่าว · ศก. ${d.econ} · การเมือง ${d.poli} · ธุรกิจ ${d.biz} · สวล. ${d.env}</span>`);
+         .html(`<strong>${d.place}</strong><span>${d.total} stories · Econ ${d.econ} · Politics ${d.poli} · Business ${d.biz} · Env ${d.env}</span>`);
     })
     .on("mouseleave", () => tip.style("opacity", 0))
     .on("click", (ev, d) => { show(d); ev.stopPropagation(); });
@@ -1116,7 +1159,7 @@ def render(news, markets, charts=None, logos=None):
           <div class="poster-meta"><span class="src">{html.escape(it['source'])}{loc}</span><span class="age">{it['age']}</span></div>
         </div>
       </a>
-      <button class="speak poster-speak" type="button" title="ฟังข่าว" {speak_attrs(it)}>🔊</button>
+      <button class="speak poster-speak" type="button" title="Listen" {speak_attrs(it)}>🔊</button>
     </article>"""
 
     def hero(it, scope, primary):
@@ -1133,8 +1176,8 @@ def render(news, markets, charts=None, logos=None):
     <h2 class="hero-title">{html.escape(it['title'])}</h2>
     {f'<p class="hero-sum">{html.escape(it["summary"])}</p>' if it['summary'] else ''}
     <div class="hero-actions">
-      <a class="btn btn-main" href="{html.escape(it['link'])}" target="_blank" rel="noopener">▶ อ่านฉบับเต็ม</a>
-      <button class="btn btn-ghost speak" type="button" {speak_attrs(it)}>🔊 ฟังข่าว</button>
+      <a class="btn btn-main" href="{html.escape(it['link'])}" target="_blank" rel="noopener">▶ READ FULL</a>
+      <button class="btn btn-ghost speak" type="button" {speak_attrs(it)}>🔊 LISTEN</button>
     </div>
   </div>
 </section>"""
@@ -1145,7 +1188,7 @@ def render(news, markets, charts=None, logos=None):
         # ชุดที่สองมีไว้ให้ marquee วนต่อเนื่อง ไม่ต้องให้ screen reader/แป้น Tab อ่านซ้ำ
         extra = ' dup" tabindex="-1" aria-hidden="true' if dup else ''
         return f"""<button class="tick{extra}" type="button" data-label="{html.escape(m['label'], quote=True)}"
-      title="ดูข่าวที่เกี่ยวข้องกับ {html.escape(m['label'], quote=True)}"><span class="t-label">{html.escape(m['label'])}</span> <span class="t-price">{m['price']}</span> <span class="t-chg {cls}">{arrow} {m.get('chg_str', '—')}</span> <span class="t-pct {cls}">{m['pct_str']}</span></button>"""
+      title="Related news for {html.escape(m['label'], quote=True)}"><span class="t-label">{html.escape(m['label'])}</span> <span class="t-price">{m['price']}</span> <span class="t-chg {cls}">{arrow} {m.get('chg_str', '—')}</span> <span class="t-pct {cls}">{m['pct_str']}</span></button>"""
 
     def ticker_row(group, title):
         items = [m for m in markets if m.get("group") == group]
@@ -1175,9 +1218,9 @@ def render(news, markets, charts=None, logos=None):
   <div class="row-head">
     <h2>{cat_icon(cat)}{label}{badge}<span class="row-n">{len(items)}</span></h2>
     <div class="row-tools">
-      <input class="search" type="search" placeholder="ค้นหา…" oninput="filterItems(this)">
-      <button class="row-nav" type="button" onclick="scrollRow('{rid}',-1)" aria-label="เลื่อนซ้าย">‹</button>
-      <button class="row-nav" type="button" onclick="scrollRow('{rid}',1)" aria-label="เลื่อนขวา">›</button>
+      <input class="search" type="search" placeholder="Search…" oninput="filterItems(this)">
+      <button class="row-nav" type="button" onclick="scrollRow('{rid}',-1)" aria-label="Scroll left">‹</button>
+      <button class="row-nav" type="button" onclick="scrollRow('{rid}',1)" aria-label="Scroll right">›</button>
     </div>
   </div>
   <div class="row-track" id="{rid}">{body}</div>
@@ -1194,21 +1237,35 @@ def render(news, markets, charts=None, logos=None):
 
     def scope_block(sc, label, rows, live=False):
         if not rows:
-            return ""
+            return ""          # ไม่มีข่าว ก็ไม่ต้องมีหัวข้อ
         flag = "TH" if sc == "th" else "INTL"
-        # ป้าย LIVE อยู่บนหัวข้อ จะได้ยังเห็นตอนพับกลุ่มเก็บ
-        badge = '<span class="live live-dot">LIVE</span>' if live else ""
-        return f"""<div class="scope-group" data-scope="{sc}">
-  <h2 class="scope-title">{label}<span class="scope-flag">{flag}</span>{badge}</h2>
+        # แถวข่าวสด ใช้แค่ป้าย LIVE เป็นหัวข้อ (กดพับได้) ไม่ต้องมีชื่อกลุ่มซ้ำ
+        title = (f'<span class="live live-dot">LIVE</span><span class="live-scope">{label}</span>'
+                 if live else f'{label}<span class="scope-flag">{flag}</span>')
+        return f"""<div class="scope-group{' live-group' if live else ''}" data-scope="{sc}">
+  <h2 class="scope-title">{title}</h2>
   {rows}
 </div>"""
 
     # แยกเป็นสองก้อน เพราะแผนที่กับแถบราคามาคั่นระหว่างข่าวล่าสุดกับข่าวรายหมวด
     latest_blocks = "".join(
         scope_block(sc, lb, row_section("mixed", groups[sc]["latest"], f"row-{sc}-latest",
-                                        "ล่าสุด", '<span class="live">LIVE</span>'),
+                                        "LATEST", '<span class="live">LIVE</span>'),
                     live=True)
         for sc, lb in SCOPES)
+
+    # หน้า LIVE รวมข่าวใหม่สุดของทั้งสองฝั่ง — มีเมนูให้เฉพาะตอนมีข่าวจริง
+    live_all = pick([i for i in news if i is not top_story], 24)
+    live_tab = ('<button class="tab tab-icon tab-live" type="button" draggable="true" '
+                'data-id="live" onclick="openLive()">'
+                '<span class="live-dot-sm"></span>LIVE</button>') if live_all else ""
+    live_page = "".join(
+        f"""<a class="cnews-row" href="{html.escape(i['link'])}" target="_blank" rel="noopener">
+      {cat_icon(i['cat'], 'ci-sm')}
+      <span class="cnews-t">{html.escape(i['title'])}
+        <span class="cnews-m">{html.escape(i['source'])} · {i['age']}
+          · {'THAI' if i['scope'] == 'th' else 'GLOBAL'}</span></span></a>"""
+        for i in live_all)
     category_blocks = "".join(
         scope_block(sc, lb, "".join(row_section(c, groups[sc]["cats"][c], f"row-{sc}-{c}")
                                     for c in CAT_NAMES))
@@ -1225,7 +1282,7 @@ def render(news, markets, charts=None, logos=None):
          for m in markets}, ensure_ascii=False)
     charts_json = json.dumps(charts or {}, ensure_ascii=False)
     logos_json = json.dumps(logos or {}, ensure_ascii=False)
-    page_desc = f"ข่าวเศรษฐกิจ-การเมือง {len(news)} ข่าวใน 24 ชม. จาก {len(FEEDS)} แหล่ง อัปเดต {NOW.strftime('%d %b %Y %H:%M')} น."
+    page_desc = f"{len(news)} economy, politics, business and environment stories in 24h from {len(FEEDS)} sources · updated {NOW.strftime('%d %b %Y %H:%M')}"
     favicon = ("data:image/svg+xml,"
                "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
                "%3Crect width='100' height='100' rx='20' fill='%230A0E1A'/%3E"
@@ -1394,8 +1451,11 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .tfbtn:hover{{color:var(--ink)}}
 .tfbtn.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:600}}
 .cmodal-body{{flex:1;display:flex;min-height:0}}
-.cmodal-list{{width:190px;flex:none;overflow-y:auto;border-right:1px solid var(--line);
-  padding:6px 0}}
+.cmodal-pick{{width:210px;flex:none;display:flex;flex-direction:column;min-height:0;
+  border-right:1px solid var(--line)}}
+.csearch{{margin:8px 10px;width:auto;flex:none}}
+.cmodal-list{{flex:1;overflow-y:auto;padding:2px 0}}
+.cmodal-list .cnone{{padding:16px 14px;color:var(--dim);font-size:.76rem}}
 .cgroup{{padding:9px 14px 5px;font-family:'IBM Plex Mono',monospace;font-size:.62rem;
   letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}}
 .citem{{display:flex;align-items:center;gap:8px;width:100%;padding:7px 14px;
@@ -1473,8 +1533,8 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 @media(max-width:1100px){{.cmodal-side{{width:264px}}}}
 @media(max-width:860px){{
   .cmodal-body{{flex-direction:column;overflow-y:auto}}
-  .cmodal-list{{width:auto;display:flex;overflow-x:auto;border-right:0;
-    border-bottom:1px solid var(--line);padding:6px}}
+  .cmodal-pick{{width:auto;border-right:0;border-bottom:1px solid var(--line)}}
+  .cmodal-list{{display:flex;overflow-x:auto;padding:6px;max-height:none}}
   .cgroup{{display:none}}
   .citem{{width:auto;white-space:nowrap}}
   .cmodal-chart{{min-height:340px}}
@@ -1708,6 +1768,14 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   transition:transform .2s}}
 .scope-group.folded .scope-caret{{transform:rotate(-90deg)}}
 .scope-group.folded .row{{display:none}}
+.live-scope{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.1em;
+  color:var(--mute);font-weight:500}}
+.live-group .scope-title{{font-size:.9rem}}
+.tab-live{{color:var(--down)}}
+.live-dot-sm{{width:7px;height:7px;border-radius:50%;background:var(--down);
+  box-shadow:0 0 0 0 rgba(229,72,77,.6);animation:livePulse 2.2s infinite}}
+.live-list{{flex:1;overflow-y:auto}}
+.live-list .cnews-row{{padding:11px 16px}}
 .tab-n{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;font-weight:400;
   color:var(--dim);margin-left:6px}}
 .scope-title{{display:flex;align-items:center;gap:10px;font-size:1.18rem;font-weight:700;
@@ -1747,10 +1815,10 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
         <h3 id="tmodal-name"></h3>
         <div class="tmodal-price"><span id="tmodal-p"></span><span id="tmodal-c"></span></div>
       </div>
-      <button type="button" class="tmodal-x" onclick="closeTicker()" aria-label="ปิด">×</button>
+      <button type="button" class="tmodal-x" onclick="closeTicker()" aria-label="Close">×</button>
     </div>
-    <p class="tmodal-note">เรียงตาม<strong>ความเกี่ยวข้องของเนื้อหา</strong>กับสินทรัพย์นี้
-      (จับจากคำในหัวข้อ/เนื้อข่าว) — ไม่ใช่การวัดว่าข่าวทำให้ราคาขยับกี่เปอร์เซ็นต์</p>
+    <p class="tmodal-note">Ranked by <strong>content relevance</strong> to this asset
+      (keyword match on headline and body) — not a measure of price impact</p>
     <div class="tmodal-list" id="tmodal-list"></div>
   </div>
 </div>
@@ -1763,19 +1831,34 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </h1>
   <div class="stamp">
     <span class="pulse"></span>
-    <span>อัปเดต {NOW.strftime('%d %b %Y · %H:%M')} น.</span>
-    <span style="color:var(--dim)">· รอบถัดไป {next_run} น.</span>
+    <span>UPDATED {NOW.strftime('%d %b %Y · %H:%M')}</span>
+    <span style="color:var(--dim)">· next {next_run}</span>
   </div>
 </header>
 
-<div id="mmodal" class="tmodal" hidden>
-  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="แผนที่ข่าว">
+<div id="lmodal" class="tmodal" hidden>
+  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="Live news">
     <div class="cmodal-head">
-      <button type="button" class="backbtn" onclick="closeMap()" aria-label="ย้อนกลับ">
+      <button type="button" class="backbtn" onclick="closeLive()" aria-label="Back">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
-      <div class="cmodal-title"><h3>แผนที่ข่าว</h3>
-        <div class="cmodal-price">{len(markers)} พื้นที่ · คลิกจุดเพื่อดูข่าว · ซูมได้</div>
+      <div class="cmodal-title">
+        <h3><span class="live live-dot">LIVE</span> NEWSFEED</h3>
+        <div class="cmodal-price">{len(live_all)} newest stories · Thai and international</div>
+      </div>
+    </div>
+    <div class="cnews-list live-list">{live_page}</div>
+  </div>
+</div>
+
+<div id="mmodal" class="tmodal" hidden>
+  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="News map">
+    <div class="cmodal-head">
+      <button type="button" class="backbtn" onclick="closeMap()" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="cmodal-title"><h3>NEWS MAP</h3>
+        <div class="cmodal-price">{len(markers)} places · click a dot · zoomable</div>
       </div>
     </div>
     <div class="map-modal-body">
@@ -1783,9 +1866,9 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
         <svg id="map"></svg>
         <div id="tip"></div>
         <div class="zoom-ctl">
-          <button type="button" onclick="zoomBy(1.6)" aria-label="ซูมเข้า">+</button>
-          <button type="button" onclick="zoomBy(1/1.6)" aria-label="ซูมออก">−</button>
-          <button type="button" onclick="zoomReset()" aria-label="รีเซ็ตแผนที่">⟲</button>
+          <button type="button" onclick="zoomBy(1.6)" aria-label="Zoom in">+</button>
+          <button type="button" onclick="zoomBy(1/1.6)" aria-label="Zoom out">−</button>
+          <button type="button" onclick="zoomReset()" aria-label="Reset map">⟲</button>
         </div>
         <div class="legend">
           {''.join(f'<span>{cat_icon(c, "ci-sm")}{CAT_LABELS[c]}</span>' for c in CAT_NAMES + ["mixed"])}
@@ -1797,9 +1880,9 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 </div>
 
 <div id="cmodal" class="tmodal" hidden>
-  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="กราฟราคา">
+  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="Price charts">
     <div class="cmodal-head">
-      <button type="button" class="backbtn" onclick="closeCharts()" aria-label="ย้อนกลับ">
+      <button type="button" class="backbtn" onclick="closeCharts()" aria-label="Back">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
       <div class="cmodal-title">
@@ -1809,11 +1892,15 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
     </div>
 
     <div class="tickers cmodal-tape">
-      {ticker_row("th", "ไทย")}
-      {ticker_row("intl", "ต่างประเทศ")}
+      {ticker_row("th", "THAI")}
+      {ticker_row("intl", "GLOBAL")}
     </div>
     <div class="cmodal-body">
-      <div class="cmodal-list" id="cmodal-list"></div>
+      <div class="cmodal-pick">
+        <input class="search csearch" id="csearch" type="search" autocomplete="off"
+               placeholder="Search symbol…" oninput="filterAssets(this.value)">
+        <div class="cmodal-list" id="cmodal-list"></div>
+      </div>
       <div class="cmodal-chart">
         <div id="cchart"></div>
         <div class="cbottom">
@@ -1821,16 +1908,16 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
           <div class="cctrl">
             <div class="tfbar" id="cmodal-tf"></div>
             <div class="tfbar ctype">
-              <button class="tfbtn on" type="button" data-ct="candle" onclick="pickType('candle')">แท่งเทียน</button>
-              <button class="tfbtn" type="button" data-ct="line" onclick="pickType('line')">เส้น</button>
+              <button class="tfbtn on" type="button" data-ct="candle" onclick="pickType('candle')">CANDLES</button>
+              <button class="tfbtn" type="button" data-ct="line" onclick="pickType('line')">LINE</button>
             </div>
           </div>
         </div>
       </div>
       <div class="cmodal-side">
-        <div class="cnews-head">ค่าคำนวณ</div>
+        <div class="cnews-head">METRICS</div>
         <div class="calc" id="ccalc"></div>
-        <div class="cnews-head">ข่าวที่เกี่ยวข้อง</div>
+        <div class="cnews-head">RELATED NEWS</div>
         <div class="cnews-list" id="cnews-list"></div>
       </div>
     </div>
@@ -1839,16 +1926,17 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
 <div class="navbar">
   <button class="burger" type="button" onclick="toggleNav()" aria-expanded="false"
-          aria-controls="tabs" aria-label="เมนู">
+          aria-controls="tabs" aria-label="Menu">
     <span></span><span></span><span></span>
   </button>
-  <nav class="tabs" id="tabs" role="tablist" title="ลากเพื่อสลับลำดับได้" hidden>
-    <button class="tab active" type="button" role="tab" draggable="true" data-id="all" data-scope="all" onclick="setScope('all')">หน้าแรก<span class="tab-n">{len(news)}</span></button>
+  <nav class="tabs" id="tabs" role="tablist" title="Drag to reorder" hidden>
+    <button class="tab active" type="button" role="tab" draggable="true" data-id="all" data-scope="all" onclick="setScope('all')">HOME<span class="tab-n">{len(news)}</span></button>
     {''.join(f'''<button class="tab" type="button" role="tab" draggable="true" data-id="{sc}" data-scope="{sc}" onclick="setScope('{sc}')">{lb}<span class="tab-n">{groups[sc]["n"]}</span></button>''' for sc, lb in SCOPES)}
     <button class="tab tab-icon" type="button" draggable="true" data-id="chart" onclick="openCharts()">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>กราฟราคา</button>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>CHARTS</button>
     <button class="tab tab-icon" type="button" draggable="true" data-id="map" onclick="openMap()">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg>แผนที่ข่าว</button>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg>NEWS MAP</button>
+    {live_tab}
   </nav>
 </div>
 
@@ -1860,18 +1948,18 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
 <div class="grid-side">
   <section class="panel">
-    <div class="panel-head"><h2>พื้นที่ที่มีข่าวมากสุด</h2></div>
+    <div class="panel-head"><h2>TOP LOCATIONS</h2></div>
     <div>{''.join(hot_row(m, i) for i, m in enumerate(markers[:10])) or '<div class="hot"><span></span><span>—</span></div>'}</div>
   </section>
   <section class="panel">
-    <div class="panel-head"><h2>คำที่พูดถึงมากสุด</h2></div>
+    <div class="panel-head"><h2>TOP KEYWORDS</h2></div>
     <div class="kws">{''.join(kw_chip(w, f) for w, f in kws)}</div>
   </section>
 </div>
 
 <footer>
-  <span>{len(FEEDS)} แหล่งข่าว · {len(news)} ข่าวใน 24 ชม. · ระบุพิกัดได้ {located} ข่าว</span>
-  <span>รีเฟรชอัตโนมัติทุก 15 นาที · ดึงข้อมูลใหม่ทุก 3 ชม.</span>
+  <span>{len(FEEDS)} sources · {len(news)} stories in 24h · {located} geolocated</span>
+  <span>auto-refresh every 15 min · rebuilt every 3 h</span>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -1917,7 +2005,7 @@ function openTicker(label){{
         </span>
         <span class="score ${{scoreClass(n.score)}}">${{n.score}}%</span>
       </a>`).join('')
-    : '<p class="tmodal-empty">รอบนี้ยังไม่มีข่าวที่เกี่ยวข้องกับสินทรัพย์นี้</p>';
+    : '<p class="tmodal-empty">No related stories this round</p>';
   document.getElementById('tmodal').hidden = false;
   document.body.style.overflow = 'hidden';
 }}
@@ -1953,10 +2041,10 @@ function assetLogo(label){{
 let chCur = null, chTf = '3M', chCache = {{}}, chData = null, chZoom = null, chType = 'candle';
 let chLevels = {{}}, chOverlays = new Set();
 const OV_STYLE = {{
-  fair:   {{color: 'var(--biz)',   label: 'ราคาที่แท้จริง'}},
-  target: {{color: 'var(--mixed)', label: 'เป้าหมาย'}},
-  base:   {{color: 'var(--poli)',  label: 'ราคาฐาน'}},
-  trend:  {{color: 'var(--econ)',  label: 'เทรนด์'}},
+  fair:   {{color: 'var(--biz)',   label: 'FAIR VALUE'}},
+  target: {{color: 'var(--mixed)', label: 'TARGET'}},
+  base:   {{color: 'var(--poli)',  label: 'BASE'}},
+  trend:  {{color: 'var(--econ)',  label: 'TREND'}},
 }};
 
 function pickType(t){{
@@ -1985,7 +2073,7 @@ function renderCalc(){{
   const fmt = n => d3.format(Math.abs(n) >= 1000 ? ',.0f' : ',.2f')(n);
 
   const total = closes[0] ? linSlope(closes) * (closes.length - 1) / closes[0] * 100 : 0;
-  const tr = total > 3 ? ['ขาขึ้น', 'up'] : total < -3 ? ['ขาลง', 'down'] : ['ออกข้าง', 'flat'];
+  const tr = total > 3 ? ['RISING', 'up'] : total < -3 ? ['FALLING', 'down'] : ['SIDEWAYS', 'flat'];
 
   // ราคาฐาน = ค่าเฉลี่ยของจุดต่ำสุด 20% ล่างในกรอบเวลานี้
   const lows = rows.map(r => r[3]).slice().sort((a, b) => a - b);
@@ -2007,22 +2095,22 @@ function renderCalc(){{
     `<span class="calc-v ${{cls || ''}}">${{value}}${{vsub ? `<small>${{vsub}}</small>` : ''}}</span></div>`;
 
   box.innerHTML =
-    row('P/E', 'ย้อนหลัง 12 เดือน', f.pe != null ? fmt(f.pe) : '—',
-        f.pe != null ? '' : 'calc-na', f.fpe != null ? 'ล่วงหน้า ' + fmt(f.fpe) : '') +
-    row('ราคาที่แท้จริง', gr ? 'สูตร Graham √(22.5×EPS×BVPS)' : 'ต้องมีกำไรและมูลค่าตามบัญชี',
+    row('P/E', 'trailing 12 months', f.pe != null ? fmt(f.pe) : '—',
+        f.pe != null ? '' : 'calc-na', f.fpe != null ? 'forward ' + fmt(f.fpe) : '') +
+    row('FAIR VALUE', gr ? 'Graham √(22.5×EPS×BVPS)' : 'needs positive EPS and book value',
         gr ? fmt(gr) : '—', gr ? (gr > last ? 'up' : 'down') : 'calc-na',
-        gr ? ((gr / last - 1) * 100).toFixed(1) + '% เทียบราคาปัจจุบัน' : '',
+        gr ? ((gr / last - 1) * 100).toFixed(1) + '% vs current price' : '',
         gr ? 'fair' : '') +
-    row('เป้าหมายนักวิเคราะห์', 'ค่าเฉลี่ยจากโบรกฯ', f.target != null ? fmt(f.target) : '—',
+    row('ANALYST TARGET', 'mean of broker targets', f.target != null ? fmt(f.target) : '—',
         f.target != null ? (f.target > last ? 'up' : 'down') : 'calc-na', '',
         f.target != null ? 'target' : '') +
-    row('เทรนด์', 'ความชันราคาปิดช่วง ' + chTf, tr[0], tr[1],
+    row('TREND', 'slope of closes over ' + chTf, tr[0], tr[1],
         (total >= 0 ? '+' : '') + total.toFixed(1) + '%', 'trend') +
-    row('ราคาฐาน', 'เฉลี่ยจุดต่ำสุด 20% ล่าง ' + chTf, fmt(base), '',
-        ((last / base - 1) * 100).toFixed(1) + '% เหนือฐาน', 'base') +
-    '<p class="calc-note">คลิกแถวที่กดได้เพื่อวางเส้นทับบนกราฟ · ' +
-    'คำนวณจากราคาย้อนหลังและข้อมูลพื้นฐานเท่าที่ดึงได้ ' +
-    'เป็นค่าประกอบการพิจารณา ไม่ใช่คำแนะนำการลงทุน</p>';
+    row('BASE PRICE', 'mean of lowest 20% of lows over ' + chTf, fmt(base), '',
+        ((last / base - 1) * 100).toFixed(1) + '% above base', 'base') +
+    '<p class="calc-note">Click a highlighted row to plot it on the chart · ' +
+    'computed from price history and available fundamentals · ' +
+    'indicators only, not investment advice</p>';
 
   box.querySelectorAll('.calc-on-able').forEach(r => {{
     r.classList.toggle('on', chOverlays.has(r.dataset.ov));
@@ -2035,23 +2123,41 @@ function renderCalc(){{
   }});
 }}
 
+// รายชื่อสินทรัพย์ทั้งหมด เรียงตัวที่อยู่ในแถบราคาก่อน แล้วค่อยเรียง % มากไปน้อย
+function renderAssetList(q){{
+  const term = (q || '').trim().toLowerCase();
+  const groups = {{th: 'THAILAND', intl: 'GLOBAL'}};
+  let html = '';
+  for (const [g, title] of Object.entries(groups)) {{
+    const rows = Object.entries(CHARTS)
+      .filter(([l, c]) => (c.g || 'intl') === g && (!term || l.toLowerCase().includes(term)))
+      .sort((a, b) => {{
+        const A = TNEWS[a[0]], B = TNEWS[b[0]];
+        if (!!A !== !!B) return A ? -1 : 1;             // ตัวที่มีราคาสดขึ้นก่อน
+        if (A && B) return (B.pctv ?? 0) - (A.pctv ?? 0);
+        return a[0].localeCompare(b[0]);
+      }});
+    if (!rows.length) continue;
+    html += `<div class="cgroup">${{title}} · ${{rows.length}}</div>` + rows.map(([l]) => {{
+      const d = TNEWS[l];
+      return `<button class="citem" type="button" data-label="${{esc(l)}}" onclick="pickChart('${{esc(l)}}')">
+        ${{assetLogo(l)}}<span class="cname">${{esc(l)}}</span>
+        <span class="${{d ? d.dir : ''}}">${{d ? d.pct : ''}}</span></button>`;
+    }}).join('');
+  }}
+  document.getElementById('cmodal-list').innerHTML =
+    html || '<p class="cnone">No symbol matches</p>';
+  document.querySelectorAll('.citem').forEach(b =>
+    b.classList.toggle('on', b.dataset.label === chCur));
+}}
+
+function filterAssets(q){{ renderAssetList(q); }}
+
 function openCharts(){{
   const modal = document.getElementById('cmodal');
   if (!Object.keys(CHARTS).length) return;
   if (!document.getElementById('cmodal-list').childElementCount) {{
-    const groups = {{th: 'ไทย', intl: 'ต่างประเทศ'}};
-    let html = '';
-    for (const [g, title] of Object.entries(groups)) {{
-      const rows = Object.entries(TNEWS)
-        .filter(([l]) => CHARTS[l] && (TNEWS[l].group || 'intl') === g)
-        .sort((a, b) => (b[1].pctv ?? 0) - (a[1].pctv ?? 0));   // บวกมากสุดอยู่บน
-      if (!rows.length) continue;
-      html += `<div class="cgroup">${{title}}</div>` + rows.map(([l, d]) =>
-        `<button class="citem" type="button" data-label="${{esc(l)}}" onclick="pickChart('${{esc(l)}}')">
-           ${{assetLogo(l)}}<span class="cname">${{esc(l)}}</span>
-           <span class="${{d.dir}}">${{d.pct}}</span></button>`).join('');
-    }}
-    document.getElementById('cmodal-list').innerHTML = html;
+    renderAssetList('');
     document.getElementById('cmodal-tf').innerHTML = CH_TF.map(t =>
       `<button class="tfbtn" type="button" data-tf="${{t}}" onclick="pickTf('${{t}}')">${{t}}</button>`).join('');
   }}
@@ -2074,21 +2180,21 @@ async function pickChart(label){{
     b.classList.toggle('on', b.dataset.label === label));
   const d = TNEWS[label];
   document.getElementById('cmodal-name').textContent = label;
-  if (d) {{
-    document.getElementById('cmodal-p').textContent = d.price;
-    const c = document.getElementById('cmodal-c');
-    c.textContent = d.pct; c.className = d.dir;
-  }}
+  // สินทรัพย์นอกแถบราคาไม่มีราคาสด ต้องล้างของตัวก่อนหน้าออก
+  const c = document.getElementById('cmodal-c');
+  document.getElementById('cmodal-p').textContent = d ? d.price : '';
+  c.textContent = d ? d.pct : '';
+  c.className = d ? d.dir : '';
   document.getElementById('cnews-list').innerHTML = (d?.news || []).length
     ? d.news.map(n => `<a class="cnews-row" href="${{esc(n.link)}}" target="_blank" rel="noopener">
         <span class="score ${{scoreClass(n.score)}}">${{n.score}}%</span>
         <span class="cnews-t">${{esc(n.title)}}
           <span class="cnews-m">${{esc(n.source)}} · ${{esc(n.age)}}</span></span></a>`).join('')
-    : '<p class="tmodal-empty">ยังไม่มีข่าวที่เกี่ยวข้อง</p>';
+    : '<p class="tmodal-empty">No related stories</p>';
   if (!chCache[label]) {{
-    document.getElementById('cchart').innerHTML = '<div class="cempty">กำลังโหลด…</div>';
+    document.getElementById('cchart').innerHTML = '<div class="cempty">Loading…</div>';
     try {{
-      chCache[label] = await fetch('{CHART_DIR}/' + CHARTS[label] + '.json').then(r => r.json());
+      chCache[label] = await fetch('{CHART_DIR}/' + CHARTS[label].s + '.json').then(r => r.json());
     }} catch (e) {{ chCache[label] = {{tf: {{}}}}; }}
   }}
   chData = chCache[label];
@@ -2098,7 +2204,7 @@ async function pickChart(label){{
 function renderChart(){{
   const host = document.getElementById('cchart');
   const avail = CH_TF.filter(t => (chData?.tf || {{}})[t]?.length);
-  if (!avail.length) {{ host.innerHTML = '<div class="cempty">ไม่มีข้อมูลกราฟ</div>'; return; }}
+  if (!avail.length) {{ host.innerHTML = '<div class="cempty">No chart data</div>'; return; }}
   if (!avail.includes(chTf)) chTf = avail.includes('3M') ? '3M' : avail[0];
   // เจาะเฉพาะปุ่มช่วงเวลา ไม่งั้นจะไปปิดปุ่มเลือกชนิดกราฟที่ใช้คลาสเดียวกัน
   document.querySelectorAll('#cmodal-tf .tfbtn').forEach(b => {{
@@ -2227,9 +2333,9 @@ function renderChart(){{
     if (!r) return;
     cross.style('display', null).attr('x1', v.zx(rows.indexOf(r))).attr('x2', v.zx(rows.indexOf(r)));
     const f = n => d3.format(n >= 1000 ? ',.0f' : ',.2f')(n);
-    out.innerHTML = `<span>${{fmtT(r[0])}}</span><span>เปิด <b>${{f(r[1])}}</b></span>` +
-      `<span>สูง <b>${{f(r[2])}}</b></span><span>ต่ำ <b>${{f(r[3])}}</b></span>` +
-      `<span>ปิด <b>${{f(r[4])}}</b></span>`;
+    out.innerHTML = `<span>${{fmtT(r[0])}}</span><span>O <b>${{f(r[1])}}</b></span>` +
+      `<span>H <b>${{f(r[2])}}</b></span><span>L <b>${{f(r[3])}}</b></span>` +
+      `<span>C <b>${{f(r[4])}}</b></span>`;
   }}).on('mouseleave', () => {{ cross.style('display', 'none'); out.innerHTML = ''; }});
 }}
 
@@ -2238,6 +2344,7 @@ document.getElementById('cmodal').addEventListener('click', ev => {{
 }});
 addEventListener('keydown', ev => {{
   if (ev.key === 'Escape' && !document.getElementById('cmodal').hidden) closeCharts();
+  if (ev.key === 'Escape' && !document.getElementById('lmodal')?.hidden) closeLive();
 }});
 
 function setScope(s){{
@@ -2261,6 +2368,18 @@ function toggleNav(force){{
   try {{ localStorage.setItem('navOpen', open ? '1' : '0'); }} catch(e) {{}}
 }}
 try {{ if (localStorage.getItem('navOpen') === '1') toggleNav(true); }} catch(e) {{}}
+
+function openLive(){{
+  document.getElementById('lmodal').hidden = false;
+  document.body.style.overflow = 'hidden';
+}}
+function closeLive(){{
+  document.getElementById('lmodal').hidden = true;
+  document.body.style.overflow = '';
+}}
+document.getElementById('lmodal')?.addEventListener('click', ev => {{
+  if (ev.target.id === 'lmodal') closeLive();
+}});
 
 function openMap(){{
   document.getElementById('mmodal').hidden = false;
@@ -2367,7 +2486,7 @@ if ('speechSynthesis' in window) {{
     u.lang = btn.dataset.lang;
     u.onend = u.onerror = () => {{ rest(btn); currentBtn = null; }};
     btn.classList.add('playing');
-    btn.textContent = btn.classList.contains('poster-speak') ? '⏸' : '⏸ กำลังอ่าน…';
+    btn.textContent = btn.classList.contains('poster-speak') ? '⏸' : '⏸ PLAYING…';
     currentBtn = btn;
     speechSynthesis.speak(u);
   }});
@@ -2420,7 +2539,7 @@ if __name__ == "__main__":
         fetch_fundamentals(markets)
         logos = fetch_logos()
         print("ดึงข้อมูลแท่งเทียน...")
-        charts = build_charts(markets)
+        charts = build_charts()
     print()
 
     with open("index.html", "w", encoding="utf-8") as f:
