@@ -1481,12 +1481,18 @@ def render(news, markets, charts=None, logos=None, streams=None):
     charts_json = json.dumps(charts or {}, ensure_ascii=False)
     logos_json = json.dumps(logos or {}, ensure_ascii=False)
     page_desc = f"{len(news)} economy, politics, business and environment stories in 24h from {len(FEEDS)} sources · updated {NOW.strftime('%d %b %Y %H:%M')}"
+    # ตัว T แบบเซริฟในกรอบเส้นคู่ อย่างหัวหนังสือพิมพ์
     favicon = ("data:image/svg+xml,"
                "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
-               "%3Crect width='100' height='100' rx='20' fill='%230A0E1A'/%3E"
-               "%3Ccircle cx='30' cy='62' r='9' fill='%234C8DFF'/%3E"
-               "%3Ccircle cx='58' cy='40' r='9' fill='%23F5A524'/%3E"
-               "%3Ccircle cx='78' cy='58' r='7' fill='%239B8AFB'/%3E%3C/svg%3E")
+               "%3Crect width='100' height='100' fill='%23EFE8D9'/%3E"
+               "%3Crect x='7' y='7' width='86' height='86' fill='none'"
+               " stroke='%23191612' stroke-width='5'/%3E"
+               "%3Crect x='16' y='16' width='68' height='68' fill='none'"
+               " stroke='%23191612' stroke-width='1.6'/%3E"
+               "%3Cg fill='%23191612'%3E"
+               "%3Crect x='26' y='30' width='48' height='10'/%3E"
+               "%3Crect x='45' y='30' width='10' height='40'/%3E"
+               "%3Crect x='37' y='64' width='26' height='6'/%3E%3C/g%3E%3C/svg%3E")
 
     return f"""<!doctype html>
 <html lang="th">
@@ -1494,22 +1500,22 @@ def render(news, markets, charts=None, logos=None, streams=None):
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="900">
-<title>Econ · Politics Monitor</title>
+<title>The Tribune · Thai &amp; International Business News</title>
 <meta name="description" content="{html.escape(page_desc)}">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Econ · Politics Monitor">
+<meta property="og:title" content="The Tribune · Thai &amp; International Business News">
 <meta property="og:description" content="{html.escape(page_desc)}">
 <meta property="og:url" content="https://netflixss266-lang.github.io/econ-monitor/">
 <meta name="twitter:card" content="summary">
-<meta name="theme-color" content="#0A0E1A">
+<meta name="theme-color" content="#EFE8D9">
 <link rel="icon" href="{favicon}">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Econ Monitor">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Tribune">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Serif+Thai:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,700&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
 <script>
 /* เล่นอินโทรครั้งเดียวต่อการเปิดเว็บ ไม่ให้เล่นซ้ำตอนหน้ารีเฟรชอัตโนมัติทุก 15 นาที */
 try{{
@@ -1521,50 +1527,68 @@ try{{
 </script>
 <style>
 :root{{
-  --bg:#0A0E1A; --panel:#111726; --panel2:#0E1420; --line:#1E2637;
-  --ink:#E7ECF5; --mute:#7A879C; --dim:#4E5A70;
-  --econ:#4C8DFF; --poli:#F5A524; --biz:#2DD4BF; --env:#4ADE80; --mixed:#9B8AFB;
-  --up:#3FB68B; --down:#E5484D;
-  --brass:#C6A961; --cream:#F4EFE3;
+  /* กระดาษหนังสือพิมพ์ + หมึกดำ — โทนสิ่งพิมพ์ต้นศตวรรษที่ 20 */
+  --bg:#EFE8D9; --panel:#F8F3E7; --panel2:#E9E1CD; --panel3:#E2D8C0;
+  --line:#CCC0A6; --line2:#A4977A; --faint:#BCAF94;
+  --ink:#191612; --mute:#4B453B; --dim:#7C7261;
+  --hover:#EAE1CC; --sel:#E3D9C0;
+  --econ:#26456F; --poli:#8A5518; --biz:#1D6350; --env:#4C6A24; --mixed:#5A4A78;
+  --up:#1C6B45; --down:#A32C24;
+  --brass:#8A6A28; --cream:#14110C;
+  --scrim:rgba(30,25,17,.55);
 }}
 *{{box-sizing:border-box;margin:0;padding:0}}
+button,input{{font-family:inherit}}
 body{{background:var(--bg);color:var(--ink);
-  font-family:'IBM Plex Sans Thai',system-ui,sans-serif;
+  font-family:'Noto Serif Thai',Georgia,'Times New Roman',serif;
   font-size:15px;line-height:1.55;padding:20px;max-width:1560px;margin:0 auto;
   animation:pageIn .85s 1.9s backwards}}
 a{{color:inherit;text-decoration:none}}
 
-header{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:9px;
-  padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--line)}}
-/* โลโก้ EPM — ตัวอักษรเซริฟแบบคลาสสิกอังกฤษ + เส้นทองเรียบๆ แบบสมัยใหม่ */
-.logo{{display:flex;flex-direction:column;align-items:center;gap:9px;font-weight:400}}
-.logo-mark{{font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-weight:700;
-  font-size:clamp(2.5rem,7.4vw,3.7rem);line-height:.94;
-  letter-spacing:.16em;text-indent:.16em;color:var(--cream)}}
-@supports ((-webkit-background-clip:text) or (background-clip:text)){{
-  .logo-mark{{background:linear-gradient(176deg,#FBF7EE 8%,var(--cream) 46%,var(--brass) 128%);
-    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}}
-}}
-.logo-rule{{width:min(250px,64vw);height:1px;
-  background:linear-gradient(90deg,transparent,var(--brass) 24%,var(--brass) 76%,transparent);
-  opacity:.72}}
-.logo-sub{{font-size:clamp(.55rem,1.55vw,.71rem);font-weight:500;
-  letter-spacing:.4em;text-indent:.4em;text-transform:uppercase;color:var(--mute)}}
+/* ── หัวหนังสือพิมพ์ ──────────────────────────────────── */
+header{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px;
+  padding:6px 0 12px;margin-bottom:18px;
+  border-top:3px solid var(--ink);border-bottom:3px double var(--ink)}}
+.mast-top{{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;
+  gap:9px;width:100%;padding-bottom:9px;margin-bottom:2px;
+  border-bottom:1px solid var(--line);
+  font-family:'Playfair Display',Georgia,serif;font-size:.63rem;font-weight:600;
+  letter-spacing:.26em;text-transform:uppercase;color:var(--mute)}}
+.mast-dot{{color:var(--brass);letter-spacing:0}}
+.logo{{display:flex;flex-direction:column;align-items:center;gap:4px;font-weight:400}}
+/* ชื่อหัวเป็นอักษรแบล็กเลตเตอร์ อย่างหัวหนังสือพิมพ์ต้นศตวรรษที่ 20 */
+.logo-the{{font-family:'Playfair Display',Georgia,serif;font-style:italic;font-weight:700;
+  font-size:clamp(.9rem,2.4vw,1.15rem);letter-spacing:.12em;color:var(--mute);
+  margin-bottom:-4px}}
+.logo-mark{{font-family:'UnifrakturMaguntia','Playfair Display',Georgia,serif;font-weight:400;
+  font-size:clamp(3rem,10.5vw,5.6rem);line-height:1.02;letter-spacing:.02em;
+  color:var(--ink)}}
+.logo-rule{{display:flex;align-items:center;justify-content:center;gap:12px;
+  width:min(760px,94vw);margin-top:2px;color:var(--brass)}}
+.logo-rule::before,.logo-rule::after{{content:"";flex:1;height:1px;background:var(--line2)}}
+.logo-rule span{{font-size:.6rem;letter-spacing:.1em}}
+.logo-sub{{font-family:'Playfair Display',Georgia,serif;
+  font-size:clamp(.6rem,1.7vw,.78rem);font-weight:600;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--mute);
+  max-width:900px;line-height:1.9}}
+.logo-sub b{{font-size:1.24em;font-weight:700;color:var(--ink)}}
+.logo-sub i{{font-style:normal;color:var(--brass);padding:0 2px}}
 .stamp{{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;
-  font-family:'IBM Plex Mono',monospace;font-size:.76rem;color:var(--mute)}}
+  font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--mute)}}
 .pulse{{width:7px;height:7px;border-radius:50%;background:var(--up);
-  box-shadow:0 0 0 0 rgba(63,182,139,.6);animation:p 2.4s infinite}}
-@keyframes p{{70%{{box-shadow:0 0 0 9px rgba(63,182,139,0)}}100%{{box-shadow:0 0 0 0 rgba(63,182,139,0)}}}}
+  box-shadow:0 0 0 0 rgba(28,107,69,.55);animation:p 2.4s infinite}}
+@keyframes p{{70%{{box-shadow:0 0 0 9px rgba(28,107,69,0)}}100%{{box-shadow:0 0 0 0 rgba(28,107,69,0)}}}}
 
 /* แถบราคาเลื่อนไปทางซ้ายต่อเนื่องแบบรายการทีวี — วิ่งตลอด ไม่หยุดตอนชี้เมาส์ */
 .tickers{{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}}
 .ticker-row{{display:flex;align-items:stretch;gap:8px;min-width:0}}
-.ticker-tag{{flex:none;display:flex;align-items:center;padding:0 12px;border-radius:10px;
+.ticker-tag{{flex:none;display:flex;align-items:center;padding:0 12px;border-radius:2px;
   background:var(--panel2);border:1px solid var(--line);
   font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.06em;
   text-transform:uppercase;color:var(--mute);white-space:nowrap}}
 .ticker{{flex:1;min-width:0;overflow:hidden;border:1px solid var(--line);
-  border-radius:10px;background:var(--panel)}}
+  border-radius:2px;background:var(--panel)}}
 .ticker-track{{display:flex;width:max-content;animation:marquee linear infinite}}
 @keyframes marquee{{from{{transform:translateX(0)}}to{{transform:translateX(-50%)}}}}
 @media(prefers-reduced-motion:reduce){{
@@ -1577,16 +1601,16 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   border:0;border-right:1px solid var(--line);background:none;color:inherit;
   font-family:'IBM Plex Mono',monospace;font-size:.8rem;cursor:pointer;
   display:flex;align-items:baseline;gap:7px;transition:background .15s}}
-.tick:hover{{background:rgba(255,255,255,.06)}}
+.tick:hover{{background:rgba(25,22,18,.05)}}
 .tick:focus-visible{{outline:2px solid var(--econ);outline-offset:-2px}}
 .t-chg{{font-size:.76rem}}
 
 /* ── หน้าต่างข่าวที่เกี่ยวข้องกับสินทรัพย์ ─────────────────── */
 .tmodal{{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;
-  background:rgba(4,6,11,.82)}}
+  background:var(--scrim)}}
 .tmodal-box{{width:min(760px,100%);max-height:86vh;display:flex;flex-direction:column;
-  background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;
-  box-shadow:0 30px 80px rgba(0,0,0,.6)}}
+  background:var(--panel);border:1px solid var(--line);border-radius:2px;overflow:hidden;
+  box-shadow:0 24px 60px rgba(46,38,24,.28)}}
 .tmodal-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
   padding:16px 18px 12px;border-bottom:1px solid var(--line);background:var(--panel2)}}
 .tmodal-head h3{{font-size:1.1rem;font-weight:700;letter-spacing:.02em}}
@@ -1594,10 +1618,10 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   font-family:'IBM Plex Mono',monospace}}
 #tmodal-p{{font-size:1rem}}
 #tmodal-c{{font-size:.8rem}}
-.tmodal-x{{flex:none;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:1.2rem;
+.tmodal-x{{flex:none;width:30px;height:30px;border-radius:2px;cursor:pointer;font-size:1.2rem;
   line-height:1;color:var(--mute);background:transparent;border:1px solid var(--line)}}
-.tmodal-x:hover{{color:var(--ink);background:rgba(255,255,255,.07)}}
-.backbtn{{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:9px;
+.tmodal-x:hover{{color:var(--ink);background:rgba(25,22,18,.06)}}
+.backbtn{{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:2px;
   cursor:pointer;color:var(--mute);background:var(--panel);border:1px solid var(--line)}}
 .backbtn svg{{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;
   stroke-linecap:round;stroke-linejoin:round}}
@@ -1609,28 +1633,28 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .trow{{display:flex;align-items:center;gap:11px;padding:11px 18px;
   border-bottom:1px solid var(--line)}}
 .trow:last-child{{border-bottom:0}}
-.trow:hover{{background:#151C2C}}
-.trow-thumb{{width:58px;height:38px;border-radius:6px;object-fit:cover;flex:none;
+.trow:hover{{background:var(--hover)}}
+.trow-thumb{{width:58px;height:38px;border-radius:2px;object-fit:cover;flex:none;
   background:var(--panel2)}}
 .trow-body{{flex:1;min-width:0}}
 .trow-title{{font-size:.85rem;line-height:1.4;font-weight:500}}
 .trow-meta{{display:flex;gap:8px;margin-top:4px;font-family:'IBM Plex Mono',monospace;
   font-size:.64rem;color:var(--dim);text-transform:uppercase}}
-.score{{flex:none;min-width:52px;text-align:center;padding:5px 8px;border-radius:7px;
+.score{{flex:none;min-width:52px;text-align:center;padding:5px 8px;border-radius:2px;
   font-family:'IBM Plex Mono',monospace;font-size:.78rem;font-weight:600}}
 /* >50 เขียว · 10-49 เหลือง · <10 แดง */
-.score.hi{{color:#8CF0C6;background:rgba(63,182,139,.16);border:1px solid rgba(63,182,139,.4)}}
-.score.mid{{color:#FFD27A;background:rgba(245,165,36,.14);border:1px solid rgba(245,165,36,.38)}}
-.score.low{{color:#FFA9AC;background:rgba(229,72,77,.14);border:1px solid rgba(229,72,77,.38)}}
+.score.hi{{color:#12513A;background:rgba(28,107,69,.14);border:1px solid rgba(28,107,69,.42)}}
+.score.mid{{color:#6E4310;background:rgba(138,85,24,.14);border:1px solid rgba(138,85,24,.4)}}
+.score.low{{color:#7E211B;background:rgba(163,44,36,.13);border:1px solid rgba(163,44,36,.4)}}
 .tmodal-empty{{padding:26px 18px;color:var(--mute);font-size:.85rem;text-align:center}}
 
 /* ── หน้ากราฟแท่งเทียน ─────────────────────────────────── */
 .chart-bar{{display:flex;align-items:center;gap:12px;margin-bottom:8px}}
-.chart-open{{display:inline-flex;align-items:center;gap:8px;padding:8px 15px;border-radius:9px;
+.chart-open{{display:inline-flex;align-items:center;gap:8px;padding:8px 15px;border-radius:2px;
   font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--ink);
-  background:linear-gradient(180deg,#1A2334,#141B29);border:1px solid #2A3548;
+  background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line2);
   transition:border-color .16s,background .16s}}
-.chart-open:hover{{border-color:var(--brass);background:#1E2839}}
+.chart-open:hover{{border-color:var(--brass);background:var(--sel)}}
 .chart-open svg{{width:15px;height:15px;fill:none;stroke:var(--brass);stroke-width:2;
   stroke-linecap:round}}
 .chart-hint{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim)}}
@@ -1644,10 +1668,10 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cmodal-title h3{{font-size:1.05rem;font-weight:700}}
 .cmodal-price{{display:flex;gap:9px;font-family:'IBM Plex Mono',monospace;font-size:.78rem}}
 .tfbar{{display:flex;gap:4px;flex:1;flex-wrap:wrap}}
-.tfbtn{{padding:5px 11px;border-radius:7px;cursor:pointer;font-family:'IBM Plex Mono',monospace;
+.tfbtn{{padding:5px 11px;border-radius:2px;cursor:pointer;font-family:'IBM Plex Mono',monospace;
   font-size:.72rem;color:var(--mute);background:transparent;border:1px solid var(--line)}}
 .tfbtn:hover{{color:var(--ink)}}
-.tfbtn.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:600}}
+.tfbtn.on{{color:#FBF7EC;background:var(--brass);border-color:var(--brass);font-weight:600}}
 .cmodal-body{{flex:1;display:flex;min-height:0}}
 .cmodal-pick{{width:210px;flex:none;display:flex;flex-direction:column;min-height:0;
   border-right:1px solid var(--line)}}
@@ -1662,26 +1686,26 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .citem .cname{{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 /* แถบเลือกว่าจะโชว์เฉพาะตัวโปรด หรือทั้งตลาด */
 .cfav-bar{{display:flex;gap:4px;padding:9px 10px 0}}
-.cfav-tab{{flex:1;padding:6px 8px;border-radius:7px;cursor:pointer;
+.cfav-tab{{flex:1;padding:6px 8px;border-radius:2px;cursor:pointer;
   font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.06em;
   color:var(--mute);background:transparent;border:1px solid var(--line)}}
 .cfav-tab:hover{{color:var(--ink)}}
-.cfav-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
+.cfav-tab.on{{color:#FBF7EC;background:var(--brass);border-color:var(--brass);font-weight:700}}
 .cpct{{font-family:'IBM Plex Mono',monospace;font-size:.7rem}}
 .cfav{{flex:none;width:20px;text-align:center;font-size:.82rem;line-height:1;
-  color:#2E3A4E;cursor:pointer}}
+  color:var(--faint);cursor:pointer}}
 .cfav:hover{{color:var(--brass)}}
 .cfav.on{{color:var(--brass)}}
 .cnone-hint{{padding:16px 14px;color:var(--dim);font-size:.72rem;line-height:1.6}}
 /* โลโก้สินทรัพย์ — ถ้าไม่มีรูปจะเหลืออักษรย่อที่วางไว้ข้างล่าง */
 .clogo{{position:relative;flex:none;display:grid;place-items:center;
-  width:20px;height:20px;border-radius:5px;overflow:hidden;
-  background:#1B2434;font-family:'IBM Plex Mono',monospace;font-size:.56rem;
+  width:20px;height:20px;border-radius:2px;overflow:hidden;
+  background:var(--panel3);font-family:'IBM Plex Mono',monospace;font-size:.56rem;
   font-weight:600;color:var(--mute)}}
 .clogo img{{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
   background:#fff}}
-.citem:hover{{background:#151C2C;color:var(--ink)}}
-.citem.on{{background:#182133;color:var(--ink);box-shadow:inset 2px 0 0 var(--brass)}}
+.citem:hover{{background:var(--hover);color:var(--ink)}}
+.citem.on{{background:var(--sel);color:var(--ink);box-shadow:inset 2px 0 0 var(--brass)}}
 .cmodal-chart{{flex:1;min-width:0;display:flex;flex-direction:column;padding:10px 14px 8px}}
 #cchart{{flex:1;min-height:0}}
 /* ปุ่มช่วงเวลา + ชนิดกราฟ อยู่มุมขวาล่างของกราฟ */
@@ -1692,11 +1716,11 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .map-modal-body .map-wrap{{flex:1;height:auto;min-height:0}}
 .map-modal-body #hotspot-detail{{max-height:210px}}
 #cchart svg{{width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}}
-.c-grid line{{stroke:#1B2434;stroke-width:1;shape-rendering:crispEdges}}
+.c-grid line{{stroke:var(--line);stroke-width:1;shape-rendering:crispEdges}}
 .c-axis text{{fill:var(--dim);font-family:'IBM Plex Mono',monospace;font-size:10px}}
 .c-up{{fill:var(--up);stroke:var(--up)}}
 .c-down{{fill:var(--down);stroke:var(--down)}}
-.c-cross{{stroke:#4E5A70;stroke-width:1;stroke-dasharray:3 3;pointer-events:none}}
+.c-cross{{stroke:var(--line2);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}}
 .creadout{{min-height:19px;font-family:'IBM Plex Mono',monospace;font-size:.7rem;
   color:var(--mute);display:flex;gap:12px;flex-wrap:wrap}}
 .creadout b{{color:var(--ink);font-weight:500}}
@@ -1705,8 +1729,8 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 
 .ctype{{flex:none}}
 .cmodal-tape{{margin:0;padding:7px 10px;gap:6px;border-bottom:1px solid var(--line);
-  background:#0C1220}}
-.cmodal-tape .ticker{{background:transparent;border-color:#1A2333}}
+  background:var(--panel3)}}
+.cmodal-tape .ticker{{background:transparent;border-color:var(--line)}}
 
 /* ค่าคำนวณ + ข่าว อยู่คอลัมน์ขวาของกราฟ */
 .cmodal-side{{width:310px;flex:none;display:flex;flex-direction:column;
@@ -1721,11 +1745,11 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .calc-v small{{display:block;font-size:.6rem;font-weight:400;color:var(--dim)}}
 .calc-na{{color:var(--dim)}}
 .calc-on-able{{cursor:pointer}}
-.calc-on-able:hover{{background:#151C2C}}
+.calc-on-able:hover{{background:var(--hover)}}
 .calc-on-able::after{{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
   background:transparent}}
 .calc-on-able{{position:relative}}
-.calc-on-able.on{{background:#182133}}
+.calc-on-able.on{{background:var(--sel)}}
 .calc-on-able.on::after{{background:var(--brass)}}
 .calc-note{{padding:8px 13px;font-size:.6rem;line-height:1.5;color:var(--dim);
   border-bottom:1px solid var(--line)}}
@@ -1742,7 +1766,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cnews-list{{flex:1;overflow-y:auto}}
 .cnews-row{{display:flex;gap:9px;align-items:flex-start;padding:9px 13px;
   border-bottom:1px solid var(--line)}}
-.cnews-row:hover{{background:#151C2C}}
+.cnews-row:hover{{background:var(--hover)}}
 .cnews-row .score{{min-width:44px;padding:3px 6px;font-size:.68rem}}
 .cnews-t{{flex:1;min-width:0;font-size:.78rem;line-height:1.38}}
 .cnews-m{{display:block;margin-top:3px;font-family:'IBM Plex Mono',monospace;
@@ -1763,7 +1787,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .t-pct{{font-size:.76rem}}
 .up{{color:var(--up)}} .down{{color:var(--down)}} .flat{{color:var(--mute)}}
 
-.panel{{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}}
+.panel{{background:var(--panel);border:1px solid var(--line);border-radius:2px;overflow:hidden}}
 .panel-head{{display:flex;align-items:center;justify-content:space-between;
   padding:12px 15px;border-bottom:1px solid var(--line);background:var(--panel2)}}
 .panel-head h2{{display:flex;align-items:center;gap:8px;
@@ -1780,31 +1804,31 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .row-panel{{margin-bottom:16px}}
 
 .map-wrap{{position:relative;height:440px;
-  background:radial-gradient(ellipse at 50% 45%,#101827 0%,#0B111C 70%)}}
+  background:radial-gradient(ellipse at 50% 45%,#F3ECDC 0%,#E5DCC5 72%)}}
 #map{{width:100%;height:100%;display:block;cursor:grab;touch-action:none}}
 #map:active{{cursor:grabbing}}
 /* เส้นขอบไม่หนาขึ้นตอนซูม */
-.sphere{{fill:#0C1220;stroke:#1A2333;stroke-width:.8;vector-effect:non-scaling-stroke}}
-.grat{{fill:none;stroke:#141C2B;stroke-width:.45;vector-effect:non-scaling-stroke}}
-.country{{fill:#172030;stroke:#232E42;stroke-width:.45;vector-effect:non-scaling-stroke}}
+.sphere{{fill:#F1EADA;stroke:var(--line2);stroke-width:.8;vector-effect:non-scaling-stroke}}
+.grat{{fill:none;stroke:#D8CDB2;stroke-width:.45;vector-effect:non-scaling-stroke}}
+.country{{fill:#E0D5BB;stroke:#9E9075;stroke-width:.45;vector-effect:non-scaling-stroke}}
 .zoom-ctl{{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:5px;z-index:5}}
 .zoom-ctl button{{width:27px;height:27px;font-family:inherit;font-size:.95rem;line-height:1;
-  color:var(--mute);background:rgba(10,14,26,.85);border:1px solid var(--line);
-  border-radius:6px;cursor:pointer}}
+  color:var(--mute);background:rgba(248,243,231,.9);border:1px solid var(--line);
+  border-radius:2px;cursor:pointer}}
 .zoom-ctl button:hover{{color:var(--ink);border-color:var(--dim)}}
 .mk{{cursor:pointer}}
 .mk .halo{{opacity:.16;transition:opacity .15s}}
-.mk .core{{stroke:#0A0E1A;stroke-width:1.2}}
+.mk .core{{stroke:var(--bg);stroke-width:1.2}}
 .mk:hover .halo{{opacity:.34}}
-.mk-label{{font-family:'IBM Plex Sans Thai',sans-serif;font-size:10px;
+.mk-label{{font-family:'Noto Serif Thai',Georgia,serif;font-size:10px;
   fill:var(--mute);pointer-events:none}}
 #tip{{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;
-  background:rgba(10,14,26,.95);border:1px solid var(--line);border-radius:7px;
+  background:rgba(248,243,231,.96);border:1px solid var(--line);border-radius:2px;
   padding:7px 10px;font-size:.74rem;display:flex;flex-direction:column;gap:2px;z-index:5}}
 #tip span{{color:var(--mute);font-family:'IBM Plex Mono',monospace;font-size:.66rem}}
 .legend{{position:absolute;left:14px;bottom:12px;display:flex;flex-wrap:wrap;gap:6px 14px;
-  font-size:.68rem;color:var(--mute);background:rgba(10,14,26,.8);
-  border:1px solid var(--line);border-radius:7px;padding:6px 11px}}
+  font-size:.68rem;color:var(--mute);background:rgba(248,243,231,.88);
+  border:1px solid var(--line);border-radius:2px;padding:6px 11px}}
 .legend span{{display:flex;align-items:center;gap:5px}}
 
 #hotspot-detail{{border-top:1px solid var(--line);max-height:172px;overflow-y:auto}}
@@ -1813,17 +1837,17 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .hd-top span{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--dim)}}
 .hd-row{{display:flex;align-items:center;gap:9px;
   padding:8px 15px;border-top:1px solid var(--line);font-size:.8rem}}
-.hd-row:hover{{background:#151C2C}}
+.hd-row:hover{{background:var(--hover)}}
 .hd-row > span:nth-last-child(2){{flex:1;min-width:0}}
-.hd-thumb{{width:36px;height:36px;border-radius:6px;object-fit:cover;flex:none;background:var(--panel2)}}
+.hd-thumb{{width:36px;height:36px;border-radius:2px;object-fit:cover;flex:none;background:var(--panel2)}}
 .hd-age{{font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--dim);white-space:nowrap}}
 
 /* ข่าวล่าสุดอยู่เต็มความกว้างเหนือแผนที่ → จัดเป็นหลายคอลัมน์ */
 .feed{{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}}
 .feed-row{{display:flex;align-items:center;gap:10px;min-width:0;
   padding:9px 15px;border-bottom:1px solid var(--line);transition:background .12s}}
-.feed-row:hover{{background:#151C2C}}
-.feed-thumb{{width:44px;height:44px;border-radius:7px;object-fit:cover;flex:none;background:var(--panel2)}}
+.feed-row:hover{{background:var(--hover)}}
+.feed-thumb{{width:44px;height:44px;border-radius:2px;object-fit:cover;flex:none;background:var(--panel2)}}
 .feed-title{{flex:1;min-width:0;font-size:.82rem;line-height:1.4}}
 .feed-age{{flex:none;font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim);white-space:nowrap}}
 
@@ -1831,13 +1855,13 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   padding:7px 15px;border-bottom:1px solid var(--line);font-size:.8rem}}
 .hot:last-child{{border-bottom:0}}
 .rank{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--dim)}}
-.hot-bars{{display:flex;height:5px;border-radius:3px;overflow:hidden;background:#1A2333}}
+.hot-bars{{display:flex;height:5px;border-radius:3px;overflow:hidden;background:var(--panel3)}}
 .hot-bars .hb-econ{{background:var(--econ)}} .hot-bars .hb-poli{{background:var(--poli)}}
 .hot-bars .hb-biz{{background:var(--biz)}} .hot-bars .hb-env{{background:var(--env)}}
 .hot-n{{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--mute);text-align:right}}
 
 .search-wrap{{padding:11px 15px;border-bottom:1px solid var(--line)}}
-.search{{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+.search{{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:2px;
   color:var(--ink);font-family:inherit;font-size:.82rem;padding:8px 12px}}
 .search::placeholder{{color:var(--dim)}}
 .search:focus{{outline:none;border-color:var(--econ)}}
@@ -1845,29 +1869,32 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .grid-side{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
 @media(max-width:700px){{.grid-side{{grid-template-columns:1fr}}}}
 
-/* ── เรื่องเด่น (billboard) ───────────────────────────── */
+/* ── เรื่องเด่น (billboard) — ภาพพิมพ์เต็มหน้า ตัวหนังสือสีกระดาษทับบนภาพ ── */
 .hero{{position:relative;display:flex;align-items:flex-end;overflow:hidden;
-  border-radius:14px;margin-bottom:30px;min-height:clamp(320px,44vw,510px)}}
+  color:#F6F1E3;border:1px solid var(--ink);
+  border-radius:2px;margin-bottom:30px;min-height:clamp(320px,44vw,510px)}}
 .hero-img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}}
 .hero-scrim{{position:absolute;inset:0;
   background:linear-gradient(90deg,rgba(5,7,13,.95) 0%,rgba(5,7,13,.78) 40%,rgba(5,7,13,.28) 74%),
              linear-gradient(0deg,rgba(5,7,13,.96) 0%,rgba(5,7,13,0) 58%)}}
 .hero-body{{position:relative;padding:clamp(18px,3vw,40px);max-width:780px}}
 .hero-badge{{display:flex;align-items:center;flex-wrap:wrap;gap:7px;
-  font-family:'IBM Plex Mono',monospace;font-size:.71rem;color:var(--mute)}}
-.hero-sep{{color:var(--dim)}}
+  font-family:'IBM Plex Mono',monospace;font-size:.71rem;color:#DCD2BB;
+  text-transform:uppercase;letter-spacing:.06em}}
+.hero-sep{{color:#A99C82}}
 .hero-title{{font-size:clamp(1.35rem,3.1vw,2.55rem);font-weight:700;line-height:1.18;
   margin:11px 0 12px;text-shadow:0 2px 20px rgba(0,0,0,.65)}}
-.hero-sum{{color:#C2CCDD;font-size:.92rem;line-height:1.6;max-width:640px;
+.hero-sum{{color:#EDE5D2;font-size:.92rem;line-height:1.6;max-width:640px;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}}
 .hero-actions{{display:flex;flex-wrap:wrap;gap:10px;margin-top:17px}}
-.btn{{display:inline-flex;align-items:center;gap:7px;padding:9px 19px;border-radius:7px;
+.btn{{display:inline-flex;align-items:center;gap:7px;padding:9px 19px;border-radius:2px;
   font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;
   border:1px solid transparent;transition:background .16s}}
-.btn-main{{background:#fff;color:#0A0E1A}}
-.btn-main:hover{{background:#D7E0EF}}
-.btn-ghost{{background:rgba(175,192,220,.2);color:var(--ink);border-color:rgba(255,255,255,.15)}}
-.btn-ghost:hover{{background:rgba(175,192,220,.33)}}
+.btn-main{{background:#F7F2E7;color:#191612}}
+.btn-main:hover{{background:#fff}}
+.btn-ghost{{background:rgba(246,241,227,.16);color:#F6F1E3;
+  border-color:rgba(246,241,227,.45)}}
+.btn-ghost:hover{{background:rgba(246,241,227,.3)}}
 
 /* ── แถวข่าวแบบเลื่อนแนวนอน ───────────────────────────── */
 .row{{margin-bottom:28px}}
@@ -1875,21 +1902,21 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .row-head h2{{display:flex;align-items:center;gap:9px;font-size:1.05rem;font-weight:700}}
 .row-n{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--dim);font-weight:400}}
 .live{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.08em;
-  color:#fff;background:var(--down);border-radius:4px;padding:2px 6px}}
+  color:#fff;background:var(--down);border-radius:2px;padding:2px 6px}}
 /* ป้าย LIVE บนหัวข้อกลุ่ม — เห็นชัดแม้ตอนพับเก็บ */
 .live-dot{{display:inline-flex;align-items:center;gap:5px;font-size:.62rem;
   font-weight:700;padding:3px 9px;
-  box-shadow:0 0 0 0 rgba(229,72,77,.55);animation:livePulse 2.2s infinite}}
+  box-shadow:0 0 0 0 rgba(163,44,36,.5);animation:livePulse 2.2s infinite}}
 .live-dot::before{{content:"";width:6px;height:6px;border-radius:50%;background:#fff}}
 @keyframes livePulse{{
-  70%{{box-shadow:0 0 0 8px rgba(229,72,77,0)}}
-  100%{{box-shadow:0 0 0 0 rgba(229,72,77,0)}}
+  70%{{box-shadow:0 0 0 8px rgba(163,44,36,0)}}
+  100%{{box-shadow:0 0 0 0 rgba(163,44,36,0)}}
 }}
 .row-tools{{display:flex;align-items:center;gap:7px}}
 .row-tools .search{{width:150px}}
 .row-nav{{width:30px;height:30px;flex:none;border-radius:50%;cursor:pointer;font-size:1.05rem;
-  line-height:1;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line)}}
-.row-nav:hover{{background:rgba(255,255,255,.15)}}
+  line-height:1;color:var(--ink);background:rgba(25,22,18,.05);border:1px solid var(--line)}}
+.row-nav:hover{{background:rgba(25,22,18,.12)}}
 /* padding + margin ติดลบ เพื่อให้การ์ดที่ขยายตอน hover ไม่โดนตัดขอบ */
 .row-track{{display:flex;gap:12px;overflow-x:auto;scroll-behavior:smooth;
   scroll-snap-type:x proximity;padding:24px 4px 28px;margin:-24px -4px -28px}}
@@ -1902,12 +1929,12 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   transition:transform .28s cubic-bezier(.2,.7,.3,1)}}
 .lcard:hover{{transform:scale(1.055);z-index:3}}
 .lcard-thumb{{position:relative;display:block;aspect-ratio:16/9;overflow:hidden;
-  border-radius:10px;background:#0C1220;border:1px solid var(--line);
+  border-radius:2px;background:var(--panel3);border:1px solid var(--line);
   transition:border-color .28s,box-shadow .28s}}
-.lcard:hover .lcard-thumb{{border-color:var(--down);box-shadow:0 18px 42px rgba(0,0,0,.62)}}
+.lcard:hover .lcard-thumb{{border-color:var(--down);box-shadow:0 14px 30px rgba(46,38,24,.26)}}
 .lcard-thumb img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
 .lcard-badge{{position:absolute;left:9px;top:9px;z-index:2;display:inline-flex;align-items:center;
-  gap:5px;padding:3px 8px;border-radius:5px;background:var(--down);color:#fff;
+  gap:5px;padding:3px 8px;border-radius:2px;background:var(--down);color:#fff;
   font-family:'IBM Plex Mono',monospace;font-size:.58rem;font-weight:700;letter-spacing:.1em}}
 .lcard-badge i{{width:5px;height:5px;border-radius:50%;background:#fff;
   animation:livePulse 2.2s infinite}}
@@ -1918,7 +1945,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .lcard-ch{{display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;
   font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--cream)}}
 .lcard-flag{{font-size:.55rem;letter-spacing:.08em;color:var(--dim);
-  border:1px solid var(--line);border-radius:4px;padding:1px 5px}}
+  border:1px solid var(--line);border-radius:2px;padding:1px 5px}}
 .lcard-t{{font-size:.83rem;line-height:1.45;color:var(--mute);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}
 .lcard:hover .lcard-t{{color:var(--ink)}}
@@ -1928,54 +1955,54 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .live-page .live-list{{flex:none;overflow:visible}}
 
 .poster{{position:relative;flex:0 0 288px;scroll-snap-align:start;background:var(--panel);
-  border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  border:1px solid var(--line);border-radius:2px;overflow:hidden;
   transition:transform .28s cubic-bezier(.2,.7,.3,1),box-shadow .28s,border-color .28s}}
-.poster:hover{{transform:scale(1.07);z-index:3;border-color:#31415C;
-  box-shadow:0 18px 42px rgba(0,0,0,.62)}}
+.poster:hover{{transform:scale(1.07);z-index:3;border-color:var(--line2);
+  box-shadow:0 14px 30px rgba(46,38,24,.26)}}
 .poster.hidden{{display:none}}
 .poster-img{{position:relative;display:grid;place-items:center;aspect-ratio:16/9}}
 .poster-img img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
 .poster-img .ci-lg{{width:42px;height:42px;opacity:.45}}
 .poster-cat{{position:absolute;left:9px;top:9px;z-index:2;display:grid;place-items:center;
-  width:24px;height:24px;border-radius:6px;background:rgba(5,7,13,.72)}}
+  width:24px;height:24px;border-radius:2px;background:rgba(5,7,13,.72)}}
 .poster-speak{{position:absolute;right:9px;top:9px;z-index:2;width:26px;height:26px;padding:0;
-  border-radius:6px;background:rgba(5,7,13,.72);opacity:0;transition:opacity .2s}}
+  border-radius:2px;background:rgba(5,7,13,.72);opacity:0;transition:opacity .2s}}
 .poster:hover .poster-speak,.poster-speak:focus{{opacity:1}}
 .poster-body{{padding:11px 12px 13px}}
 .poster-body h3{{font-size:.89rem;font-weight:600;line-height:1.42;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}}
 .poster-meta{{display:flex;justify-content:space-between;gap:8px;margin-top:8px}}
 /* พื้นไล่สีตามหมวด ใช้ตอนข่าวไม่มีรูป */
-.pf-econ{{background:linear-gradient(135deg,rgba(76,141,255,.34),rgba(76,141,255,.05))}}
-.pf-poli{{background:linear-gradient(135deg,rgba(245,165,36,.34),rgba(245,165,36,.05))}}
-.pf-biz{{background:linear-gradient(135deg,rgba(45,212,191,.34),rgba(45,212,191,.05))}}
-.pf-env{{background:linear-gradient(135deg,rgba(74,222,128,.34),rgba(74,222,128,.05))}}
-.pf-mixed{{background:linear-gradient(135deg,rgba(155,138,251,.34),rgba(155,138,251,.05))}}
+.pf-econ{{background:linear-gradient(135deg,rgba(38,69,111,.22),rgba(38,69,111,.05))}}
+.pf-poli{{background:linear-gradient(135deg,rgba(138,85,24,.22),rgba(138,85,24,.05))}}
+.pf-biz{{background:linear-gradient(135deg,rgba(29,99,80,.22),rgba(29,99,80,.05))}}
+.pf-env{{background:linear-gradient(135deg,rgba(76,106,36,.22),rgba(76,106,36,.05))}}
+.pf-mixed{{background:linear-gradient(135deg,rgba(90,74,120,.22),rgba(90,74,120,.05))}}
 
 .src{{font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--mute);
   text-transform:uppercase;letter-spacing:.05em}}
-.loc{{margin-left:6px;padding:1px 5px;border:1px solid var(--line);border-radius:4px;
+.loc{{margin-left:6px;padding:1px 5px;border:1px solid var(--line);border-radius:2px;
   color:var(--dim);text-transform:none;letter-spacing:0}}
 .age{{font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--dim);white-space:nowrap}}
 .speak{{font-family:inherit;font-size:.7rem;color:var(--mute);background:var(--panel2);
-  border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer}}
+  border:1px solid var(--line);border-radius:2px;padding:4px 9px;cursor:pointer}}
 .speak:hover{{color:var(--ink);border-color:var(--dim)}}
 .speak.playing{{color:var(--econ);border-color:var(--econ)}}
 
 /* ── อินโทรตอนเข้าเว็บ ─────────────────────────────────── */
-#intro{{position:fixed;inset:0;z-index:99;background:#05070D;display:grid;place-items:center;
+#intro{{position:fixed;inset:0;z-index:99;background:var(--bg);display:grid;place-items:center;
   animation:introFade .6s 1.95s forwards}}
-.intro-inner{{display:flex;flex-direction:column;align-items:center;gap:14px;
+.intro-inner{{display:flex;flex-direction:column;align-items:center;gap:12px;
+  padding:26px 34px;border-top:3px solid var(--ink);border-bottom:3px double var(--ink);
   animation:introIn 1.05s cubic-bezier(.2,.7,.3,1) backwards,
             introZoom .8s 1.72s ease-in forwards}}
-.intro-mark{{font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-weight:700;
-  font-size:clamp(3rem,12vw,5.6rem);line-height:.94;letter-spacing:.17em;text-indent:.17em;
-  color:var(--cream);
-  text-shadow:0 0 40px rgba(198,169,97,.42),0 0 110px rgba(198,169,97,.18)}}
-.intro-rule{{width:min(300px,58vw);height:1px;
-  background:linear-gradient(90deg,transparent,var(--brass) 24%,var(--brass) 76%,transparent)}}
-.intro-inner b{{font-size:clamp(.58rem,2vw,.8rem);letter-spacing:.44em;text-indent:.44em;
-  font-weight:500;text-transform:uppercase;color:var(--brass)}}
+.intro-mark{{font-family:'UnifrakturMaguntia','Playfair Display',Georgia,serif;font-weight:400;
+  font-size:clamp(3rem,12vw,5.6rem);line-height:1.04;color:var(--ink)}}
+.intro-rule{{width:min(320px,58vw);height:1px;background:var(--line2)}}
+.intro-inner b{{font-family:'Playfair Display',Georgia,serif;
+  font-size:clamp(.55rem,1.9vw,.74rem);letter-spacing:.24em;
+  font-weight:600;text-transform:uppercase;color:var(--mute);text-align:center;
+  max-width:min(640px,86vw);line-height:1.8}}
 @keyframes introIn{{from{{opacity:0;transform:scale(.84);filter:blur(13px)}}}}
 @keyframes introZoom{{to{{opacity:0;transform:scale(1.55)}}}}
 @keyframes introFade{{to{{opacity:0;visibility:hidden}}}}
@@ -1987,9 +2014,9 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .navbar{{display:flex;align-items:center;gap:13px;margin-bottom:18px;
   border-bottom:1px solid var(--line);padding-bottom:10px}}
 .burger{{display:inline-flex;align-items:center;gap:10px;height:38px;padding:0 14px;
-  cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:2px;
   transition:border-color .16s,background .16s}}
-.burger:hover{{border-color:var(--brass);background:#1A2334}}
+.burger:hover{{border-color:var(--brass);background:var(--hover)}}
 .burger-bars{{display:flex;flex-direction:column;justify-content:center;gap:4px;width:18px}}
 .burger-bars span{{display:block;height:2px;border-radius:2px;background:var(--mute);
   transition:transform .2s,opacity .2s}}
@@ -2004,12 +2031,12 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   color:var(--dim)}}
 .navbar-now::before{{content:"› "}}
 
-.navdim{{position:fixed;inset:0;z-index:58;background:rgba(4,7,14,.6);
+.navdim{{position:fixed;inset:0;z-index:58;background:var(--scrim);
   opacity:0;visibility:hidden;transition:opacity .2s,visibility .2s}}
 .navdim.on{{opacity:1;visibility:visible}}
 .navpanel{{position:fixed;left:0;top:0;bottom:0;z-index:59;width:252px;max-width:84vw;
   display:flex;flex-direction:column;background:var(--panel);
-  border-right:1px solid var(--line);box-shadow:18px 0 46px rgba(0,0,0,.45);
+  border-right:1px solid var(--line);box-shadow:14px 0 38px rgba(46,38,24,.24);
   transform:translateX(-100%);visibility:hidden;
   transition:transform .22s cubic-bezier(.4,0,.2,1),visibility .22s}}
 .navpanel.open{{transform:none;visibility:visible}}
@@ -2018,18 +2045,18 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.16em;
   font-weight:600;color:var(--dim)}}
 .nav-x{{width:28px;height:28px;font-size:1.15rem;line-height:1;cursor:pointer;
-  color:var(--mute);background:none;border:1px solid var(--line);border-radius:7px}}
+  color:var(--mute);background:none;border:1px solid var(--line);border-radius:2px}}
 .nav-x:hover{{color:var(--ink);border-color:var(--brass)}}
 .nav-foot{{padding:11px 18px;border-top:1px solid var(--line);
   font-family:'IBM Plex Mono',monospace;font-size:.58rem;letter-spacing:.1em;color:var(--dim)}}
 .tabs{{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;padding:9px}}
 .tab{{position:relative;display:flex;align-items:center;width:100%;
   font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;text-align:left;
-  color:var(--mute);background:none;border:0;padding:11px 13px;border-radius:8px;
+  color:var(--mute);background:none;border:0;padding:11px 13px;border-radius:2px;
   transition:color .16s,background .16s}}
 .tab .tab-n{{margin-left:auto}}
-.tab:hover{{color:var(--ink);background:rgba(255,255,255,.05)}}
-.tab.active{{color:var(--ink);background:#182133}}
+.tab:hover{{color:var(--ink);background:rgba(25,22,18,.045)}}
+.tab.active{{color:var(--ink);background:var(--sel)}}
 .tab.active::after{{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;
   border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--econ),var(--poli))}}
 .tab[draggable]{{cursor:grab}}
@@ -2049,12 +2076,12 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .live-scope{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.1em;
   color:var(--mute);font-weight:500}}
 .tag-news{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.1em;
-  font-weight:700;color:var(--cream);background:#1D2739;border:1px solid #2C3548;
-  border-radius:4px;padding:3px 9px}}
+  font-weight:700;color:var(--bg);background:var(--ink);border:1px solid var(--ink);
+  border-radius:2px;padding:3px 9px}}
 .live-group .scope-title{{font-size:.9rem}}
 .tab-live{{color:var(--down)}}
 .live-dot-sm{{width:7px;height:7px;border-radius:50%;background:var(--down);
-  box-shadow:0 0 0 0 rgba(229,72,77,.6);animation:livePulse 2.2s infinite}}
+  box-shadow:0 0 0 0 rgba(163,44,36,.5);animation:livePulse 2.2s infinite}}
 .live-list{{flex:1;overflow-y:auto}}
 .live-list .cnews-row{{padding:11px 16px}}
 .tab-n{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;font-weight:400;
@@ -2064,18 +2091,31 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .scope-title::after{{content:"";flex:1;height:1px;background:var(--line)}}
 .scope-flag{{font-size:.66rem;font-weight:500;letter-spacing:.08em;color:var(--dim);
   font-family:'IBM Plex Mono',monospace;border:1px solid var(--line);
-  border-radius:5px;padding:2px 7px}}
+  border-radius:2px;padding:2px 7px}}
 [hidden]{{display:none!important}}
 
 .kws{{display:flex;flex-wrap:wrap;gap:7px 12px;padding:15px;align-items:baseline}}
 .kw{{font-weight:500;line-height:1.2}}
 
-footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
+footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--ink);
   display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;
-  font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--dim)}}
+  font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--dim)}}
+.foot-mark{{font-family:'UnifrakturMaguntia','Playfair Display',Georgia,serif;
+  font-size:1.05rem;letter-spacing:0;text-transform:none;color:var(--ink)}}
+
+/* ── หัวข้อทุกระดับใช้ตัวเซริฟแบบหนังสือพิมพ์ ─────────────── */
+.row-head h2,.scope-title,.panel-head h2,.cmodal-title h3,.tmodal-head h3,
+.cnews-head,.hd-top h4,.hero-title{{
+  font-family:'Playfair Display','Noto Serif Thai',Georgia,serif}}
+.row-head h2{{letter-spacing:.06em;text-transform:uppercase;font-size:1rem}}
+.scope-title{{letter-spacing:.1em;text-transform:uppercase}}
+.panel-head h2,.cnews-head{{letter-spacing:.14em}}
+/* เส้นคั่นหัวแถวข่าว อย่างคอลัมน์หนังสือพิมพ์ */
+.row-head{{border-bottom:1px solid var(--line);padding-bottom:8px}}
 ::-webkit-scrollbar{{width:8px;height:8px}}
 ::-webkit-scrollbar-track{{background:transparent}}
-::-webkit-scrollbar-thumb{{background:#222B3D;border-radius:4px}}
+::-webkit-scrollbar-thumb{{background:var(--line2);border-radius:2px}}
 @media(prefers-reduced-motion:reduce){{
   *{{animation:none!important;transition:none!important}}
   #intro{{display:none!important}}   /* กัน overlay ค้างเมื่ออนิเมชันถูกปิด */
@@ -2086,8 +2126,8 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 <body>
 
 <div id="intro" aria-hidden="true"><div class="intro-inner">
-  <span class="intro-mark">EPM</span><span class="intro-rule"></span>
-  <b>Economics · Politics · Monitor</b></div></div>
+  <span class="intro-mark">The Tribune</span><span class="intro-rule"></span>
+  <b>Thai · Regional · International · Business · Updates · News · Exchange</b></div></div>
 
 <div id="tmodal" class="tmodal" hidden>
   <div class="tmodal-box" role="dialog" aria-modal="true" aria-labelledby="tmodal-name">
@@ -2105,15 +2145,26 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 </div>
 
 <header>
+  <div class="mast-top">
+    <span>Est. 2026</span><span class="mast-dot">❧</span>
+    <span>Bangkok · Digital Edition</span><span class="mast-dot">❧</span>
+    <span>Published every three hours</span>
+  </div>
   <h1 class="logo">
-    <span class="logo-mark">EPM</span>
-    <span class="logo-rule"></span>
-    <span class="logo-sub">Economics · Politics · Monitor</span>
+    <span class="logo-the">The</span>
+    <span class="logo-mark">Tribune</span>
   </h1>
+  <div class="logo-rule"><span>◆ ◆ ◆</span></div>
+  <div class="logo-sub">
+    <b>T</b>hai <i>·</i> <b>R</b>egional <i>·</i> <b>I</b>nternational <i>·</i> <b>B</b>usiness
+    <i>·</i> <b>U</b>pdates <i>·</i> <b>N</b>ews <i>·</i> <b>E</b>xchange
+  </div>
   <div class="stamp">
     <span class="pulse"></span>
-    <span>UPDATED {NOW.strftime('%d %b %Y · %H:%M')}</span>
-    <span style="color:var(--dim)">· next {next_run}</span>
+    <span>{NOW.strftime('%A, %d %B %Y')}</span>
+    <span style="color:var(--dim)">·</span>
+    <span>Updated {NOW.strftime('%H:%M')}</span>
+    <span style="color:var(--dim)">· next edition {next_run}</span>
   </div>
 </header>
 
@@ -2248,7 +2299,8 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 </div>
 
 <footer>
-  <span>{len(FEEDS)} sources · {len(news)} stories in 24h · {located} geolocated</span>
+  <span><span class="foot-mark">The Tribune</span> · {len(FEEDS)} sources ·
+    {len(news)} stories in 24h · {located} geolocated</span>
   <span>auto-refresh every 15 min · rebuilt every 3 h</span>
 </footer>
 

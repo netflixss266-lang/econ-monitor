@@ -1,12 +1,12 @@
 {
-  "name": "Econ · Politics Monitor",
-  "short_name": "Econ Monitor",
-  "description": "แดชบอร์ดข่าวเศรษฐกิจ-การเมืองและราคาตลาด อัปเดตทุก 3 ชั่วโมง",
+  "name": "The Tribune · Thai & International Business News",
+  "short_name": "Tribune",
+  "description": "Thai Regional & International Business Updates, News and Exchange — ข่าวเศรษฐกิจ การเมือง ธุรกิจ สิ่งแวดล้อม และราคาตลาด อัปเดตทุก 3 ชั่วโมง",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0A0E1A",
-  "theme_color": "#0A0E1A",
+  "background_color": "#EFE8D9",
+  "theme_color": "#EFE8D9",
   "lang": "th",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
