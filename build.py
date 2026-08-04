@@ -14,6 +14,7 @@ import html
 import json
 import time
 import socket
+import calendar
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from difflib import SequenceMatcher
@@ -27,6 +28,7 @@ socket.setdefaulttimeout(15)   # กัน feedparser ค้างถ้าเ�
 TZ = timezone(timedelta(hours=7))          # Asia/Bangkok
 NOW = datetime.now(TZ)
 MAX_AGE_HOURS = 24
+LIVE_WINDOW_MIN = 90   # ข่าวที่ถือว่า "สด ณ ตอนนี้" ต้องมีเวลาเผยแพร่จริงและใหม่กว่านี้
 PER_CATEGORY = 18
 PER_ROW = 14          # จำนวนการ์ดต่อแถว (แยกไทย/ต่างประเทศแล้วจึงลดลงจาก PER_CATEGORY)
 CACHE_FILE = "cache.json"
@@ -731,8 +733,10 @@ def fetch_news():
                 if not title:
                     continue
 
+                # feedparser คืนเวลาเป็น UTC เสมอ ต้องใช้ timegm ไม่ใช่ mktime
+                # (mktime อ่านเป็นเวลาท้องถิ่น ทำให้ข่าวดูเก่ากว่าจริงตาม timezone ของเครื่อง)
                 tp = e.get("published_parsed") or e.get("updated_parsed")
-                dt = (datetime.fromtimestamp(time.mktime(tp), tz=timezone.utc).astimezone(TZ)
+                dt = (datetime.fromtimestamp(calendar.timegm(tp), tz=timezone.utc).astimezone(TZ)
                       if tp else NOW)
                 if (NOW - dt).total_seconds() > MAX_AGE_HOURS * 3600:
                     continue
@@ -749,6 +753,8 @@ def fetch_news():
                     "title": title, "summary": summary, "link": e.get("link", "#"),
                     "source": source, "lang": lang, "cat": cat, "dt": dt,
                     "age": age_label(dt), "image": extract_image(e),
+                    # ฟีดที่ไม่ส่งเวลามาให้ ถูกตีเป็น NOW จึงนับเป็นข่าวสดไม่ได้
+                    "dated": bool(tp),
                     "place": geo[0] if geo else None,
                     "lat": geo[1] if geo else None,
                     "lon": geo[2] if geo else None,
@@ -1112,6 +1118,11 @@ def render(news, markets, charts=None, logos=None):
     for it in news:
         it["scope"] = scope_of(it)
 
+    def is_live(it):
+        """ข่าวสด = มีเวลาเผยแพร่จริงจากฟีด และเพิ่งออกภายในกรอบ LIVE_WINDOW_MIN
+        ฟีดที่ไม่ส่งเวลามาจะถูกตีเป็น NOW ซึ่งทำให้ข่าวเก่าปนมาเป็นข่าวสดได้"""
+        return bool(it.get("dated")) and (NOW - it["dt"]).total_seconds() <= LIVE_WINDOW_MIN * 60
+
     # เรื่องเด่น = ข่าวใหม่สุดที่มีรูป (ถ้าไม่มีรูปเลยใช้ข่าวใหม่สุด)
     top_story = next((i for i in news if i.get("image")), news[0] if news else None)
     primary_scope = top_story["scope"] if top_story else "th"
@@ -1132,6 +1143,7 @@ def render(news, markets, charts=None, logos=None):
             latest = pick(rest, PER_ROW)
         groups[sc] = {
             "top": top, "latest": latest,
+            "live": pick([i for i in rest if is_live(i)], PER_ROW),
             "cats": {c: pick([i for i in pool if i["cat"] == c], PER_ROW) for c in CAT_NAMES},
             "n": len(pool),
         }
@@ -1235,30 +1247,43 @@ def render(news, markets, charts=None, logos=None):
         for sc, _ in SCOPES if (g := groups[sc])["top"]
     )
 
-    def scope_block(sc, label, rows, live=False):
+    def scope_block(sc, label, rows, kind="cat"):
+        """kind: live = ป้าย LIVE เต้น · news = ป้าย NEWS · cat = ชื่อกลุ่มเต็ม"""
         if not rows:
             return ""          # ไม่มีข่าว ก็ไม่ต้องมีหัวข้อ
         flag = "TH" if sc == "th" else "INTL"
-        # แถวข่าวสด ใช้แค่ป้าย LIVE เป็นหัวข้อ (กดพับได้) ไม่ต้องมีชื่อกลุ่มซ้ำ
-        title = (f'<span class="live live-dot">LIVE</span><span class="live-scope">{label}</span>'
-                 if live else f'{label}<span class="scope-flag">{flag}</span>')
-        return f"""<div class="scope-group{' live-group' if live else ''}" data-scope="{sc}">
+        if kind == "live":
+            title = f'<span class="live live-dot">LIVE</span><span class="live-scope">{label}</span>'
+        elif kind == "news":
+            title = f'<span class="tag-news">NEWS</span><span class="live-scope">{label}</span>'
+        else:
+            title = f'{label}<span class="scope-flag">{flag}</span>'
+        cls = " live-group" if kind in ("live", "news") else ""
+        return f"""<div class="scope-group{cls}" data-scope="{sc}">
   <h2 class="scope-title">{title}</h2>
   {rows}
 </div>"""
 
-    # แยกเป็นสองก้อน เพราะแผนที่กับแถบราคามาคั่นระหว่างข่าวล่าสุดกับข่าวรายหมวด
-    latest_blocks = "".join(
-        scope_block(sc, lb, row_section("mixed", groups[sc]["latest"], f"row-{sc}-latest",
-                                        "LATEST", '<span class="live">LIVE</span>'),
-                    live=True)
+    # LIVE = เฉพาะข่าวที่เพิ่งออกจริงๆ ในกรอบ LIVE_WINDOW_MIN นาที
+    live_blocks = "".join(
+        scope_block(sc, lb, row_section("mixed", groups[sc]["live"], f"row-{sc}-live",
+                                        "JUST IN", '<span class="live">NOW</span>'),
+                    kind="live")
         for sc, lb in SCOPES)
 
-    # หน้า LIVE รวมข่าวใหม่สุดของทั้งสองฝั่ง — มีเมนูให้เฉพาะตอนมีข่าวจริง
-    live_all = pick([i for i in news if i is not top_story], 24)
+    # ข่าวล่าสุดแยกออกมาเป็นก้อน NEWS ของตัวเอง (แผนที่/แถบราคาคั่นก่อนข่าวรายหมวด)
+    latest_blocks = "".join(
+        scope_block(sc, lb, row_section("mixed", groups[sc]["latest"], f"row-{sc}-latest",
+                                        "LATEST"),
+                    kind="news")
+        for sc, lb in SCOPES)
+
+    # หน้า LIVE รวมข่าวสดของทั้งสองฝั่ง — มีเมนูให้เฉพาะตอนที่มีข่าวสดจริง
+    live_all = sorted([i for i in news if is_live(i)], key=lambda x: x["dt"], reverse=True)[:30]
     live_tab = ('<button class="tab tab-icon tab-live" type="button" draggable="true" '
                 'data-id="live" onclick="openLive()">'
-                '<span class="live-dot-sm"></span>LIVE</button>') if live_all else ""
+                f'<span class="live-dot-sm"></span>LIVE<span class="tab-n">{len(live_all)}</span>'
+                '</button>') if live_all else ""
     live_page = "".join(
         f"""<a class="cnews-row" href="{html.escape(i['link'])}" target="_blank" rel="noopener">
       {cat_icon(i['cat'], 'ci-sm')}
@@ -1266,6 +1291,22 @@ def render(news, markets, charts=None, logos=None):
         <span class="cnews-m">{html.escape(i['source'])} · {i['age']}
           · {'THAI' if i['scope'] == 'th' else 'GLOBAL'}</span></span></a>"""
         for i in live_all)
+    # ไม่มีข่าวสด ก็ไม่ต้องมีหน้า LIVE ในหน้าเว็บเลย
+    live_modal = f"""<div id="lmodal" class="tmodal" hidden>
+  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="Live news">
+    <div class="cmodal-head">
+      <button type="button" class="backbtn" onclick="closeLive()" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="cmodal-title">
+        <h3><span class="live live-dot">LIVE</span> NEWSFEED</h3>
+        <div class="cmodal-price">{len(live_all)} stories in the last {LIVE_WINDOW_MIN} minutes</div>
+      </div>
+    </div>
+    <div class="cnews-list live-list">{live_page}</div>
+  </div>
+</div>""" if live_all else ""
+
     category_blocks = "".join(
         scope_block(sc, lb, "".join(row_section(c, groups[sc]["cats"][c], f"row-{sc}-{c}")
                                     for c in CAT_NAMES))
@@ -1458,10 +1499,23 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cmodal-list .cnone{{padding:16px 14px;color:var(--dim);font-size:.76rem}}
 .cgroup{{padding:9px 14px 5px;font-family:'IBM Plex Mono',monospace;font-size:.62rem;
   letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}}
-.citem{{display:flex;align-items:center;gap:8px;width:100%;padding:7px 14px;
+.citem{{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px 7px 14px;
   cursor:pointer;background:none;border:0;color:var(--mute);font-family:inherit;
   font-size:.79rem;text-align:left}}
-.citem .cname{{flex:1;min-width:0}}
+.citem .cname{{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+/* แถบเลือกว่าจะโชว์เฉพาะตัวโปรด หรือทั้งตลาด */
+.cfav-bar{{display:flex;gap:4px;padding:9px 10px 0}}
+.cfav-tab{{flex:1;padding:6px 8px;border-radius:7px;cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.06em;
+  color:var(--mute);background:transparent;border:1px solid var(--line)}}
+.cfav-tab:hover{{color:var(--ink)}}
+.cfav-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
+.cpct{{font-family:'IBM Plex Mono',monospace;font-size:.7rem}}
+.cfav{{flex:none;width:20px;text-align:center;font-size:.82rem;line-height:1;
+  color:#2E3A4E;cursor:pointer}}
+.cfav:hover{{color:var(--brass)}}
+.cfav.on{{color:var(--brass)}}
+.cnone-hint{{padding:16px 14px;color:var(--dim);font-size:.72rem;line-height:1.6}}
 /* โลโก้สินทรัพย์ — ถ้าไม่มีรูปจะเหลืออักษรย่อที่วางไว้ข้างล่าง */
 .clogo{{position:relative;flex:none;display:grid;place-items:center;
   width:20px;height:20px;border-radius:5px;overflow:hidden;
@@ -1471,7 +1525,6 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   background:#fff}}
 .citem:hover{{background:#151C2C;color:var(--ink)}}
 .citem.on{{background:#182133;color:var(--ink);box-shadow:inset 2px 0 0 var(--brass)}}
-.citem span:last-child{{font-family:'IBM Plex Mono',monospace;font-size:.7rem}}
 .cmodal-chart{{flex:1;min-width:0;display:flex;flex-direction:column;padding:10px 14px 8px}}
 #cchart{{flex:1;min-height:0}}
 /* ปุ่มช่วงเวลา + ชนิดกราฟ อยู่มุมขวาล่างของกราฟ */
@@ -1522,6 +1575,13 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cnews-head{{padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel2);
   font-size:.72rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
   color:var(--mute)}}
+/* หัวข้อ METRICS พับเก็บได้ */
+.cfold{{display:flex;align-items:center;gap:9px;width:100%;cursor:pointer;text-align:left;
+  font-family:inherit;border:0;border-bottom:1px solid var(--line)}}
+.cfold:hover{{color:var(--ink)}}
+.cfold .scope-caret{{transition:transform .2s}}
+.calc-folded .cfold .scope-caret{{transform:rotate(-90deg)}}
+.calc-folded .calc{{display:none}}
 .cnews-list{{flex:1;overflow-y:auto}}
 .cnews-row{{display:flex;gap:9px;align-items:flex-start;padding:9px 13px;
   border-bottom:1px solid var(--line)}}
@@ -1735,28 +1795,58 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .no-intro #intro{{display:none}}
 .no-intro body{{animation:none}}
 
-/* ── เมนูพับเก็บได้ ─────────────────────────────────────── */
-.navbar{{margin-bottom:18px;border-bottom:1px solid var(--line);padding-bottom:2px}}
-.burger{{display:flex;flex-direction:column;justify-content:center;gap:4px;
-  width:42px;height:36px;padding:0 11px;margin-bottom:6px;cursor:pointer;
-  background:var(--panel);border:1px solid var(--line);border-radius:9px}}
-.burger span{{display:block;height:2px;border-radius:2px;background:var(--mute);
+/* ── เมนูหลัก: ปุ่ม 3 ขีด เปิดแถบยาวทางซ้ายมือ ───────────── */
+.navbar{{display:flex;align-items:center;gap:13px;margin-bottom:18px;
+  border-bottom:1px solid var(--line);padding-bottom:10px}}
+.burger{{display:inline-flex;align-items:center;gap:10px;height:38px;padding:0 14px;
+  cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  transition:border-color .16s,background .16s}}
+.burger:hover{{border-color:var(--brass);background:#1A2334}}
+.burger-bars{{display:flex;flex-direction:column;justify-content:center;gap:4px;width:18px}}
+.burger-bars span{{display:block;height:2px;border-radius:2px;background:var(--mute);
   transition:transform .2s,opacity .2s}}
-.burger:hover span{{background:var(--ink)}}
-.burger[aria-expanded="true"] span:nth-child(1){{transform:translateY(6px) rotate(45deg)}}
-.burger[aria-expanded="true"] span:nth-child(2){{opacity:0}}
-.burger[aria-expanded="true"] span:nth-child(3){{transform:translateY(-6px) rotate(-45deg)}}
-.tabs{{display:flex;gap:6px;flex-wrap:wrap}}
-.tab{{position:relative;font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;
-  color:var(--mute);background:none;border:0;padding:9px 16px 11px;border-radius:8px 8px 0 0;
+.burger:hover .burger-bars span{{background:var(--ink)}}
+.burger-txt{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.14em;
+  font-weight:600;color:var(--mute)}}
+.burger:hover .burger-txt{{color:var(--ink)}}
+.burger[aria-expanded="true"] .burger-bars span:nth-child(1){{transform:translateY(6px) rotate(45deg)}}
+.burger[aria-expanded="true"] .burger-bars span:nth-child(2){{opacity:0}}
+.burger[aria-expanded="true"] .burger-bars span:nth-child(3){{transform:translateY(-6px) rotate(-45deg)}}
+.navbar-now{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.12em;
+  color:var(--dim)}}
+.navbar-now::before{{content:"› "}}
+
+.navdim{{position:fixed;inset:0;z-index:58;background:rgba(4,7,14,.6);
+  opacity:0;visibility:hidden;transition:opacity .2s,visibility .2s}}
+.navdim.on{{opacity:1;visibility:visible}}
+.navpanel{{position:fixed;left:0;top:0;bottom:0;z-index:59;width:252px;max-width:84vw;
+  display:flex;flex-direction:column;background:var(--panel);
+  border-right:1px solid var(--line);box-shadow:18px 0 46px rgba(0,0,0,.45);
+  transform:translateX(-100%);visibility:hidden;
+  transition:transform .22s cubic-bezier(.4,0,.2,1),visibility .22s}}
+.navpanel.open{{transform:none;visibility:visible}}
+.nav-head{{display:flex;align-items:center;justify-content:space-between;
+  padding:15px 14px 13px 18px;border-bottom:1px solid var(--line);background:var(--panel2);
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.16em;
+  font-weight:600;color:var(--dim)}}
+.nav-x{{width:28px;height:28px;font-size:1.15rem;line-height:1;cursor:pointer;
+  color:var(--mute);background:none;border:1px solid var(--line);border-radius:7px}}
+.nav-x:hover{{color:var(--ink);border-color:var(--brass)}}
+.nav-foot{{padding:11px 18px;border-top:1px solid var(--line);
+  font-family:'IBM Plex Mono',monospace;font-size:.58rem;letter-spacing:.1em;color:var(--dim)}}
+.tabs{{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;padding:9px}}
+.tab{{position:relative;display:flex;align-items:center;width:100%;
+  font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;text-align:left;
+  color:var(--mute);background:none;border:0;padding:11px 13px;border-radius:8px;
   transition:color .16s,background .16s}}
+.tab .tab-n{{margin-left:auto}}
 .tab:hover{{color:var(--ink);background:rgba(255,255,255,.05)}}
-.tab.active{{color:var(--ink)}}
-.tab.active::after{{content:"";position:absolute;left:12px;right:12px;bottom:-3px;height:3px;
-  border-radius:3px 3px 0 0;background:linear-gradient(90deg,var(--econ),var(--poli))}}
+.tab.active{{color:var(--ink);background:#182133}}
+.tab.active::after{{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;
+  border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--econ),var(--poli))}}
 .tab[draggable]{{cursor:grab}}
 .tab.dragging{{opacity:.4;cursor:grabbing}}
-.tab-icon{{display:inline-flex;align-items:center;gap:7px;color:var(--brass)}}
+.tab-icon{{display:flex;align-items:center;gap:9px;color:var(--brass)}}
 .tab-icon svg{{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
   stroke-linecap:round;stroke-linejoin:round}}
 .tab-icon:hover{{color:var(--cream)}}
@@ -1770,6 +1860,9 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .scope-group.folded .row{{display:none}}
 .live-scope{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.1em;
   color:var(--mute);font-weight:500}}
+.tag-news{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.1em;
+  font-weight:700;color:var(--cream);background:#1D2739;border:1px solid #2C3548;
+  border-radius:4px;padding:3px 9px}}
 .live-group .scope-title{{font-size:.9rem}}
 .tab-live{{color:var(--down)}}
 .live-dot-sm{{width:7px;height:7px;border-radius:50%;background:var(--down);
@@ -1836,20 +1929,7 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
   </div>
 </header>
 
-<div id="lmodal" class="tmodal" hidden>
-  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="Live news">
-    <div class="cmodal-head">
-      <button type="button" class="backbtn" onclick="closeLive()" aria-label="Back">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-      </button>
-      <div class="cmodal-title">
-        <h3><span class="live live-dot">LIVE</span> NEWSFEED</h3>
-        <div class="cmodal-price">{len(live_all)} newest stories · Thai and international</div>
-      </div>
-    </div>
-    <div class="cnews-list live-list">{live_page}</div>
-  </div>
-</div>
+{live_modal}
 
 <div id="mmodal" class="tmodal" hidden>
   <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="News map">
@@ -1897,6 +1977,12 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
     </div>
     <div class="cmodal-body">
       <div class="cmodal-pick">
+        <div class="cfav-bar">
+          <button class="cfav-tab on" type="button" data-mode="fav"
+                  onclick="setAssetMode('fav')">★ FAVORITES</button>
+          <button class="cfav-tab" type="button" data-mode="all"
+                  onclick="setAssetMode('all')">ALL</button>
+        </div>
         <input class="search csearch" id="csearch" type="search" autocomplete="off"
                placeholder="Search symbol…" oninput="filterAssets(this.value)">
         <div class="cmodal-list" id="cmodal-list"></div>
@@ -1914,8 +2000,10 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
           </div>
         </div>
       </div>
-      <div class="cmodal-side">
-        <div class="cnews-head">METRICS</div>
+      <div class="cmodal-side" id="cmodal-side">
+        <button class="cnews-head cfold" type="button" onclick="toggleCalc()"
+                aria-expanded="true" aria-controls="ccalc">
+          <svg class="scope-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>METRICS</button>
         <div class="calc" id="ccalc"></div>
         <div class="cnews-head">RELATED NEWS</div>
         <div class="cnews-list" id="cnews-list"></div>
@@ -1926,10 +2014,20 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
 
 <div class="navbar">
   <button class="burger" type="button" onclick="toggleNav()" aria-expanded="false"
-          aria-controls="tabs" aria-label="Menu">
-    <span></span><span></span><span></span>
+          aria-controls="navpanel" aria-label="Menu">
+    <span class="burger-bars"><span></span><span></span><span></span></span>
+    <span class="burger-txt">MENU</span>
   </button>
-  <nav class="tabs" id="tabs" role="tablist" title="Drag to reorder" hidden>
+  <span class="navbar-now" id="navbar-now">HOME</span>
+</div>
+
+<div class="navdim" id="navdim" onclick="toggleNav(false)"></div>
+<aside class="navpanel" id="navpanel" aria-label="Menu">
+  <div class="nav-head">
+    <span>MENU</span>
+    <button class="nav-x" type="button" onclick="toggleNav(false)" aria-label="Close">×</button>
+  </div>
+  <nav class="tabs" id="tabs" role="tablist" title="Drag to reorder">
     <button class="tab active" type="button" role="tab" draggable="true" data-id="all" data-scope="all" onclick="setScope('all')">HOME<span class="tab-n">{len(news)}</span></button>
     {''.join(f'''<button class="tab" type="button" role="tab" draggable="true" data-id="{sc}" data-scope="{sc}" onclick="setScope('{sc}')">{lb}<span class="tab-n">{groups[sc]["n"]}</span></button>''' for sc, lb in SCOPES)}
     <button class="tab tab-icon" type="button" draggable="true" data-id="chart" onclick="openCharts()">
@@ -1938,9 +2036,12 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg>NEWS MAP</button>
     {live_tab}
   </nav>
-</div>
+  <div class="nav-foot">drag to reorder</div>
+</aside>
 
 {heroes}
+
+{live_blocks}
 
 {latest_blocks}
 
@@ -2123,14 +2224,44 @@ function renderCalc(){{
   }});
 }}
 
-// รายชื่อสินทรัพย์ทั้งหมด เรียงตัวที่อยู่ในแถบราคาก่อน แล้วค่อยเรียง % มากไปน้อย
+// ── รายชื่อสินทรัพย์ + รายการโปรด ────────────────────────
+// ค่าเริ่มต้นของรายการโปรด = ตัวที่มีราคาสดในแถบราคา จะได้ไม่ขึ้นทั้งตลาดตั้งแต่แรก
+let chFavs = new Set(Object.keys(TNEWS).filter(l => CHARTS[l]));
+let chMode = 'fav';
+try {{
+  const saved = JSON.parse(localStorage.getItem('chFavs') || 'null');
+  if (Array.isArray(saved)) chFavs = new Set(saved);
+  chMode = localStorage.getItem('chMode') === 'all' ? 'all' : 'fav';
+}} catch(e) {{}}
+const saveFavs = () => {{
+  try {{ localStorage.setItem('chFavs', JSON.stringify([...chFavs])); }} catch(e) {{}}
+}};
+
+function toggleFav(ev, label){{
+  ev.stopPropagation();
+  chFavs.has(label) ? chFavs.delete(label) : chFavs.add(label);
+  saveFavs();
+  renderAssetList(document.getElementById('csearch').value);
+}}
+
+function setAssetMode(m){{
+  chMode = m;
+  try {{ localStorage.setItem('chMode', m); }} catch(e) {{}}
+  document.querySelectorAll('.cfav-tab').forEach(b =>
+    b.classList.toggle('on', b.dataset.mode === m));
+  renderAssetList(document.getElementById('csearch').value);
+}}
+
+// เรียงตัวที่อยู่ในแถบราคาก่อน แล้วค่อยเรียง % มากไปน้อย
 function renderAssetList(q){{
   const term = (q || '').trim().toLowerCase();
   const groups = {{th: 'THAILAND', intl: 'GLOBAL'}};
-  let html = '';
+  let html = '', shown = 0;
   for (const [g, title] of Object.entries(groups)) {{
     const rows = Object.entries(CHARTS)
-      .filter(([l, c]) => (c.g || 'intl') === g && (!term || l.toLowerCase().includes(term)))
+      .filter(([l, c]) => (c.g || 'intl') === g
+        && (chMode === 'all' || chFavs.has(l))
+        && (!term || l.toLowerCase().includes(term)))
       .sort((a, b) => {{
         const A = TNEWS[a[0]], B = TNEWS[b[0]];
         if (!!A !== !!B) return A ? -1 : 1;             // ตัวที่มีราคาสดขึ้นก่อน
@@ -2138,32 +2269,50 @@ function renderAssetList(q){{
         return a[0].localeCompare(b[0]);
       }});
     if (!rows.length) continue;
+    shown += rows.length;
     html += `<div class="cgroup">${{title}} · ${{rows.length}}</div>` + rows.map(([l]) => {{
-      const d = TNEWS[l];
-      return `<button class="citem" type="button" data-label="${{esc(l)}}" onclick="pickChart('${{esc(l)}}')">
+      const d = TNEWS[l], f = chFavs.has(l);
+      return `<div class="citem" role="button" tabindex="0" data-label="${{esc(l)}}"
+        onclick="pickChart('${{esc(l)}}')" onkeydown="if(event.key==='Enter')pickChart('${{esc(l)}}')">
         ${{assetLogo(l)}}<span class="cname">${{esc(l)}}</span>
-        <span class="${{d ? d.dir : ''}}">${{d ? d.pct : ''}}</span></button>`;
+        <span class="cpct ${{d ? d.dir : ''}}">${{d ? d.pct : ''}}</span>
+        <span class="cfav${{f ? ' on' : ''}}" role="button" tabindex="-1"
+          title="${{f ? 'Remove from favorites' : 'Add to favorites'}}"
+          onclick="toggleFav(event,'${{esc(l)}}')">${{f ? '★' : '☆'}}</span></div>`;
     }}).join('');
   }}
-  document.getElementById('cmodal-list').innerHTML =
-    html || '<p class="cnone">No symbol matches</p>';
+  if (!shown) {{
+    html = term ? '<p class="cnone">No symbol matches</p>'
+      : (chMode === 'fav'
+        ? '<p class="cnone-hint">No favorites yet.<br>Open <b>ALL</b> and tap ☆ next to a symbol to pin it here.</p>'
+        : '<p class="cnone">No symbols</p>');
+  }}
+  document.getElementById('cmodal-list').innerHTML = html;
   document.querySelectorAll('.citem').forEach(b =>
     b.classList.toggle('on', b.dataset.label === chCur));
 }}
 
 function filterAssets(q){{ renderAssetList(q); }}
 
+function toggleCalc(){{
+  const side = document.getElementById('cmodal-side');
+  const folded = side.classList.toggle('calc-folded');
+  side.querySelector('.cfold').setAttribute('aria-expanded', folded ? 'false' : 'true');
+  try {{ localStorage.setItem('calcFold', folded ? '1' : '0'); }} catch(e) {{}}
+}}
+try {{ if (localStorage.getItem('calcFold') === '1') toggleCalc(); }} catch(e) {{}}
+
 function openCharts(){{
   const modal = document.getElementById('cmodal');
   if (!Object.keys(CHARTS).length) return;
   if (!document.getElementById('cmodal-list').childElementCount) {{
-    renderAssetList('');
+    setAssetMode(chMode);           // เปิดมาที่โหมดเดิมที่ผู้ใช้เลือกไว้
     document.getElementById('cmodal-tf').innerHTML = CH_TF.map(t =>
       `<button class="tfbtn" type="button" data-tf="${{t}}" onclick="pickTf('${{t}}')">${{t}}</button>`).join('');
   }}
   modal.hidden = false;
   document.body.style.overflow = 'hidden';
-  pickChart(chCur || Object.keys(CHARTS)[0]);
+  pickChart(chCur || [...chFavs].find(l => CHARTS[l]) || Object.keys(CHARTS)[0]);
 }}
 
 function closeCharts(){{
@@ -2343,13 +2492,20 @@ document.getElementById('cmodal').addEventListener('click', ev => {{
   if (ev.target.id === 'cmodal') closeCharts();
 }});
 addEventListener('keydown', ev => {{
-  if (ev.key === 'Escape' && !document.getElementById('cmodal').hidden) closeCharts();
-  if (ev.key === 'Escape' && !document.getElementById('lmodal')?.hidden) closeLive();
+  if (ev.key !== 'Escape') return;
+  const lm = document.getElementById('lmodal');
+  if (!document.getElementById('cmodal').hidden) closeCharts();
+  if (lm && !lm.hidden) closeLive();
+  if (document.getElementById('navpanel').classList.contains('open')) toggleNav(false);
 }});
 
 function setScope(s){{
-  document.querySelectorAll('.tab').forEach(t =>
-    t.classList.toggle('active', t.dataset.scope === s));
+  document.querySelectorAll('.tab').forEach(t => {{
+    const on = t.dataset.scope === s;
+    t.classList.toggle('active', on);
+    if (on) document.getElementById('navbar-now').textContent =
+      t.textContent.replace(/\\d+$/, '').trim();
+  }});
   document.querySelectorAll('.scope-group').forEach(g =>
     g.hidden = !(s === 'all' || g.dataset.scope === s));
   // แท็บ "ทั้งหมด" โชว์เรื่องเด่นอันเดียว (ข่าวใหม่สุด) ไม่ใช่ทั้งสองฝั่ง
@@ -2358,23 +2514,34 @@ function setScope(s){{
   try {{ sessionStorage.setItem('scope', s); }} catch(e) {{}}
 }}
 
-// ── เมนูพับเก็บ / แผนที่ / พับหัวข้อกลุ่มข่าว ─────────────
+// ── เมนูแถบซ้าย / แผนที่ / พับหัวข้อกลุ่มข่าว ─────────────
 function toggleNav(force){{
-  const nav = document.getElementById('tabs');
+  const p = document.getElementById('navpanel');
+  const dim = document.getElementById('navdim');
   const b = document.querySelector('.burger');
-  const open = force !== undefined ? force : nav.hidden;
-  nav.hidden = !open;
+  const open = force !== undefined ? force : !p.classList.contains('open');
+  p.classList.toggle('open', open);
+  dim.classList.toggle('on', open);
   b.setAttribute('aria-expanded', open ? 'true' : 'false');
-  try {{ localStorage.setItem('navOpen', open ? '1' : '0'); }} catch(e) {{}}
+  // อย่าคืน scroll ให้หน้าหลัก ถ้ายังมีหน้าต่างเต็มจอเปิดอยู่
+  if (open) document.body.style.overflow = 'hidden';
+  else if (!document.querySelector('.tmodal:not([hidden])')) document.body.style.overflow = '';
 }}
-try {{ if (localStorage.getItem('navOpen') === '1') toggleNav(true); }} catch(e) {{}}
+// เลือกเมนูแล้วปิดแถบให้เอง (ทำงานหลัง onclick ของปุ่มเสมอ)
+document.getElementById('tabs').addEventListener('click', ev => {{
+  if (ev.target.closest('.tab')) toggleNav(false);
+}});
 
 function openLive(){{
-  document.getElementById('lmodal').hidden = false;
+  const m = document.getElementById('lmodal');
+  if (!m) return;                     // รอบไหนไม่มีข่าวสด ก็ไม่มีหน้านี้
+  m.hidden = false;
   document.body.style.overflow = 'hidden';
 }}
 function closeLive(){{
-  document.getElementById('lmodal').hidden = true;
+  const m = document.getElementById('lmodal');
+  if (!m) return;
+  m.hidden = true;
   document.body.style.overflow = '';
 }}
 document.getElementById('lmodal')?.addEventListener('click', ev => {{
@@ -2448,7 +2615,7 @@ document.querySelectorAll('.scope-group').forEach(g => {{
     const over = ev.target.closest('.tab');
     if (!over || !src || over === src) return;
     const r = over.getBoundingClientRect();
-    const after = ev.clientX > r.left + r.width / 2;
+    const after = ev.clientY > r.top + r.height / 2;   // เมนูเรียงแนวตั้งแล้ว
     bar.insertBefore(src, after ? over.nextSibling : over);
   }});
   bar.addEventListener('drop', ev => ev.preventDefault());
