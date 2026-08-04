@@ -14,6 +14,7 @@ import html
 import json
 import time
 import socket
+import bisect
 import calendar
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
@@ -378,7 +379,39 @@ def fetch_candles(sym, rng, interval):
     return out
 
 
-def build_charts():
+GOLD_THB_NOTE = ("Derived from XAU/USD × USD/THB, scaled to the latest "
+                 "Gold Traders Association price — the association publishes "
+                 "today's price only, not history")
+
+
+def synth_thai_gold(frames, spot=None):
+    """แท่งเทียนทองไทย (บาท/บาททอง) — สมาคมค้าทองคำมีแต่ราคาวันนี้ ไม่มีย้อนหลัง
+    จึงคำนวณจากทองคำโลก × อัตราแลกเปลี่ยน แล้วปรับสเกลให้ปลายกราฟตรงราคาสมาคมฯ
+    """
+    gold, fx = frames.get("GOLD USD"), frames.get("USD/THB")
+    if not gold or not fx:
+        return None
+    factor = BAHT_GRAM * GOLD_965 / OZ_GRAM
+    out = {}
+    for tf, rows in gold.items():
+        frows = fx.get(tf)
+        if not frows or not rows:
+            continue
+        fts = [r[0] for r in frows]
+        fcl = [r[4] for r in frows]
+        conv = []
+        for t, o, h, lo, c in rows:
+            # ค่าเงินใช้ค่าล่าสุดที่ไม่เกินเวลาแท่งนั้น (ตลาดทองกับตลาดเงินปิดคนละเวลา)
+            rate = fcl[max(bisect.bisect_right(fts, t) - 1, 0)]
+            k = rate * factor
+            conv.append([t, o * k, h * k, lo * k, c * k])
+        k = (spot / conv[-1][4]) if spot and conv[-1][4] else 1.0
+        out[tf] = [[t, round(o * k, 2), round(h * k, 2), round(lo * k, 2), round(c * k, 2)]
+                   for t, o, h, lo, c in conv]
+    return out or None
+
+
+def build_charts(markets=None):
     """เขียนไฟล์แท่งเทียนแยกรายสินทรัพย์ไว้ให้หน้าเว็บโหลดตอนเปิดกราฟ
 
     แยกเป็นไฟล์ย่อยแทนที่จะฝังใน index.html เพราะข้อมูลรวมกันหลายสิบเมกะไบต์
@@ -401,13 +434,24 @@ def build_charts():
             if candles:
                 frames.setdefault(label, {})[tf] = candles
 
+    # ทองไทยไม่มีให้ดึงย้อนหลัง ต้องประกอบจากทองโลก × ค่าเงิน
+    spot = next((m.get("raw_price") for m in (markets or [])
+                 if m["label"] == "GOLD THB"), None)
+    notes = {}
+    gold_thb = synth_thai_gold(frames, spot)
+    if gold_thb:
+        frames["GOLD THB"] = gold_thb
+        notes["GOLD THB"] = GOLD_THB_NOTE
+        uni = uni + [(THAI_GOLD, "GOLD THB", "th")]
+
     index = {}
     for sym, label, group in uni:
         tfs = frames.get(label)
         if not tfs:
             continue
         slug = chart_slug(label)
-        save_json(f"{CHART_DIR}/{slug}.json", {"label": label, "tf": tfs})
+        save_json(f"{CHART_DIR}/{slug}.json",
+                  {"label": label, "tf": tfs, "note": notes.get(label, "")})
         index[label] = {"s": slug, "g": group}
     total = sum(len(c) for tfs in frames.values() for c in tfs.values())
     print(f"  ✓ กราฟ {len(index)}/{len(uni)} สินทรัพย์ · {total:,} แท่งเทียน")
@@ -771,6 +815,80 @@ def fetch_news():
     return unique
 
 
+# ── ช่องข่าวที่ถ่ายทอดสด (อ่านสถานะสดจากหน้า /live ของ YouTube) ──
+LIVE_CHANNELS = [
+    # (ชื่อช่อง, handle, แถว)
+    ("Thai PBS",           "ThaiPBS",          "th"),
+    ("PPTV HD 36",         "pptvhd36",         "th"),
+    ("TNN Online",         "tnnonline",        "th"),
+    ("Thairath",           "thairath",         "th"),
+    ("Amarin TV",          "amarintvhd",       "th"),
+    ("Matichon TV",        "MatichonTV",       "th"),
+    ("workpoint news",     "workpointnews",    "th"),
+    ("Voice TV",           "VoiceTVOfficial",  "th"),
+    ("Ch3 Plus",           "ch3plus",          "th"),
+    ("Al Jazeera English", "aljazeeraenglish", "intl"),
+    ("Sky News",           "SkyNews",          "intl"),
+    ("DW News",            "dwnews",           "intl"),
+    ("France 24",          "France24_en",      "intl"),
+    ("ABC News",           "ABCNews",          "intl"),
+    ("NBC News",           "NBCNews",          "intl"),
+    ("CBS News",           "cbsnews",          "intl"),
+    ("CNA",                "channelnewsasia",  "intl"),
+    ("Bloomberg TV",       "markets",          "intl"),
+    ("CNBC",               "CNBC",             "intl"),
+    ("Reuters",            "Reuters",          "intl"),
+    ("NHK WORLD",          "NHKWORLDJAPAN",    "intl"),
+    ("euronews",           "euronews",         "intl"),
+]
+
+_LIVE_BRACKET = re.compile(r"^\s*\[[^\]]{0,30}live[^\]]{0,20}\]\s*", re.I)
+_LIVE_PREFIX = re.compile(r"^[\s​🔴⭕️▶️•\-|]*(?:live|สด)?[\s:：|\-–]*", re.I)
+
+
+def fetch_live_streams():
+    """ช่องข่าวที่กำลังออกอากาศสดอยู่ ณ ตอนที่ build
+
+    ดูจากหน้า /live ของแต่ละช่อง — ถ้าไม่ได้ไลฟ์อยู่ YouTube จะส่งไลฟ์ครั้งก่อนมาแทน
+    จึงต้องเช็ก isLive ไม่ใช่แค่ว่ามีวิดีโอ
+    """
+    def one(ch):
+        name, handle, group = ch
+        try:
+            r = requests.get(f"https://www.youtube.com/@{handle}/live",
+                             headers=BROWSER_UA, timeout=15)
+            if r.status_code != 200 or '"isLive":true' not in r.text:
+                return None
+            vid = re.search(r'"videoId":"([\w-]{11})"', r.text)
+            if not vid:
+                return None
+            og = re.search(r'<meta property="og:title" content="([^"]{0,140})"', r.text)
+            title = html.unescape(og.group(1)).strip() if og else ""
+            # ตัดคำนำหน้าซ้ำๆ ทีละชั้น เช่น "🔴[Live] ..." / "[CNA 24/7 LIVE] ..."
+            for _ in range(2):
+                title = _LIVE_BRACKET.sub("", _LIVE_PREFIX.sub("", title))
+            title = title.strip() or name
+            vid = vid.group(1)
+            return {"name": name, "group": group, "title": title,
+                    "url": f"https://www.youtube.com/watch?v={vid}",
+                    "thumb": f"https://i.ytimg.com/vi/{vid}/hq720.jpg",
+                    "thumb_alt": f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"}
+        except Exception:
+            return None
+
+    out = []
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            out = [s for s in pool.map(one, LIVE_CHANNELS) if s]
+    except Exception as ex:
+        print(f"  ! ดึงรายการถ่ายทอดสดไม่ได้: {ex}")
+    # ไทยขึ้นก่อน แล้วเรียงตามลำดับที่ตั้งไว้
+    order = {n: i for i, (n, _, _) in enumerate(LIVE_CHANNELS)}
+    out.sort(key=lambda s: (s["group"] != "th", order.get(s["name"], 99)))
+    print(f"  ✓ ถ่ายทอดสด {len(out)}/{len(LIVE_CHANNELS)} ช่อง")
+    return out
+
+
 CAT_NAMES = [c for c, _ in CATEGORIES]
 
 CAT_LABELS = {
@@ -1105,7 +1223,7 @@ if (window.ResizeObserver) new ResizeObserver(() => redraw(120)).observe(svg.nod
 """
 
 
-def render(news, markets, charts=None, logos=None):
+def render(news, markets, charts=None, logos=None, streams=None):
     def pick(items, n):
         """หน้าตาเน้นรูป → เลือกข่าวที่มีรูปก่อน แล้วค่อยเรียงตามเวลาเหมือนเดิม
         (ทุกข่าวอยู่ในกรอบ 24 ชม.อยู่แล้ว ลำดับจึงไม่เพี้ยนมาก)"""
@@ -1264,8 +1382,42 @@ def render(news, markets, charts=None, logos=None):
   {rows}
 </div>"""
 
+    # ── ช่องที่กำลังถ่ายทอดสด — การ์ดใหญ่แบบหน้าแรกสตรีมมิ่ง ──
+    streams = streams or []
+
+    def live_card(s):
+        return f"""<a class="lcard" href="{html.escape(s['url'])}" target="_blank" rel="noopener">
+      <span class="lcard-thumb">
+        <img src="{html.escape(s['thumb'])}" loading="lazy" alt=""
+             onerror="this.onerror=null;this.src='{html.escape(s['thumb_alt'])}'">
+        <span class="lcard-badge"><i></i>LIVE</span>
+        <span class="lcard-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg></span>
+      </span>
+      <span class="lcard-ch">{html.escape(s['name'])}<span class="lcard-flag">{'TH' if s['group'] == 'th' else 'INTL'}</span></span>
+      <span class="lcard-t">{html.escape(s['title'])}</span>
+    </a>"""
+
+    def live_tv_row(rid):
+        if not streams:
+            return ""
+        return f"""<section class="row">
+  <div class="row-head">
+    <h2>ON AIR<span class="row-n">{len(streams)}</span></h2>
+    <div class="row-tools">
+      <button class="row-nav" type="button" onclick="scrollRow('{rid}',-1)" aria-label="Scroll left">‹</button>
+      <button class="row-nav" type="button" onclick="scrollRow('{rid}',1)" aria-label="Scroll right">›</button>
+    </div>
+  </div>
+  <div class="row-track lrow" id="{rid}">{''.join(live_card(s) for s in streams)}</div>
+</section>"""
+
+    live_tv_block = (f"""<div class="scope-group live-group" data-scope="all">
+  <h2 class="scope-title"><span class="live live-dot">LIVE</span><span class="live-scope">BROADCASTS</span></h2>
+  {live_tv_row('row-live-tv')}
+</div>""" if streams else "")
+
     # LIVE = เฉพาะข่าวที่เพิ่งออกจริงๆ ในกรอบ LIVE_WINDOW_MIN นาที
-    live_blocks = "".join(
+    live_blocks = live_tv_block + "".join(
         scope_block(sc, lb, row_section("mixed", groups[sc]["live"], f"row-{sc}-live",
                                         "JUST IN", '<span class="live">NOW</span>'),
                     kind="live")
@@ -1282,8 +1434,9 @@ def render(news, markets, charts=None, logos=None):
     live_all = sorted([i for i in news if is_live(i)], key=lambda x: x["dt"], reverse=True)[:30]
     live_tab = ('<button class="tab tab-icon tab-live" type="button" draggable="true" '
                 'data-id="live" onclick="openLive()">'
-                f'<span class="live-dot-sm"></span>LIVE<span class="tab-n">{len(live_all)}</span>'
-                '</button>') if live_all else ""
+                f'<span class="live-dot-sm"></span>LIVE'
+                f'<span class="tab-n">{len(live_all) + len(streams)}</span>'
+                '</button>') if (live_all or streams) else ""
     live_page = "".join(
         f"""<a class="cnews-row" href="{html.escape(i['link'])}" target="_blank" rel="noopener">
       {cat_icon(i['cat'], 'ci-sm')}
@@ -1300,12 +1453,16 @@ def render(news, markets, charts=None, logos=None):
       </button>
       <div class="cmodal-title">
         <h3><span class="live live-dot">LIVE</span> NEWSFEED</h3>
-        <div class="cmodal-price">{len(live_all)} stories in the last {LIVE_WINDOW_MIN} minutes</div>
+        <div class="cmodal-price">{len(streams)} channels on air ·
+          {len(live_all)} stories in the last {LIVE_WINDOW_MIN} minutes</div>
       </div>
     </div>
-    <div class="cnews-list live-list">{live_page}</div>
+    <div class="live-page">
+      {live_tv_row('row-live-tv-modal')}
+      {f'<div class="cnews-head">LATEST WIRE</div><div class="cnews-list live-list">{live_page}</div>' if live_all else ''}
+    </div>
   </div>
-</div>""" if live_all else ""
+</div>""" if (live_all or streams) else ""
 
     category_blocks = "".join(
         scope_block(sc, lb, "".join(row_section(c, groups[sc]["cats"][c], f"row-{sc}-{c}")
@@ -1543,7 +1700,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .creadout{{min-height:19px;font-family:'IBM Plex Mono',monospace;font-size:.7rem;
   color:var(--mute);display:flex;gap:12px;flex-wrap:wrap}}
 .creadout b{{color:var(--ink);font-weight:500}}
-.cmodal-note{{font-size:.65rem;color:var(--dim);margin-top:3px}}
+.cmodal-note{{font-size:.65rem;line-height:1.5;color:var(--dim);margin-top:3px;max-width:560px}}
 .cempty{{display:grid;place-items:center;height:100%;color:var(--mute);font-size:.85rem}}
 
 .ctype{{flex:none}}
@@ -1738,6 +1895,37 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   scroll-snap-type:x proximity;padding:24px 4px 28px;margin:-24px -4px -28px}}
 .row-track::-webkit-scrollbar{{height:0}}
 .row-empty{{color:var(--mute);font-size:.82rem;padding:22px 4px}}
+
+/* ── การ์ดช่องที่ถ่ายทอดสด ─────────────────────────────── */
+.lrow{{gap:14px}}
+.lcard{{display:flex;flex-direction:column;gap:8px;flex:0 0 306px;scroll-snap-align:start;
+  transition:transform .28s cubic-bezier(.2,.7,.3,1)}}
+.lcard:hover{{transform:scale(1.055);z-index:3}}
+.lcard-thumb{{position:relative;display:block;aspect-ratio:16/9;overflow:hidden;
+  border-radius:10px;background:#0C1220;border:1px solid var(--line);
+  transition:border-color .28s,box-shadow .28s}}
+.lcard:hover .lcard-thumb{{border-color:var(--down);box-shadow:0 18px 42px rgba(0,0,0,.62)}}
+.lcard-thumb img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
+.lcard-badge{{position:absolute;left:9px;top:9px;z-index:2;display:inline-flex;align-items:center;
+  gap:5px;padding:3px 8px;border-radius:5px;background:var(--down);color:#fff;
+  font-family:'IBM Plex Mono',monospace;font-size:.58rem;font-weight:700;letter-spacing:.1em}}
+.lcard-badge i{{width:5px;height:5px;border-radius:50%;background:#fff;
+  animation:livePulse 2.2s infinite}}
+.lcard-play{{position:absolute;inset:0;display:grid;place-items:center;z-index:2;
+  opacity:0;transition:opacity .22s;background:rgba(5,7,13,.34)}}
+.lcard:hover .lcard-play{{opacity:1}}
+.lcard-play svg{{width:44px;height:44px;fill:#fff;filter:drop-shadow(0 3px 10px rgba(0,0,0,.6))}}
+.lcard-ch{{display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;
+  font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--cream)}}
+.lcard-flag{{font-size:.55rem;letter-spacing:.08em;color:var(--dim);
+  border:1px solid var(--line);border-radius:4px;padding:1px 5px}}
+.lcard-t{{font-size:.83rem;line-height:1.45;color:var(--mute);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}
+.lcard:hover .lcard-t{{color:var(--ink)}}
+/* หน้า LIVE: การ์ดถ่ายทอดสดอยู่บน แล้วต่อด้วยรายการข่าว */
+.live-page{{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}}
+.live-page .row{{padding:16px 18px 4px;margin:0}}
+.live-page .live-list{{flex:none;overflow:visible}}
 
 .poster{{position:relative;flex:0 0 288px;scroll-snap-align:start;background:var(--panel);
   border:1px solid var(--line);border-radius:10px;overflow:hidden;
@@ -1968,6 +2156,7 @@ footer{{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
       <div class="cmodal-title">
         <h3 id="cmodal-name">—</h3>
         <div class="cmodal-price"><span id="cmodal-p"></span><span id="cmodal-c"></span></div>
+        <div class="cmodal-note" id="cnote" hidden></div>
       </div>
     </div>
 
@@ -2346,7 +2535,12 @@ async function pickChart(label){{
       chCache[label] = await fetch('{CHART_DIR}/' + CHARTS[label].s + '.json').then(r => r.json());
     }} catch (e) {{ chCache[label] = {{tf: {{}}}}; }}
   }}
+  if (chCur !== label) return;        // ผู้ใช้กดตัวอื่นระหว่างรอไฟล์กราฟ
   chData = chCache[label];
+  // สินทรัพย์บางตัว (เช่นทองไทย) ต้องบอกที่มาของตัวเลขไว้ด้วย
+  const note = document.getElementById('cnote');
+  note.textContent = chData.note || '';
+  note.hidden = !chData.note;
   renderChart();
 }}
 
@@ -2683,6 +2877,10 @@ if __name__ == "__main__":
     markets = fetch_markets()
     print()
 
+    print("เช็คช่องที่ถ่ายทอดสด...")
+    streams = fetch_live_streams()
+    print()
+
     cache = load_json(CACHE_FILE)
     if not news:
         print("  ⚠ ดึงข่าวไม่ได้เลยรอบนี้ ใช้ cache รอบก่อนแทน")
@@ -2706,9 +2904,9 @@ if __name__ == "__main__":
         fetch_fundamentals(markets)
         logos = fetch_logos()
         print("ดึงข้อมูลแท่งเทียน...")
-        charts = build_charts()
+        charts = build_charts(markets)
     print()
 
     with open("index.html", "w", encoding="utf-8") as f:
-        f.write(render(news, markets, charts, logos))
+        f.write(render(news, markets, charts, logos, streams))
     print(f"เสร็จ · index.html · {NOW.strftime('%H:%M')} น.")
