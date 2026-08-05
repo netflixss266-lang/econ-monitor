@@ -1085,14 +1085,33 @@ def top_keywords(items, n=14):
     stop = set("""the a an and or of to in on for at by with from is are was were be been
     this that it its as has have had will would can could not new says say said after
     over more than about into up down out ที่ และ ของ ใน การ เป็น มี ให้ กับ จาก ได้ ไม่
-    จะ ก็ แต่ ว่า ด้วย เพื่อ ต่อ ยัง ทั้ง คน ปี วัน นี้ นั้น อยู่ ขึ้น ลง""".split())
-    freq = {}
+    จะ ก็ แต่ ว่า ด้วย เพื่อ ต่อ ยัง ทั้ง คน ปี วัน นี้ นั้น อยู่ ขึ้น ลง
+    january february march april may june july august september october november december
+    reuters bloomberg afp cnbc cnn bbc guardian ข่าว""".split())
+    # นับแบบไม่แยกตัวพิมพ์ ไม่งั้น Retail กับ retail จะกินโควตาคนละช่อง
+    freq, forms, rep = {}, {}, {}
     for it in items:
+        seen = set()
         for w in re.findall(r"[ก-๙]{3,}|[A-Za-z]{3,}", it["title"]):
-            if w.lower() in stop:
+            key = w.lower()
+            if key in stop:
                 continue
-            freq[w] = freq.get(w, 0) + 1
-    return sorted(freq.items(), key=lambda x: -x[1])[:n]
+            freq[key] = freq.get(key, 0) + 1
+            forms.setdefault(key, {})[w] = forms.setdefault(key, {}).get(w, 0) + 1
+            # ข่าวตัวแทนของคำนั้น — เลือกข่าวที่มีรูปก่อน ไว้ใช้เป็นภาพพื้นหลัง
+            if key not in seen:
+                seen.add(key)
+                cur = rep.get(key)
+                if cur is None or (not cur.get("image") and it.get("image")):
+                    rep[key] = it
+    top = sorted(freq.items(), key=lambda x: -x[1])[:n]
+    out = []
+    for key, f in top:
+        it = rep.get(key) or {}
+        label = max(forms[key].items(), key=lambda x: x[1])[0]     # รูปคำที่พบบ่อยสุด
+        out.append({"w": label, "n": f, "image": it.get("image"), "link": it.get("link"),
+                    "cat": it.get("cat", "mixed"), "title": it.get("title", "")})
+    return out
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1271,7 +1290,7 @@ def render(news, markets, charts=None, logos=None, streams=None):
         }
     markers = build_markers(news)
     kws = top_keywords(news)
-    maxf = max([f for _, f in kws], default=1)
+    maxf = max([k["n"] for k in kws], default=1)
     located = sum(1 for i in news if i["place"])
 
     def speak_attrs(it):
@@ -1360,9 +1379,17 @@ def render(news, markets, charts=None, logos=None, streams=None):
   <div class="row-track" id="{rid}">{body}</div>
 </section>"""
 
-    def kw_chip(w, f):
-        return (f'<span class="kw" style="font-size:{0.78 + (f/maxf)*0.85:.2f}rem;'
-                f'opacity:{0.45 + (f/maxf)*0.55:.2f}">{html.escape(w)}</span>')
+    def kw_tile(k, i):
+        """โมเสกคำที่ถูกพูดถึง — ขนาดช่องไล่ตามความถี่ ใช้ภาพข่าวที่พูดถึงคำนั้นเป็นพื้นหลัง"""
+        size = "kw-xl" if i == 0 else ("kw-lg" if i < 3 else ("kw-md" if i < 7 else "kw-sm"))
+        img = (f'<img src="{html.escape(k["image"])}" loading="lazy" alt=""'
+               f' onerror="this.remove()">') if k.get("image") else ""
+        tag = "a" if k.get("link") else "span"
+        href = (f' href="{html.escape(k["link"])}" target="_blank" rel="noopener"'
+                f' title="{html.escape(k["title"], quote=True)}"') if k.get("link") else ""
+        return (f'<{tag} class="kw {size} pf-{k["cat"]}"{href}>{img}'
+                f'<span class="kw-scrim"></span>'
+                f'<span class="kw-t">{html.escape(k["w"])}<b>{k["n"]}</b></span></{tag}>')
 
     heroes = "".join(
         hero(g["top"], sc, sc == primary_scope)
@@ -1752,6 +1779,20 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   box-shadow:0 18px 44px rgba(0,0,0,.55)}}
 .cpop-head{{padding:9px 12px;border-bottom:1px solid var(--line);background:var(--panel2);
   font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.16em;color:var(--mute)}}
+.cpop-head span{{display:block;margin-top:3px;font-family:'Noto Serif Thai',serif;
+  font-size:.58rem;letter-spacing:0;color:var(--dim)}}
+/* กล่องอธิบายอินดิเคเตอร์ — ชี้ค้างบนคอม / กดค้างบนมือถือ */
+.cpop-tip{{position:fixed;z-index:70;width:min(330px,86vw);
+  background:var(--panel);border:1px solid var(--brass);border-radius:2px;
+  box-shadow:0 22px 54px rgba(0,0,0,.62);padding:12px 14px}}
+.tip-h{{font-family:'Playfair Display',Georgia,serif;font-size:.95rem;font-weight:700;
+  color:var(--cream)}}
+.tip-f{{font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--brass);
+  margin:2px 0 9px;padding-bottom:8px;border-bottom:1px solid var(--line)}}
+.tip-r{{font-size:.76rem;line-height:1.55;color:var(--mute);margin-bottom:7px}}
+.tip-r:last-child{{margin-bottom:0}}
+.tip-r b{{display:block;font-family:'IBM Plex Mono',monospace;font-size:.56rem;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:500}}
 .cpop-body{{max-height:340px;overflow-y:auto}}
 .cpop-grp{{padding:8px 12px 3px;font-family:'IBM Plex Mono',monospace;font-size:.55rem;
   letter-spacing:.14em;color:var(--dim)}}
@@ -2149,8 +2190,30 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   border-radius:2px;padding:2px 7px}}
 [hidden]{{display:none!important}}
 
-.kws{{display:flex;flex-wrap:wrap;gap:7px 12px;padding:15px;align-items:baseline}}
-.kw{{font-weight:500;line-height:1.2}}
+/* ── โมเสกคำที่ถูกพูดถึง — ภาพข่าวเป็นพื้น ตัวหนังสือทับกลางช่อง ── */
+.kws{{display:grid;grid-template-columns:repeat(6,1fr);grid-auto-rows:52px;
+  grid-auto-flow:dense;gap:2px;padding:2px}}
+.kw{{position:relative;display:grid;place-items:center;overflow:hidden;
+  border-radius:2px;background:var(--panel2);text-align:center;
+  transition:transform .25s cubic-bezier(.2,.7,.3,1)}}
+.kw:hover{{transform:scale(1.04);z-index:2}}
+.kw img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
+.kw-scrim{{position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(5,7,13,.34),rgba(5,7,13,.72))}}
+.kw-t{{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;
+  gap:2px;padding:4px 6px;font-weight:600;line-height:1.15;color:#fff;
+  text-shadow:0 1px 10px rgba(0,0,0,.85)}}
+.kw-t b{{font-family:'IBM Plex Mono',monospace;font-size:.58rem;font-weight:500;
+  letter-spacing:.06em;color:var(--brass);text-shadow:none}}
+.kw-xl{{grid-column:span 3;grid-row:span 3;font-size:1.5rem}}
+.kw-lg{{grid-column:span 3;grid-row:span 2;font-size:1.12rem}}
+.kw-md{{grid-column:span 2;grid-row:span 2;font-size:.94rem}}
+.kw-sm{{grid-column:span 2;grid-row:span 1;font-size:.8rem}}
+@media(max-width:560px){{
+  .kws{{grid-template-columns:repeat(4,1fr);grid-auto-rows:46px}}
+  .kw-xl,.kw-lg{{grid-column:span 4}}
+  .kw-md,.kw-sm{{grid-column:span 2}}
+}}
 
 footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
   display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;
@@ -2219,6 +2282,8 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
     <span style="color:var(--dim)">· next edition {next_run}</span>
   </div>
 </header>
+
+<div class="cpop-tip" id="ind-tip" hidden></div>
 
 {live_modal}
 
@@ -2305,7 +2370,8 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
         <div class="crail-sep"></div>
         <button class="crbtn" type="button" onclick="resetZoom()" title="Reset zoom">⟲</button>
         <div class="cpop" id="pop-ind" hidden>
-          <div class="cpop-head">INDICATORS</div>
+          <div class="cpop-head">INDICATORS
+            <span>ชี้ค้าง / กดค้าง เพื่อดูคำอธิบาย</span></div>
           <div class="cpop-body" id="ind-list"></div>
           <button class="cpop-clear" type="button" onclick="clearInd()">CLEAR ALL</button>
         </div>
@@ -2364,7 +2430,7 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
   </section>
   <section class="panel">
     <div class="panel-head"><h2>TOP KEYWORDS</h2></div>
-    <div class="kws">{''.join(kw_chip(w, f) for w, f in kws)}</div>
+    <div class="kws">{''.join(kw_tile(k, i) for i, k in enumerate(kws))}</div>
   </section>
 </div>
 
@@ -2452,22 +2518,82 @@ function assetLogo(label){{
 }}
 let chCur = null, chTf = '3M', chCache = {{}}, chData = null, chZoom = null, chType = 'candle';
 // ── เครื่องมือวิเคราะห์ทางเทคนิค ──────────────────────────
+// d = คำอธิบาย: f ชื่อเต็ม · w วิเคราะห์อะไร · t ใช้เมื่อไร · u มักใช้ทำอะไร
 const IND = [
   {{g: 'TREND', items: [
-    {{k: 'sma20',  n: 'SMA 20',        c: '#4C8DFF'}},
-    {{k: 'sma50',  n: 'SMA 50',        c: '#F5A524'}},
-    {{k: 'sma200', n: 'SMA 200',       c: '#9B8AFB'}},
-    {{k: 'ema12',  n: 'EMA 12',        c: '#2DD4BF'}},
-    {{k: 'ema26',  n: 'EMA 26',        c: '#E5484D'}}]}},
+    {{k: 'sma20',  n: 'SMA 20',        c: '#4C8DFF', d: {{
+      f: 'Simple Moving Average (20)',
+      w: 'ค่าเฉลี่ยราคาปิด 20 แท่งล่าสุด ถ่วงน้ำหนักเท่ากันทุกแท่ง เกลี่ยความผันผวนระยะสั้นออกให้เห็นทิศทางหลัก',
+      t: 'ใช้กับกรอบเวลาสั้น–กลาง เวลาอยากรู้ว่าราคาปัจจุบันสูงหรือต่ำกว่าค่าเฉลี่ยของช่วงที่ผ่านมา',
+      u: 'ราคายืนเหนือเส้น = ฝั่งซื้อคุมเกม · ตัวเส้นเองมักถูกใช้เป็นแนวรับ-แนวต้านแบบเคลื่อนที่'}}}},
+    {{k: 'sma50',  n: 'SMA 50',        c: '#F5A524', d: {{
+      f: 'Simple Moving Average (50)',
+      w: 'ค่าเฉลี่ยราคาปิด 50 แท่ง เป็นเส้นแนวโน้มระยะกลางที่นักลงทุนสถาบันอ้างถึงบ่อย',
+      t: 'ใช้ยืนยันแนวโน้มระยะกลาง หรือคู่กับ SMA 200 เพื่อดูจุดตัด',
+      u: 'SMA 50 ตัดขึ้นเหนือ SMA 200 เรียก golden cross · ตัดลงเรียก death cross'}}}},
+    {{k: 'sma200', n: 'SMA 200',       c: '#9B8AFB', d: {{
+      f: 'Simple Moving Average (200)',
+      w: 'ค่าเฉลี่ยราคาปิด 200 แท่ง เป็นเส้นแบ่งตลาดกระทิง–หมีที่ใช้กันแพร่หลายที่สุด',
+      t: 'ใช้กับกราฟรายวันขึ้นไป ดูภาพใหญ่ว่าสินทรัพย์ยังอยู่ในขาขึ้นระยะยาวหรือไม่',
+      u: 'ราคาต่ำกว่าเส้นนี้ต่อเนื่อง มักถูกตีความว่าเข้าสู่ตลาดขาลงระยะยาว'}}}},
+    {{k: 'ema12',  n: 'EMA 12',        c: '#2DD4BF', d: {{
+      f: 'Exponential Moving Average (12)',
+      w: 'ค่าเฉลี่ยที่ให้น้ำหนักราคาล่าสุดมากกว่าราคาย้อนหลัง จึงตอบสนองการเปลี่ยนแปลงไวกว่า SMA',
+      t: 'ใช้เมื่อต้องการจับการกลับตัวเร็ว เช่นเทรดรอบสั้นหรือกราฟรายชั่วโมง',
+      u: 'เป็นขาสั้นของ MACD · ใช้คู่กับ EMA 26 ดูจุดตัดของโมเมนตัม'}}}},
+    {{k: 'ema26',  n: 'EMA 26',        c: '#E5484D', d: {{
+      f: 'Exponential Moving Average (26)',
+      w: 'ค่าเฉลี่ยแบบถ่วงน้ำหนักระยะกลาง ใช้เป็นเส้นอ้างอิงที่นิ่งกว่า EMA 12',
+      t: 'ใช้คู่กับ EMA 12 เสมอ เพื่อดูว่าโมเมนตัมสั้นเร็วกว่าหรือช้ากว่าระยะกลาง',
+      u: 'เป็นขายาวของ MACD · ระยะห่างระหว่างสองเส้นบอกความแรงของแนวโน้ม'}}}},
+    {{k: 'sr',     n: 'Support / Resistance', c: '#C6A961', d: {{
+      f: 'Auto Support & Resistance (pivot clustering)',
+      w: 'หาจุดกลับตัวเฉพาะที่ (pivot high / pivot low) ในกรอบที่มองเห็น แล้วรวมจุดที่ราคาใกล้กันเป็นระดับเดียว',
+      t: 'ใช้ก่อนเข้าออเดอร์ เพื่อรู้ว่าราคามีโอกาสชะลอหรือกลับตัวแถวไหน',
+      u: 'ตั้งจุดเข้า–จุดตัดขาดทุน · เส้นที่ราคาเคยชนหลายครั้ง (เลข × สูง) ถือว่าเชื่อถือได้มากกว่า'}}}},
+    {{k: 'regr',   n: 'Regression Channel', c: '#2DD4BF', d: {{
+      f: 'Linear Regression Channel (±2σ)',
+      w: 'เส้นถดถอยกำลังสองน้อยสุดของราคาปิดในกรอบที่มองเห็น พร้อมช่องเบี่ยงเบนมาตรฐาน 2 เท่า',
+      t: 'ใช้เมื่ออยากวัดว่าเทรนด์ชันขึ้นหรือลงจริงไหม และตอนนี้ราคาแพงหรือถูกเทียบกับเส้นเทรนด์',
+      u: 'ราคาชนขอบบน = ยืดเกินเทรนด์ · ชนขอบล่าง = ต่ำกว่าเทรนด์ · ความชันบอกทิศทาง'}}}},
+    {{k: 'dc',     n: 'Donchian 20',   c: '#8FA0BC', d: {{
+      f: 'Donchian Channel (20) — Richard Donchian',
+      w: 'ราคาสูงสุดและต่ำสุดของ 20 แท่งล่าสุด วาดเป็นกรอบครอบราคา',
+      t: 'ใช้กับระบบเทรดตามแนวโน้ม (trend following) โดยเฉพาะเวลาหาจังหวะเบรกเอาต์',
+      u: 'ราคาทะลุขอบบน = เบรกขาขึ้น (หัวใจของระบบ Turtle Trading) · หลุดขอบล่าง = เบรกขาลง'}}}}]}},
   {{g: 'VOLATILITY', items: [
-    {{k: 'bb',     n: 'Bollinger 20·2σ', c: '#8FA0BC'}},
-    {{k: 'atr',    n: 'ATR 14',        c: '#C6A961', pane: 'ATR 14'}}]}},
+    {{k: 'bb',     n: 'Bollinger 20·2σ', c: '#8FA0BC', d: {{
+      f: 'Bollinger Bands (20, 2σ) — John Bollinger',
+      w: 'เส้นกลางคือ SMA 20 ขอบบน-ล่างคือบวกลบ 2 ส่วนเบี่ยงเบนมาตรฐาน จึงกว้างแคบตามความผันผวน',
+      t: 'ใช้เมื่ออยากรู้ว่าราคาผันผวนมากผิดปกติไหม และตอนนี้อยู่ปลายกรอบหรือกลางกรอบ',
+      u: 'กรอบบีบแคบ (squeeze) มักตามด้วยการเคลื่อนไหวแรง · ราคาชนขอบไม่ได้แปลว่าต้องกลับตัวเสมอ'}}}},
+    {{k: 'atr',    n: 'ATR 14',        c: '#C6A961', pane: 'ATR 14', d: {{
+      f: 'Average True Range (14) — J. Welles Wilder',
+      w: 'ช่วงแกว่งจริงเฉลี่ยต่อแท่ง รวมช่องว่างราคาเปิด วัดเฉพาะ "ความแรง" ไม่บอกทิศทาง',
+      t: 'ใช้ตอนวางแผนความเสี่ยงก่อนเข้าเทรด ไม่ใช่ตอนหาสัญญาณซื้อขาย',
+      u: 'ตั้งจุดตัดขาดทุนเป็นกี่เท่าของ ATR · กำหนดขนาดโพซิชันให้เท่ากันในทุกสินทรัพย์'}}}}]}},
   {{g: 'MOMENTUM', items: [
-    {{k: 'rsi',    n: 'RSI 14',        c: '#9B8AFB', pane: 'RSI 14'}},
-    {{k: 'macd',   n: 'MACD 12·26·9',  c: '#4C8DFF', pane: 'MACD'}}]}},
+    {{k: 'rsi',    n: 'RSI 14',        c: '#9B8AFB', pane: 'RSI 14', d: {{
+      f: 'Relative Strength Index (14) — J. Welles Wilder',
+      w: 'เทียบขนาดการขึ้นเฉลี่ยกับการลงเฉลี่ย 14 แท่ง ออกมาเป็นค่า 0–100',
+      t: 'ใช้ตอนอยากรู้ว่าราคาวิ่งไปทางเดียวจนสุดโต่งหรือยัง',
+      u: 'เกิน 70 = ซื้อมากเกินไป · ต่ำกว่า 30 = ขายมากเกินไป · ราคาทำจุดสูงใหม่แต่ RSI ไม่ทำตาม (divergence) เตือนโมเมนตัมอ่อน'}}}},
+    {{k: 'macd',   n: 'MACD 12·26·9',  c: '#4C8DFF', pane: 'MACD', d: {{
+      f: 'Moving Average Convergence Divergence — Gerald Appel',
+      w: 'ผลต่าง EMA 12 กับ EMA 26 (เส้น MACD) เทียบกับ EMA 9 ของตัวมันเอง (เส้น signal) ส่วนแท่งคือผลต่างของสองเส้น',
+      t: 'ใช้จับจังหวะที่โมเมนตัมเริ่มเปลี่ยนทิศ ก่อนที่เส้นค่าเฉลี่ยราคาจะตัดกัน',
+      u: 'MACD ตัดขึ้นเหนือ signal = สัญญาณซื้อ · ตัดลง = สัญญาณขาย · แท่งฮิสโตแกรมหดตัวเตือนว่าแรงกำลังหมด'}}}}]}},
   {{g: 'VOLUME', items: [
-    {{k: 'vol',    n: 'Volume',        c: '#7A879C', pane: 'VOLUME'}},
-    {{k: 'vwap',   n: 'VWAP 20',       c: '#F5A524'}}]}},
+    {{k: 'vol',    n: 'Volume',        c: '#7A879C', pane: 'VOLUME', d: {{
+      f: 'Volume (ปริมาณการซื้อขาย)',
+      w: 'จำนวนหน่วยที่ซื้อขายจริงในแต่ละแท่ง แท่งเขียว/แดงตามทิศทางราคาของแท่งนั้น',
+      t: 'ดูควบคู่กับราคาเสมอ โดยเฉพาะตอนราคาทะลุแนวรับแนวต้าน',
+      u: 'ราคาขึ้นพร้อมวอลุ่มหนา = การเคลื่อนไหวมีคนสนับสนุนจริง · ขึ้นแต่วอลุ่มบาง มักไปไม่ไกล'}}}},
+    {{k: 'vwap',   n: 'VWAP 20',       c: '#F5A524', d: {{
+      f: 'Volume Weighted Average Price (20)',
+      w: 'ราคาเฉลี่ยที่ถ่วงน้ำหนักด้วยปริมาณซื้อขาย 20 แท่งล่าสุด จึงสะท้อนราคาที่เงินส่วนใหญ่ซื้อขายกันจริง',
+      t: 'ใช้ตอนอยากรู้ว่าตัวเองได้ราคาดีกว่าหรือแย่กว่าตลาด',
+      u: 'สถาบันใช้เป็นเกณฑ์วัดคุณภาพการส่งคำสั่ง · ราคาเหนือ VWAP = ผู้ซื้อยอมจ่ายแพงกว่าค่าเฉลี่ย'}}}}]}},
 ];
 const IND_MAP = {{}};
 IND.forEach(g => g.items.forEach(i => {{ IND_MAP[i.k] = i; }}));
@@ -2537,6 +2663,59 @@ const vwapA = (rows, n) => {{
   return o;
 }};
 const FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+// สูงสุด/ต่ำสุดแบบเลื่อนหน้าต่าง ใช้กับ Donchian
+const rollA = (a, n, pick) => a.map((_, i) =>
+  i < n - 1 ? null : pick.apply(null, a.slice(i - n + 1, i + 1)));
+
+// แนวรับ-แนวต้านอัตโนมัติ: หาจุดกลับตัวเฉพาะที่ แล้วรวมจุดที่ราคาใกล้กันเป็นระดับเดียว
+function srLevels(vis){{
+  // ช่วงสั้นมีแท่งน้อย ต้องผ่อนเงื่อนไขจุดกลับตัวลง ไม่งั้นจะไม่เจอเลย
+  const k = vis.length < 45 ? 2 : 3, piv = [];
+  for (let i = k; i < vis.length - k; i++) {{
+    let ph = true, pl = true;
+    for (let j = i - k; j <= i + k; j++) {{
+      // ใช้ > ไม่ใช่ >= เพราะราคาปิดเท่ากันหลายแท่งเป็นเรื่องปกติ
+      if (j === i) continue;
+      if (vis[j][2] > vis[i][2]) ph = false;
+      if (vis[j][3] < vis[i][3]) pl = false;
+    }}
+    if (ph) piv.push(vis[i][2]);
+    if (pl) piv.push(vis[i][3]);
+  }}
+  if (piv.length < 2) return [];
+  piv.sort((a, b) => a - b);
+  const hi = d3.max(vis, r => r[2]), lo = d3.min(vis, r => r[3]);
+  const tol = Math.max((hi - lo) * 0.02, ((hi + lo) / 2) * 0.004) || 1e-6;
+  const groups = [[piv[0]]];
+  for (let i = 1; i < piv.length; i++) {{
+    const g = groups[groups.length - 1];
+    if (piv[i] - g[g.length - 1] <= tol) g.push(piv[i]);
+    else groups.push([piv[i]]);
+  }}
+  const all = groups.map(g => ({{v: g.reduce((a, b) => a + b, 0) / g.length, n: g.length}}));
+  const strong = all.filter(l => l.n >= 2).sort((a, b) => b.n - a.n).slice(0, 6);
+  if (strong.length >= 2) return strong;
+  // ช่วงสั้นๆ มีจุดกลับตัวน้อย ใช้จุดเดี่ยวที่ใกล้ราคาปัจจุบันที่สุดแทน
+  const last = vis[vis.length - 1][4];
+  return all.sort((a, b) => Math.abs(a.v - last) - Math.abs(b.v - last)).slice(0, 4);
+}}
+
+// ช่องแนวโน้มจากเส้นถดถอยกำลังสองน้อยสุด ± 2 ส่วนเบี่ยงเบนมาตรฐาน
+function regrChannel(vis){{
+  const n = vis.length;
+  if (n < 5) return null;
+  let sx = 0, sy = 0, sxy = 0, sxx = 0;
+  for (let i = 0; i < n; i++) {{
+    const y = vis[i][4];
+    sx += i; sy += y; sxy += i * y; sxx += i * i;
+  }}
+  const den = n * sxx - sx * sx;
+  if (!den) return null;
+  const b = (n * sxy - sx * sy) / den, a = (sy - b * sx) / n;
+  let se = 0;
+  for (let i = 0; i < n; i++) {{ const d = vis[i][4] - (a + b * i); se += d * d; }}
+  return {{a, b, sd: 2 * Math.sqrt(se / n), n}};
+}}
 let chLevels = {{}}, chOverlays = new Set();
 const OV_STYLE = {{
   fair:   {{color: 'var(--biz)',   label: 'FAIR VALUE'}},
@@ -2765,8 +2944,62 @@ function renderIndList(){{
   const n = chInd.size, b = document.getElementById('crn');
   b.textContent = n; b.hidden = !n;
   document.querySelector('.crbtn[data-pop="ind"]').classList.toggle('on', !!n);
+  wireIndTips();
 }}
+// ── กล่องอธิบายอินดิเคเตอร์ ────────────────────────────────
+let tipT = null;
+function showIndTip(k, el){{
+  const d = (IND_MAP[k] || {{}}).d;
+  if (!d) return;
+  const tip = document.getElementById('ind-tip');
+  tip.innerHTML = `<div class="tip-h">${{IND_MAP[k].n}}</div>
+    <div class="tip-f">${{d.f}}</div>
+    <div class="tip-r"><b>วิเคราะห์อะไร</b>${{d.w}}</div>
+    <div class="tip-r"><b>ใช้เมื่อไร</b>${{d.t}}</div>
+    <div class="tip-r"><b>มักใช้ทำอะไร</b>${{d.u}}</div>`;
+  tip.hidden = false;
+  const r = el.getBoundingClientRect();
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let left = r.left - w - 12;
+  if (left < 8) left = Math.min(r.right + 12, innerWidth - w - 8);
+  tip.style.left = Math.max(8, left) + 'px';
+  tip.style.top = Math.max(8, Math.min(innerHeight - h - 8, r.top - 12)) + 'px';
+}}
+function hideIndTip(){{
+  clearTimeout(tipT);
+  document.getElementById('ind-tip').hidden = true;
+}}
+function wireIndTips(){{
+  const list = document.getElementById('ind-list');
+  if (!list || list.__wired) return;
+  list.__wired = true;
+  list.addEventListener('mouseover', ev => {{
+    const row = ev.target.closest('.cpop-row');
+    if (!row) return;
+    clearTimeout(tipT);
+    tipT = setTimeout(() => showIndTip(row.dataset.ind, row), 320);
+  }});
+  list.addEventListener('mouseout', ev => {{
+    if (!ev.relatedTarget || !ev.relatedTarget.closest('.cpop-row')) hideIndTip();
+  }});
+  // มือถือ: กดค้างเพื่อดูคำอธิบาย แล้วไม่ให้นับเป็นการกดเปิดอินดิเคเตอร์
+  list.addEventListener('touchstart', ev => {{
+    const row = ev.target.closest('.cpop-row');
+    if (!row) return;
+    row.dataset.long = '';
+    clearTimeout(tipT);
+    tipT = setTimeout(() => {{ row.dataset.long = '1'; showIndTip(row.dataset.ind, row); }}, 420);
+  }}, {{passive: true}});
+  list.addEventListener('touchend', ev => {{
+    const row = ev.target.closest('.cpop-row');
+    clearTimeout(tipT);
+    if (row && row.dataset.long === '1') {{ ev.preventDefault(); row.dataset.long = ''; }}
+  }});
+  list.addEventListener('touchmove', () => clearTimeout(tipT), {{passive: true}});
+}}
+
 function toggleInd(k){{
+  hideIndTip();
   chInd.has(k) ? chInd.delete(k) : chInd.add(k);
   try {{ localStorage.setItem('chInd', JSON.stringify([...chInd])); }} catch(e) {{}}
   renderIndList(); renderChart();
@@ -2797,8 +3030,10 @@ function resetZoom(){{
 }}
 document.addEventListener('click', ev => {{
   // คลิกนอกแถบเครื่องมือให้ปิดป๊อปอัป
-  if (!ev.target.closest('.crail')) document.querySelectorAll('.cpop')
-    .forEach(x => {{ x.hidden = true; }});
+  if (!ev.target.closest('.crail')) {{
+    document.querySelectorAll('.cpop').forEach(x => {{ x.hidden = true; }});
+    hideIndTip();
+  }}
 }});
 
 function renderChart(){{
@@ -2834,10 +3069,15 @@ function renderChart(){{
   if (has('rsi'))  S.rsi  = rsiA(closes, 14);
   if (has('macd')) S.macd = macdA(closes);
   if (has('atr'))  S.atr  = atrA(rows, 14);
+  if (has('dc')) {{
+    S.dcu = rollA(rows.map(r => r[2]), 20, Math.max);
+    S.dcl = rollA(rows.map(r => r[3]), 20, Math.min);
+  }}
 
   const OVER = [['sma20','sma20'],['sma50','sma50'],['sma200','sma200'],
                 ['ema12','ema12'],['ema26','ema26'],['vwap','vwap'],
-                ['bb','bbm'],['bb','bbu'],['bb','bbl']];
+                ['bb','bbm'],['bb','bbu'],['bb','bbl'],
+                ['dc','dcu'],['dc','dcl']];
   const subs = ['vol', 'rsi', 'macd', 'atr'].filter(has);
 
   const W = host.clientWidth || 700, H = host.clientHeight || 360;
@@ -2930,6 +3170,14 @@ function renderChart(){{
       const seg = S[s].slice(i0, i1 + 1).filter(v => v != null && isFinite(v));
       if (seg.length) {{ lo = Math.min(lo, d3.min(seg)); hi = Math.max(hi, d3.max(seg)); }}
     }});
+    // แนวรับ-ต้าน กับ ช่องแนวโน้ม คำนวณจากกรอบที่มองเห็น จึงขยับตามการซูม
+    const sr = has('sr') ? srLevels(vis) : [];
+    const rc = has('regr') ? regrChannel(vis) : null;
+    if (rc) {{
+      const ends = [rc.a - rc.sd, rc.a + rc.sd,
+                    rc.a + rc.b * (rc.n - 1) - rc.sd, rc.a + rc.b * (rc.n - 1) + rc.sd];
+      lo = Math.min(lo, d3.min(ends)); hi = Math.max(hi, d3.max(ends));
+    }}
     const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.02 || 1;
     const logOn = chTools.has('log') && lo - pad > 0;
     main.y = (logOn ? d3.scaleLog() : d3.scaleLinear())
@@ -2989,6 +3237,34 @@ function renderChart(){{
     fg.select('text').attr('x', 4).attr('y', d => main.y(d.v) - 3)
       .attr('fill', 'var(--brass)')
       .text(d => (d.f * 100).toFixed(1) + '%  ' + fmtP(d.v));
+
+    // ── แนวรับ-แนวต้านอัตโนมัติ ──
+    const lastC = rows[i1][4];
+    const sg = gC.selectAll('g.c-sr').data(sr, d => d.v).join(
+      en => {{ const s = en.append('g').attr('class', 'c-sr');
+               s.append('line'); s.append('text'); return s; }});
+    sg.select('line').attr('x1', 0).attr('x2', iw)
+      .attr('y1', d => main.y(d.v)).attr('y2', d => main.y(d.v))
+      .attr('stroke', d => d.v >= lastC ? 'var(--down)' : 'var(--up)')
+      .attr('stroke-width', d => Math.min(2.4, 0.9 + d.n * 0.35))
+      .attr('stroke-dasharray', '2 3').attr('opacity', .85);
+    sg.select('text').attr('x', 4).attr('y', d => main.y(d.v) - 3)
+      .attr('font-size', 9.5).attr('font-family', "'IBM Plex Mono',monospace")
+      .attr('fill', d => d.v >= lastC ? 'var(--down)' : 'var(--up)')
+      .text(d => (d.v >= lastC ? 'R ' : 'S ') + fmtP(d.v) + '  ×' + d.n);
+
+    // ── ช่องแนวโน้มจากเส้นถดถอย ──
+    const rcLines = rc ? [
+      {{k: 'mid', off: 0, dash: null}},
+      {{k: 'up',  off: rc.sd, dash: '5 4'}},
+      {{k: 'dn',  off: -rc.sd, dash: '5 4'}}] : [];
+    const rg = gC.selectAll('line.c-regr').data(rcLines, d => d.k).join('line')
+      .attr('class', 'c-regr')
+      .attr('x1', zx(i0)).attr('x2', zx(i1))
+      .attr('y1', d => main.y(rc.a + d.off))
+      .attr('y2', d => main.y(rc.a + rc.b * (rc.n - 1) + d.off))
+      .attr('stroke', IND_MAP.regr.c).attr('stroke-width', d => d.k === 'mid' ? 1.6 : 1.1)
+      .attr('stroke-dasharray', d => d.dash).attr('opacity', d => d.k === 'mid' ? .95 : .6);
 
     // ── เส้นค่าคำนวณที่กดเปิดจากแผง METRICS ──
     const ovs = [];
@@ -3080,12 +3356,14 @@ function renderChart(){{
   function legend(i){{
     const items = [{{t: chCur + ' · ' + chTf, c: 'var(--ink)'}}];
     OVER.forEach(([k, s]) => {{
-      if (!has(k) || !S[s] || s === 'bbl') return;
+      if (!has(k) || !S[s] || s === 'bbl' || s === 'bbm' || s === 'dcl') return;
       const v = S[s][i];
       if (v == null) return;
-      const nm = s === 'bbu' ? 'BB' : s === 'bbm' ? null : IND_MAP[k].n;
-      if (nm) items.push({{t: nm + ' ' + fmtP(v), c: IND_MAP[k].c}});
+      const nm = s === 'bbu' ? 'BB 20' : s === 'dcu' ? 'DC 20' : IND_MAP[k].n;
+      items.push({{t: nm + ' ' + fmtP(v), c: IND_MAP[k].c}});
     }});
+    if (has('sr')) items.push({{t: 'S/R', c: IND_MAP.sr.c}});
+    if (has('regr')) items.push({{t: 'REGR ±2σ', c: IND_MAP.regr.c}});
     main.leg.selectAll('text').data(items).join('text')
       .attr('x', (d, k) => k === 0 ? 0 : null)
       .attr('fill', d => d.c).attr('y', 0)
