@@ -370,12 +370,15 @@ def fetch_candles(sym, rng, interval):
     res = r.json()["chart"]["result"][0]
     ts = res.get("timestamp") or []
     q = res["indicators"]["quote"][0]
+    vol = q.get("volume") or []
     out = []
     for i, t in enumerate(ts):
         o, h, lo, c = q["open"][i], q["high"][i], q["low"][i], q["close"][i]
         if None in (o, h, lo, c):
             continue
-        out.append([t, round(o, 4), round(h, 4), round(lo, 4), round(c, 4)])
+        v = vol[i] if i < len(vol) and vol[i] else 0
+        # ปริมาณซื้อขายต่อท้าย ใช้กับอินดิเคเตอร์สาย volume
+        out.append([t, round(o, 4), round(h, 4), round(lo, 4), round(c, 4), int(v)])
     return out
 
 
@@ -400,14 +403,15 @@ def synth_thai_gold(frames, spot=None):
         fts = [r[0] for r in frows]
         fcl = [r[4] for r in frows]
         conv = []
-        for t, o, h, lo, c in rows:
+        for r in rows:
+            t, o, h, lo, c = r[0], r[1], r[2], r[3], r[4]
             # ค่าเงินใช้ค่าล่าสุดที่ไม่เกินเวลาแท่งนั้น (ตลาดทองกับตลาดเงินปิดคนละเวลา)
             rate = fcl[max(bisect.bisect_right(fts, t) - 1, 0)]
             k = rate * factor
-            conv.append([t, o * k, h * k, lo * k, c * k])
+            conv.append([t, o * k, h * k, lo * k, c * k, r[5] if len(r) > 5 else 0])
         k = (spot / conv[-1][4]) if spot and conv[-1][4] else 1.0
-        out[tf] = [[t, round(o * k, 2), round(h * k, 2), round(lo * k, 2), round(c * k, 2)]
-                   for t, o, h, lo, c in conv]
+        out[tf] = [[t, round(o * k, 2), round(h * k, 2), round(lo * k, 2), round(c * k, 2), v]
+                   for t, o, h, lo, c, v in conv]
     return out or None
 
 
@@ -1571,11 +1575,9 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .logo-rule::before,.logo-rule::after{{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--brass) 30%,var(--brass) 70%,transparent)}}
 .logo-rule span{{font-size:.6rem;letter-spacing:.1em}}
 .logo-sub{{font-family:'Playfair Display',Georgia,serif;
-  font-size:clamp(.6rem,1.7vw,.78rem);font-weight:600;
+  font-size:clamp(.6rem,1.7vw,.78rem);font-weight:400;
   letter-spacing:.2em;text-transform:uppercase;color:var(--mute);
   max-width:900px;line-height:1.9}}
-.logo-sub b{{font-size:1.24em;font-weight:700;color:var(--cream)}}
-.logo-sub i{{font-style:normal;color:var(--brass);padding:0 2px}}
 .stamp{{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;
   font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.06em;
   text-transform:uppercase;color:var(--mute)}}
@@ -1730,6 +1732,50 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cmodal-note{{font-size:.65rem;line-height:1.5;color:var(--dim);margin-top:3px;max-width:560px}}
 .cempty{{display:grid;place-items:center;height:100%;color:var(--mute);font-size:.85rem}}
 
+/* ── แถบเครื่องมือเทคนิคฝั่งขวา (อย่างโปรแกรมเทรด) ────────── */
+.crail{{position:relative;flex:none;width:46px;display:flex;flex-direction:column;
+  align-items:center;gap:5px;padding:9px 0;background:var(--panel2);
+  border-left:1px solid var(--line);border-right:1px solid var(--line)}}
+.crbtn{{position:relative;width:32px;height:30px;display:grid;place-items:center;
+  cursor:pointer;color:var(--mute);background:transparent;border:1px solid transparent;
+  border-radius:2px;font-family:'IBM Plex Mono',monospace;font-size:.58rem;
+  letter-spacing:.04em;font-weight:600}}
+.crbtn b{{font-family:'Playfair Display',Georgia,serif;font-size:.95rem;font-style:italic}}
+.crbtn:hover{{color:var(--ink);background:var(--hover);border-color:var(--line)}}
+.crbtn.on{{color:var(--brass);border-color:var(--brass);background:var(--sel)}}
+.crbadge{{position:absolute;right:-2px;top:-3px;min-width:14px;height:14px;padding:0 3px;
+  display:grid;place-items:center;border-radius:7px;background:var(--brass);
+  color:#0A0E1A;font-size:.52rem;font-weight:700}}
+.crail-sep{{width:22px;height:1px;background:var(--line);margin:3px 0}}
+.cpop{{position:absolute;right:52px;top:8px;z-index:8;width:232px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:2px;
+  box-shadow:0 18px 44px rgba(0,0,0,.55)}}
+.cpop-head{{padding:9px 12px;border-bottom:1px solid var(--line);background:var(--panel2);
+  font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.16em;color:var(--mute)}}
+.cpop-body{{max-height:340px;overflow-y:auto}}
+.cpop-grp{{padding:8px 12px 3px;font-family:'IBM Plex Mono',monospace;font-size:.55rem;
+  letter-spacing:.14em;color:var(--dim)}}
+.cpop-row{{display:flex;align-items:center;gap:9px;width:100%;padding:6px 12px;cursor:pointer;
+  background:none;border:0;color:var(--mute);font-family:inherit;font-size:.76rem;text-align:left}}
+.cpop-row:hover{{background:var(--hover);color:var(--ink)}}
+.cpop-row .sw{{width:13px;height:3px;border-radius:2px;flex:none}}
+.cpop-row .ck{{margin-left:auto;font-size:.72rem;color:var(--brass);opacity:0}}
+.cpop-row.on{{color:var(--ink)}}
+.cpop-row.on .ck{{opacity:1}}
+.cpop-clear{{width:100%;padding:8px;cursor:pointer;color:var(--dim);background:var(--panel2);
+  border:0;border-top:1px solid var(--line);font-family:'IBM Plex Mono',monospace;
+  font-size:.58rem;letter-spacing:.12em}}
+.cpop-clear:hover{{color:var(--down)}}
+/* ป้ายค่าอินดิเคเตอร์มุมซ้ายบนของแต่ละแพเนล */
+.c-leg text{{font-family:'IBM Plex Mono',monospace;font-size:10px}}
+.c-pane-sep{{stroke:var(--line);stroke-width:1;shape-rendering:crispEdges}}
+.c-tag rect{{fill:var(--brass)}}
+.c-tag text{{fill:#0A0E1A;font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:600}}
+.c-tag.now rect{{fill:var(--ink)}}
+.c-fib line{{stroke-dasharray:5 4;stroke-width:1}}
+.c-fib text{{font-family:'IBM Plex Mono',monospace;font-size:9px}}
+.c-vol rect{{opacity:.5}}
+
 .ctype{{flex:none}}
 .cmodal-tape{{margin:0;padding:7px 10px;gap:6px;border-bottom:1px solid var(--line);
   background:var(--panel3)}}
@@ -1784,6 +1830,11 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   .cmodal-chart{{min-height:340px}}
   .cmodal-side{{width:auto;border-left:0;border-top:1px solid var(--line)}}
   .calc{{max-height:none}}
+  /* จอแคบ: แถบเครื่องมือวางแนวนอนใต้กราฟแทน */
+  .crail{{flex-direction:row;width:auto;padding:7px 9px;justify-content:flex-start;
+    border-left:0;border-right:0;border-top:1px solid var(--line);overflow-x:auto}}
+  .crail-sep{{width:1px;height:22px;margin:0 3px}}
+  .cpop{{right:auto;left:8px;top:46px}}
 }}
 .t-label{{color:var(--ink);font-weight:600;letter-spacing:.03em}}
 .t-price{{color:var(--ink);font-weight:500}}
@@ -2159,10 +2210,7 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
     <span class="logo-mark">Tribune</span>
   </h1>
   <div class="logo-rule"><span>◆ ◆ ◆</span></div>
-  <div class="logo-sub">
-    <b>T</b>hai <b>R</b>egional &amp; <b>I</b>nternational <b>B</b>usiness
-    <b>U</b>pdates, <b>N</b>ews and <b>E</b>xchange
-  </div>
+  <div class="logo-sub">Thai Regional &amp; International Business Updates, News and Exchange</div>
   <div class="stamp">
     <span class="pulse"></span>
     <span>{NOW.strftime('%A, %d %B %Y')}</span>
@@ -2242,6 +2290,24 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
               <button class="tfbtn" type="button" data-ct="line" onclick="pickType('line')">LINE</button>
             </div>
           </div>
+        </div>
+      </div>
+      <!-- แถบเครื่องมือเทคนิคฝั่งขวาของกราฟ -->
+      <div class="crail" id="crail">
+        <button class="crbtn" type="button" data-pop="ind" onclick="togglePop('ind')"
+                title="Indicators"><b>ƒ</b><span class="crbadge" id="crn" hidden>0</span></button>
+        <button class="crbtn" type="button" data-tool="fib" onclick="toggleTool('fib')"
+                title="Fibonacci retracement">FIB</button>
+        <button class="crbtn" type="button" data-tool="log" onclick="toggleTool('log')"
+                title="Logarithmic price scale">LOG</button>
+        <button class="crbtn" type="button" data-tool="grid" onclick="toggleTool('grid')"
+                title="Grid">GRD</button>
+        <div class="crail-sep"></div>
+        <button class="crbtn" type="button" onclick="resetZoom()" title="Reset zoom">⟲</button>
+        <div class="cpop" id="pop-ind" hidden>
+          <div class="cpop-head">INDICATORS</div>
+          <div class="cpop-body" id="ind-list"></div>
+          <button class="cpop-clear" type="button" onclick="clearInd()">CLEAR ALL</button>
         </div>
       </div>
       <div class="cmodal-side" id="cmodal-side">
@@ -2385,6 +2451,92 @@ function assetLogo(label){{
   return `<span class="clogo">${{ini}}${{img}}</span>`;
 }}
 let chCur = null, chTf = '3M', chCache = {{}}, chData = null, chZoom = null, chType = 'candle';
+// ── เครื่องมือวิเคราะห์ทางเทคนิค ──────────────────────────
+const IND = [
+  {{g: 'TREND', items: [
+    {{k: 'sma20',  n: 'SMA 20',        c: '#4C8DFF'}},
+    {{k: 'sma50',  n: 'SMA 50',        c: '#F5A524'}},
+    {{k: 'sma200', n: 'SMA 200',       c: '#9B8AFB'}},
+    {{k: 'ema12',  n: 'EMA 12',        c: '#2DD4BF'}},
+    {{k: 'ema26',  n: 'EMA 26',        c: '#E5484D'}}]}},
+  {{g: 'VOLATILITY', items: [
+    {{k: 'bb',     n: 'Bollinger 20·2σ', c: '#8FA0BC'}},
+    {{k: 'atr',    n: 'ATR 14',        c: '#C6A961', pane: 'ATR 14'}}]}},
+  {{g: 'MOMENTUM', items: [
+    {{k: 'rsi',    n: 'RSI 14',        c: '#9B8AFB', pane: 'RSI 14'}},
+    {{k: 'macd',   n: 'MACD 12·26·9',  c: '#4C8DFF', pane: 'MACD'}}]}},
+  {{g: 'VOLUME', items: [
+    {{k: 'vol',    n: 'Volume',        c: '#7A879C', pane: 'VOLUME'}},
+    {{k: 'vwap',   n: 'VWAP 20',       c: '#F5A524'}}]}},
+];
+const IND_MAP = {{}};
+IND.forEach(g => g.items.forEach(i => {{ IND_MAP[i.k] = i; }}));
+let chInd = new Set(), chTools = new Set(['grid']);
+try {{
+  const a = JSON.parse(localStorage.getItem('chInd') || '[]');
+  if (Array.isArray(a)) chInd = new Set(a.filter(k => IND_MAP[k]));
+  const t = JSON.parse(localStorage.getItem('chTools') || '["grid"]');
+  if (Array.isArray(t)) chTools = new Set(t);
+}} catch(e) {{}}
+
+// ค่าเฉลี่ย/โมเมนตัม — คืนอาร์เรย์ยาวเท่าข้อมูล ช่วงที่ยังคำนวณไม่ได้เป็น null
+const smaA = (a, n) => {{
+  const o = []; let s = 0;
+  for (let i = 0; i < a.length; i++) {{
+    s += a[i]; if (i >= n) s -= a[i - n];
+    o.push(i >= n - 1 ? s / n : null);
+  }}
+  return o;
+}};
+const emaA = (a, n) => {{
+  const k = 2 / (n + 1), o = []; let e = null;
+  for (let i = 0; i < a.length; i++) {{
+    e = e == null ? a[i] : a[i] * k + e * (1 - k);
+    o.push(i >= n - 1 ? e : null);
+  }}
+  return o;
+}};
+const stdA = (a, n) => {{
+  const m = smaA(a, n), o = [];
+  for (let i = 0; i < a.length; i++) {{
+    if (i < n - 1) {{ o.push(null); continue; }}
+    let s = 0;
+    for (let j = i - n + 1; j <= i; j++) s += (a[j] - m[i]) * (a[j] - m[i]);
+    o.push(Math.sqrt(s / n));
+  }}
+  return o;
+}};
+// RSI แบบ Wilder (ค่าเฉลี่ยถ่วงน้ำหนักแบบเรียบ ไม่ใช่ SMA ธรรมดา)
+const rsiA = (a, n) => {{
+  const o = [null]; let g = 0, l = 0;
+  for (let i = 1; i < a.length; i++) {{
+    const d = a[i] - a[i - 1], up = Math.max(d, 0), dn = Math.max(-d, 0);
+    if (i <= n) {{ g += up / n; l += dn / n; o.push(i < n ? null : 100 - 100 / (1 + g / (l || 1e-9))); }}
+    else {{ g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n;
+            o.push(100 - 100 / (1 + g / (l || 1e-9))); }}
+  }}
+  return o;
+}};
+const macdA = a => {{
+  const f = emaA(a, 12), s = emaA(a, 26);
+  const m = a.map((_, i) => (f[i] != null && s[i] != null) ? f[i] - s[i] : null);
+  const sig = emaA(m.map(v => v == null ? 0 : v), 9).map((v, i) => m[i] == null ? null : v);
+  return {{m, sig, h: m.map((v, i) => (v == null || sig[i] == null) ? null : v - sig[i])}};
+}};
+const atrA = (rows, n) => emaA(rows.map((r, i) => i
+  ? Math.max(r[2] - r[3], Math.abs(r[2] - rows[i - 1][4]), Math.abs(r[3] - rows[i - 1][4]))
+  : r[2] - r[3]), n);
+const vwapA = (rows, n) => {{
+  const o = [], q = []; let pv = 0, vv = 0;
+  for (let i = 0; i < rows.length; i++) {{
+    const tp = (rows[i][2] + rows[i][3] + rows[i][4]) / 3, v = rows[i][5] || 1;
+    q.push([tp * v, v]); pv += tp * v; vv += v;
+    if (q.length > n) {{ const g = q.shift(); pv -= g[0]; vv -= g[1]; }}
+    o.push(i >= n - 1 ? pv / vv : null);
+  }}
+  return o;
+}};
+const FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
 let chLevels = {{}}, chOverlays = new Set();
 const OV_STYLE = {{
   fair:   {{color: 'var(--biz)',   label: 'FAIR VALUE'}},
@@ -2552,6 +2704,8 @@ function openCharts(){{
   if (!Object.keys(CHARTS).length) return;
   if (!document.getElementById('cmodal-list').childElementCount) {{
     setAssetMode(chMode);           // เปิดมาที่โหมดเดิมที่ผู้ใช้เลือกไว้
+    renderIndList();
+    syncTools();
     document.getElementById('cmodal-tf').innerHTML = CH_TF.map(t =>
       `<button class="tfbtn" type="button" data-tf="${{t}}" onclick="pickTf('${{t}}')">${{t}}</button>`).join('');
   }}
@@ -2600,6 +2754,53 @@ async function pickChart(label){{
   renderChart();
 }}
 
+// ── แถบเครื่องมือ: เปิด/ปิดอินดิเคเตอร์ ────────────────────
+function renderIndList(){{
+  document.getElementById('ind-list').innerHTML = IND.map(g =>
+    `<div class="cpop-grp">${{g.g}}</div>` + g.items.map(i =>
+      `<button class="cpop-row${{chInd.has(i.k) ? ' on' : ''}}" type="button"
+         data-ind="${{i.k}}" onclick="toggleInd('${{i.k}}')">
+        <span class="sw" style="background:${{i.c}}"></span>${{i.n}}
+        <span class="ck">✓</span></button>`).join('')).join('');
+  const n = chInd.size, b = document.getElementById('crn');
+  b.textContent = n; b.hidden = !n;
+  document.querySelector('.crbtn[data-pop="ind"]').classList.toggle('on', !!n);
+}}
+function toggleInd(k){{
+  chInd.has(k) ? chInd.delete(k) : chInd.add(k);
+  try {{ localStorage.setItem('chInd', JSON.stringify([...chInd])); }} catch(e) {{}}
+  renderIndList(); renderChart();
+}}
+function clearInd(){{
+  chInd.clear();
+  try {{ localStorage.setItem('chInd', '[]'); }} catch(e) {{}}
+  renderIndList(); renderChart();
+}}
+function toggleTool(t){{
+  chTools.has(t) ? chTools.delete(t) : chTools.add(t);
+  try {{ localStorage.setItem('chTools', JSON.stringify([...chTools])); }} catch(e) {{}}
+  syncTools(); renderChart();
+}}
+function syncTools(){{
+  document.querySelectorAll('.crbtn[data-tool]').forEach(b =>
+    b.classList.toggle('on', chTools.has(b.dataset.tool)));
+}}
+function togglePop(id){{
+  const p = document.getElementById('pop-' + id);
+  const open = p.hidden;
+  document.querySelectorAll('.cpop').forEach(x => {{ x.hidden = true; }});
+  p.hidden = !open;
+}}
+function resetZoom(){{
+  const svg = d3.select('#cchart svg');
+  if (svg.node() && chZoom) svg.call(chZoom.transform, d3.zoomIdentity);
+}}
+document.addEventListener('click', ev => {{
+  // คลิกนอกแถบเครื่องมือให้ปิดป๊อปอัป
+  if (!ev.target.closest('.crail')) document.querySelectorAll('.cpop')
+    .forEach(x => {{ x.hidden = true; }});
+}});
+
 function renderChart(){{
   const host = document.getElementById('cchart');
   const avail = CH_TF.filter(t => (chData?.tf || {{}})[t]?.length);
@@ -2613,25 +2814,83 @@ function renderChart(){{
   }});
 
   const rows = chData.tf[chTf];
+  const closes = rows.map(r => r[4]);
+  const has = k => chInd.has(k);
+
+  // คำนวณเฉพาะเส้นที่เปิดใช้อยู่ จะได้ไม่เสียเวลากับตัวที่ไม่ได้ดู
+  const S = {{}};
+  if (has('sma20'))  S.sma20  = smaA(closes, 20);
+  if (has('sma50'))  S.sma50  = smaA(closes, 50);
+  if (has('sma200')) S.sma200 = smaA(closes, 200);
+  if (has('ema12'))  S.ema12  = emaA(closes, 12);
+  if (has('ema26'))  S.ema26  = emaA(closes, 26);
+  if (has('vwap'))   S.vwap   = vwapA(rows, 20);
+  if (has('bb')) {{
+    const mid = smaA(closes, 20), sd = stdA(closes, 20);
+    S.bbm = mid;
+    S.bbu = mid.map((v, i) => v == null ? null : v + 2 * sd[i]);
+    S.bbl = mid.map((v, i) => v == null ? null : v - 2 * sd[i]);
+  }}
+  if (has('rsi'))  S.rsi  = rsiA(closes, 14);
+  if (has('macd')) S.macd = macdA(closes);
+  if (has('atr'))  S.atr  = atrA(rows, 14);
+
+  const OVER = [['sma20','sma20'],['sma50','sma50'],['sma200','sma200'],
+                ['ema12','ema12'],['ema26','ema26'],['vwap','vwap'],
+                ['bb','bbm'],['bb','bbu'],['bb','bbl']];
+  const subs = ['vol', 'rsi', 'macd', 'atr'].filter(has);
+
   const W = host.clientWidth || 700, H = host.clientHeight || 360;
-  const m = {{t: 10, r: 56, b: 22, l: 8}};
-  const iw = Math.max(50, W - m.l - m.r), ih = Math.max(50, H - m.t - m.b);
+  const m = {{t: 9, r: 58, b: 20, l: 8}};
+  const iw = Math.max(50, W - m.l - m.r);
+  const innerH = Math.max(90, H - m.t - m.b);
+  const subH = subs.length ? Math.max(46, Math.min(78, innerH * 0.9 / (subs.length + 2.2))) : 0;
+  const mainH = Math.max(80, innerH - subs.length * subH);
+
   host.innerHTML = '';
   const svg = d3.select(host).append('svg').attr('viewBox', `0 0 ${{W}} ${{H}}`);
-  const root = svg.append('g').attr('transform', `translate(${{m.l}},${{m.t}})`);
-  root.append('clipPath').attr('id', 'cclip').append('rect')
-      .attr('width', iw).attr('height', ih);
-
+  const defs = svg.append('defs');
   const x0 = d3.scaleLinear().domain([-0.6, rows.length - 0.4]).range([0, iw]);
-  const y = d3.scaleLinear().range([ih, 0]);
-  const gGrid = root.append('g').attr('class', 'c-grid');
-  const gY = root.append('g').attr('class', 'c-axis').attr('transform', `translate(${{iw}},0)`);
-  const gX = root.append('g').attr('class', 'c-axis').attr('transform', `translate(0,${{ih}})`);
-  const gC = root.append('g').attr('clip-path', 'url(#cclip)');
-  const cross = root.append('line').attr('class', 'c-cross').attr('y1', 0).attr('y2', ih)
-      .style('display', 'none');
 
-  // เวลาแบบตัวเลขดัชนี ไม่ใช่เวลาจริง เพื่อไม่ให้มีช่องว่างวันหยุด
+  // แต่ละแพเนลมีสเกล y ของตัวเอง แต่ใช้แกนเวลาร่วมกัน
+  const panes = [];
+  let top = 0;
+  const addPane = (k, h, label) => {{
+    const g = svg.append('g').attr('transform', `translate(${{m.l}},${{m.t + top}})`);
+    defs.append('clipPath').attr('id', 'clip-' + k)
+        .append('rect').attr('width', iw).attr('height', h);
+    if (panes.length) g.append('line').attr('class', 'c-pane-sep')
+        .attr('x1', 0).attr('x2', iw + m.r - 6).attr('y1', 0).attr('y2', 0);
+    const p = {{k, h, top, g, label,
+      y: d3.scaleLinear().range([h, 0]),
+      grid: g.append('g').attr('class', 'c-grid'),
+      body: g.append('g').attr('clip-path', 'url(#clip-' + k + ')'),
+      axis: g.append('g').attr('class', 'c-axis').attr('transform', `translate(${{iw}},0)`),
+      leg: g.append('g').attr('class', 'c-leg').attr('transform', 'translate(2,11)')}};
+    panes.push(p);
+    top += h;
+    return p;
+  }};
+  const main = addPane('main', mainH, '');
+  const pane = {{}};
+  subs.forEach(k => {{ pane[k] = addPane(k, subH, IND_MAP[k].pane); }});
+
+  const gX = svg.append('g').attr('class', 'c-axis')
+      .attr('transform', `translate(${{m.l}},${{m.t + innerH}})`);
+  const over = svg.append('g').attr('transform', `translate(${{m.l}},${{m.t}})`)
+      .style('pointer-events', 'none');
+  const crossX = over.append('line').attr('class', 'c-cross')
+      .attr('y1', 0).attr('y2', innerH).style('display', 'none');
+  const crossY = over.append('line').attr('class', 'c-cross')
+      .attr('x1', 0).attr('x2', iw).style('display', 'none');
+  const tagY = over.append('g').attr('class', 'c-tag').style('display', 'none');
+  tagY.append('rect').attr('width', 52).attr('height', 15).attr('x', iw + 2).attr('y', -7.5);
+  tagY.append('text').attr('x', iw + 28).attr('y', 3.4).attr('text-anchor', 'middle');
+  const tagNow = over.append('g').attr('class', 'c-tag now');
+  tagNow.append('rect').attr('width', 52).attr('height', 15).attr('x', iw + 2).attr('y', -7.5);
+  tagNow.append('text').attr('x', iw + 28).attr('y', 3.4).attr('text-anchor', 'middle')
+      .attr('fill', 'var(--bg)');
+
   const fmtT = ts => {{
     const dt = new Date(ts * 1000);
     return chTf === '1D'
@@ -2639,6 +2898,23 @@ function renderChart(){{
       : dt.toLocaleDateString('th-TH', {{day: '2-digit', month: 'short',
           year: ['3Y', '5Y', '1Y'].includes(chTf) ? '2-digit' : undefined}});
   }};
+  const fmtP = n => d3.format(Math.abs(n) >= 1000 ? ',.0f' : ',.2f')(n);
+  const fmtV = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B'
+    : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M'
+    : n >= 1e3 ? (n / 1e3).toFixed(0) + 'K' : String(n);
+  const lineGen = (zx, yy, arr, i0) => d3.line()
+      .defined(d => d.v != null && isFinite(d.v))
+      .x(d => zx(d.i)).y(d => yy(d.v))(
+        arr.map((v, k) => ({{i: i0 + k, v}})));
+
+  function paneAxis(p, ticks, fmt) {{
+    if (chTools.has('grid')) {{
+      p.grid.selectAll('line').data(ticks).join('line')
+        .attr('x1', 0).attr('x2', iw).attr('y1', p.y).attr('y2', p.y);
+    }} else {{ p.grid.selectAll('line').remove(); }}
+    p.axis.selectAll('text').data(ticks).join('text')
+      .attr('x', 6).attr('y', p.y).attr('dy', '.32em').text(fmt);
+  }}
 
   function draw(t){{
     const zx = t.rescaleX(x0);
@@ -2646,30 +2922,34 @@ function renderChart(){{
     const i1 = Math.min(rows.length - 1, Math.ceil(zx.invert(iw)));
     const vis = rows.slice(i0, i1 + 1);
     if (!vis.length) return;
-    const lo = d3.min(vis, d => d[3]), hi = d3.max(vis, d => d[2]);
-    const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.02 || 1;
-    y.domain([lo - pad, hi + pad]);
 
-    const ticks = y.ticks(6);
-    gGrid.selectAll('line').data(ticks).join('line')
-      .attr('x1', 0).attr('x2', iw).attr('y1', y).attr('y2', y);
-    gY.selectAll('text').data(ticks).join('text')
-      .attr('x', 6).attr('y', y).attr('dy', '.32em')
-      .text(d => d3.format(d >= 1000 ? ',.0f' : ',.2f')(d));
+    // ── แพเนลราคา ──
+    let lo = d3.min(vis, d => d[3]), hi = d3.max(vis, d => d[2]);
+    OVER.forEach(([k, s]) => {{
+      if (!has(k) || !S[s]) return;
+      const seg = S[s].slice(i0, i1 + 1).filter(v => v != null && isFinite(v));
+      if (seg.length) {{ lo = Math.min(lo, d3.min(seg)); hi = Math.max(hi, d3.max(seg)); }}
+    }});
+    const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.02 || 1;
+    const logOn = chTools.has('log') && lo - pad > 0;
+    main.y = (logOn ? d3.scaleLog() : d3.scaleLinear())
+      .domain([lo - pad, hi + pad]).range([mainH, 0]);
+    paneAxis(main, logOn ? main.y.ticks(5, ',.0f').concat([lo, hi]) : main.y.ticks(6), fmtP);
 
     const step = Math.max(1, Math.round((i1 - i0) / 6));
     const xt = [];
     for (let i = i0; i <= i1; i += step) xt.push(i);
     gX.selectAll('text').data(xt).join('text')
-      .attr('x', d => zx(d)).attr('y', 15).attr('text-anchor', 'middle')
+      .attr('x', d => zx(d)).attr('y', 14).attr('text-anchor', 'middle')
       .text(d => fmtT(rows[d][0]));
 
+    const gC = main.body;
     if (chType === 'line') {{
       gC.selectAll('g.cd').remove();
-      const path = d3.line().x((d, k) => zx(i0 + k)).y(d => y(d[4]))(vis);
       const up = vis[vis.length - 1][4] >= vis[0][4];
       gC.selectAll('path.cline').data([0]).join('path').attr('class', 'cline')
-        .attr('d', path).attr('fill', 'none').attr('stroke-width', 1.7)
+        .attr('d', d3.line().x((d, k) => zx(i0 + k)).y(d => main.y(d[4]))(vis))
+        .attr('fill', 'none').attr('stroke-width', 1.7)
         .attr('stroke', up ? 'var(--up)' : 'var(--down)');
     }} else {{
       gC.selectAll('path.cline').remove();
@@ -2680,20 +2960,44 @@ function renderChart(){{
       g.attr('class', d => 'cd ' + (d[4] >= d[1] ? 'c-up' : 'c-down'))
        .attr('transform', (d, k) => `translate(${{zx(i0 + k)}},0)`);
       g.select('line').attr('x1', 0).attr('x2', 0)
-        .attr('y1', d => y(d[2])).attr('y2', d => y(d[3])).attr('stroke-width', 1);
-      g.select('rect')
-        .attr('x', -bw / 2).attr('width', bw)
-        .attr('y', d => y(Math.max(d[1], d[4])))
-        .attr('height', d => Math.max(1, Math.abs(y(d[1]) - y(d[4]))));
+        .attr('y1', d => main.y(d[2])).attr('y2', d => main.y(d[3])).attr('stroke-width', 1);
+      g.select('rect').attr('x', -bw / 2).attr('width', bw)
+        .attr('y', d => main.y(Math.max(d[1], d[4])))
+        .attr('height', d => Math.max(1, Math.abs(main.y(d[1]) - main.y(d[4]))));
     }}
-    // เส้นค่าคำนวณที่ผู้ใช้เปิดไว้
+
+    // เส้นอินดิเคเตอร์บนแพเนลราคา
+    const lines = OVER.filter(([k]) => has(k) && S[OVER.find(o => o[0] === k)[1]])
+      .map(([k, s]) => ({{k: k + '-' + s, c: IND_MAP[k].c,
+                         dash: s === 'bbm' ? '4 3' : null,
+                         d: lineGen(zx, main.y, S[s].slice(i0, i1 + 1), i0)}}));
+    gC.selectAll('path.ind').data(lines, d => d.k).join('path')
+      .attr('class', 'ind').attr('fill', 'none').attr('stroke-width', 1.3)
+      .attr('stroke', d => d.c).attr('stroke-dasharray', d => d.dash)
+      .attr('d', d => d.d);
+
+    // ── Fibonacci จากช่วงที่มองเห็น ──
+    const fibs = chTools.has('fib')
+      ? FIB.map(f => ({{f, v: hi - (hi - lo) * f}})) : [];
+    const fg = gC.selectAll('g.c-fib').data(fibs, d => d.f).join(
+      en => {{ const s = en.append('g').attr('class', 'c-fib');
+               s.append('line'); s.append('text'); return s; }});
+    fg.select('line').attr('x1', 0).attr('x2', iw)
+      .attr('y1', d => main.y(d.v)).attr('y2', d => main.y(d.v))
+      .attr('stroke', d => d.f === 0 || d.f === 1 ? 'var(--dim)' : 'var(--brass)')
+      .attr('opacity', .75);
+    fg.select('text').attr('x', 4).attr('y', d => main.y(d.v) - 3)
+      .attr('fill', 'var(--brass)')
+      .text(d => (d.f * 100).toFixed(1) + '%  ' + fmtP(d.v));
+
+    // ── เส้นค่าคำนวณที่กดเปิดจากแผง METRICS ──
     const ovs = [];
     for (const k of chOverlays) {{
       const st = OV_STYLE[k];
       if (k === 'trend') {{
-        const t = chLevels.trend;
-        if (!t) continue;
-        ovs.push({{k, st, y1: t.first + t.slope * i0, y2: t.first + t.slope * i1, line: true}});
+        const tr = chLevels.trend;
+        if (!tr) continue;
+        ovs.push({{k, st, y1: tr.first + tr.slope * i0, y2: tr.first + tr.slope * i1, line: true}});
       }} else if (chLevels[k] != null) {{
         ovs.push({{k, st, y1: chLevels[k], y2: chLevels[k]}});
       }}
@@ -2702,21 +3006,109 @@ function renderChart(){{
       en => {{ const s = en.append('g').attr('class', 'ov');
                s.append('line'); s.append('text'); return s; }});
     og.select('line')
-      .attr('x1', zx(i0)).attr('x2', zx(i1))
-      .attr('y1', d => y(d.y1)).attr('y2', d => y(d.y2))
+      .attr('x1', 0).attr('x2', iw)
+      .attr('y1', d => main.y(d.y1)).attr('y2', d => main.y(d.y2))
       .attr('stroke', d => d.st.color).attr('stroke-width', 1.5)
       .attr('stroke-dasharray', d => d.line ? '6 4' : '4 4');
     og.select('text')
-      .attr('x', zx(i0) + 5).attr('y', d => y(d.y1) - 4)
+      .attr('x', 5).attr('y', d => main.y(d.y1) - 4)
       .attr('fill', d => d.st.color).attr('font-size', 10)
       .attr('font-family', "'IBM Plex Mono',monospace")
       .text(d => d.st.label);
 
+    // ── แพเนลย่อย ──
+    if (pane.vol) {{
+      const p = pane.vol, mx = d3.max(vis, d => d[5] || 0) || 1;
+      p.y.domain([0, mx * 1.05]);
+      paneAxis(p, p.y.ticks(2).slice(1), fmtV);
+      const bw = Math.max(1, Math.min(18, (zx(1) - zx(0)) * 0.68));
+      p.body.selectAll('g.c-vol').data([0]).join('g').attr('class', 'c-vol')
+        .selectAll('rect').data(vis, d => d[0]).join('rect')
+        .attr('x', (d, k) => zx(i0 + k) - bw / 2).attr('width', bw)
+        .attr('y', d => p.y(d[5] || 0)).attr('height', d => p.h - p.y(d[5] || 0))
+        .attr('fill', d => d[4] >= d[1] ? 'var(--up)' : 'var(--down)');
+    }}
+    if (pane.rsi) {{
+      const p = pane.rsi;
+      p.y.domain([0, 100]);
+      paneAxis(p, [30, 70], d => d);
+      p.body.selectAll('path.ind').data([0]).join('path').attr('class', 'ind')
+        .attr('fill', 'none').attr('stroke', IND_MAP.rsi.c).attr('stroke-width', 1.4)
+        .attr('d', lineGen(zx, p.y, S.rsi.slice(i0, i1 + 1), i0));
+    }}
+    if (pane.macd) {{
+      const p = pane.macd;
+      const seg = k => S.macd[k].slice(i0, i1 + 1).filter(v => v != null);
+      const ex = d3.max([...seg('m'), ...seg('sig'), ...seg('h')].map(Math.abs)) || 1;
+      p.y.domain([-ex * 1.15, ex * 1.15]);
+      paneAxis(p, [0], d => d);
+      const bw = Math.max(1, Math.min(12, (zx(1) - zx(0)) * 0.6));
+      p.body.selectAll('g.c-hist').data([0]).join('g').attr('class', 'c-hist')
+        .selectAll('rect').data(vis.map((_, k) => S.macd.h[i0 + k]), (d, k) => k)
+        .join('rect')
+        .attr('x', (d, k) => zx(i0 + k) - bw / 2).attr('width', bw)
+        .attr('y', d => d == null ? 0 : p.y(Math.max(0, d)))
+        .attr('height', d => d == null ? 0 : Math.abs(p.y(d) - p.y(0)))
+        .attr('fill', d => d >= 0 ? 'var(--up)' : 'var(--down)').attr('opacity', .55);
+      const two = [['m', IND_MAP.macd.c], ['sig', '#F5A524']];
+      p.body.selectAll('path.ind').data(two, d => d[0]).join('path').attr('class', 'ind')
+        .attr('fill', 'none').attr('stroke', d => d[1]).attr('stroke-width', 1.3)
+        .attr('d', d => lineGen(zx, p.y, S.macd[d[0]].slice(i0, i1 + 1), i0));
+    }}
+    if (pane.atr) {{
+      const p = pane.atr;
+      const seg = S.atr.slice(i0, i1 + 1).filter(v => v != null);
+      p.y.domain([d3.min(seg) * 0.9 || 0, d3.max(seg) * 1.1 || 1]);
+      paneAxis(p, p.y.ticks(2), fmtP);
+      p.body.selectAll('path.ind').data([0]).join('path').attr('class', 'ind')
+        .attr('fill', 'none').attr('stroke', IND_MAP.atr.c).attr('stroke-width', 1.3)
+        .attr('d', lineGen(zx, p.y, seg.length ? S.atr.slice(i0, i1 + 1) : [], i0));
+    }}
+
+    // ── ราคาปิดล่าสุดติดป้ายที่แกนขวา ──
+    const last = rows[rows.length - 1][4];
+    const inView = last >= main.y.domain()[0] && last <= main.y.domain()[1];
+    tagNow.style('display', inView ? null : 'none')
+      .attr('transform', `translate(0,${{main.y(last)}})`);
+    tagNow.select('text').text(fmtP(last));
+
+    legend(i1);
     svg.node().__view = {{zx, i0, i1}};
   }}
 
-  chZoom = d3.zoom().scaleExtent([1, 30])
-    .translateExtent([[0, 0], [iw, ih]]).extent([[0, 0], [iw, ih]])
+  // ป้ายชื่อ + ค่าอินดิเคเตอร์ที่ตำแหน่งเมาส์ (ถ้าไม่ชี้ ใช้แท่งล่าสุด)
+  function legend(i){{
+    const items = [{{t: chCur + ' · ' + chTf, c: 'var(--ink)'}}];
+    OVER.forEach(([k, s]) => {{
+      if (!has(k) || !S[s] || s === 'bbl') return;
+      const v = S[s][i];
+      if (v == null) return;
+      const nm = s === 'bbu' ? 'BB' : s === 'bbm' ? null : IND_MAP[k].n;
+      if (nm) items.push({{t: nm + ' ' + fmtP(v), c: IND_MAP[k].c}});
+    }});
+    main.leg.selectAll('text').data(items).join('text')
+      .attr('x', (d, k) => k === 0 ? 0 : null)
+      .attr('fill', d => d.c).attr('y', 0)
+      .text(d => d.t)
+      .attr('x', function(d, k){{
+        let x = 0;
+        for (let j = 0; j < k; j++) x += this.parentNode.children[j].getComputedTextLength() + 11;
+        return x;
+      }});
+    if (pane.rsi) pane.rsi.leg.selectAll('text').data([S.rsi[i]]).join('text')
+      .attr('fill', IND_MAP.rsi.c).text(d => 'RSI 14  ' + (d == null ? '—' : d.toFixed(1)));
+    if (pane.macd) pane.macd.leg.selectAll('text').data([S.macd.m[i]]).join('text')
+      .attr('fill', IND_MAP.macd.c)
+      .text(d => 'MACD  ' + (d == null ? '—' : fmtP(d)) +
+        '   SIGNAL ' + (S.macd.sig[i] == null ? '—' : fmtP(S.macd.sig[i])));
+    if (pane.atr) pane.atr.leg.selectAll('text').data([S.atr[i]]).join('text')
+      .attr('fill', IND_MAP.atr.c).text(d => 'ATR 14  ' + (d == null ? '—' : fmtP(d)));
+    if (pane.vol) pane.vol.leg.selectAll('text').data([rows[i][5] || 0]).join('text')
+      .attr('fill', 'var(--mute)').text(d => 'VOL  ' + (d ? fmtV(d) : '—'));
+  }}
+
+  chZoom = d3.zoom().scaleExtent([1, 40])
+    .translateExtent([[0, 0], [iw, innerH]]).extent([[0, 0], [iw, innerH]])
     .on('zoom', ev => draw(ev.transform));
   svg.call(chZoom).on('dblclick.zoom', null);
   svg.on('dblclick', () => svg.call(chZoom.transform, d3.zoomIdentity));
@@ -2726,16 +3118,28 @@ function renderChart(){{
   const out = document.getElementById('creadout');
   svg.on('mousemove', ev => {{
     const v = svg.node().__view; if (!v) return;
-    const px = d3.pointer(ev, root.node())[0];
-    const i = Math.round(v.zx.invert(px));
-    const r = rows[Math.max(v.i0, Math.min(v.i1, i))];
-    if (!r) return;
-    cross.style('display', null).attr('x1', v.zx(rows.indexOf(r))).attr('x2', v.zx(rows.indexOf(r)));
-    const f = n => d3.format(n >= 1000 ? ',.0f' : ',.2f')(n);
-    out.innerHTML = `<span>${{fmtT(r[0])}}</span><span>O <b>${{f(r[1])}}</b></span>` +
-      `<span>H <b>${{f(r[2])}}</b></span><span>L <b>${{f(r[3])}}</b></span>` +
-      `<span>C <b>${{f(r[4])}}</b></span>`;
-  }}).on('mouseleave', () => {{ cross.style('display', 'none'); out.innerHTML = ''; }});
+    const [px, py] = d3.pointer(ev, svg.node());
+    const i = Math.max(v.i0, Math.min(v.i1, Math.round(v.zx.invert(px - m.l))));
+    const r = rows[i]; if (!r) return;
+    crossX.style('display', null).attr('x1', v.zx(i)).attr('x2', v.zx(i));
+    const ly = py - m.t;
+    if (ly >= 0 && ly <= mainH) {{
+      crossY.style('display', null).attr('y1', ly).attr('y2', ly);
+      tagY.style('display', null).attr('transform', `translate(0,${{ly}})`);
+      tagY.select('text').text(fmtP(main.y.invert(ly)));
+    }} else {{ crossY.style('display', 'none'); tagY.style('display', 'none'); }}
+    legend(i);
+    const chg = ((r[4] / r[1] - 1) * 100);
+    out.innerHTML = `<span>${{fmtT(r[0])}}</span><span>O <b>${{fmtP(r[1])}}</b></span>` +
+      `<span>H <b>${{fmtP(r[2])}}</b></span><span>L <b>${{fmtP(r[3])}}</b></span>` +
+      `<span>C <b>${{fmtP(r[4])}}</b></span>` +
+      `<span class="${{chg >= 0 ? 'up' : 'down'}}">${{chg >= 0 ? '+' : ''}}${{chg.toFixed(2)}}%</span>` +
+      (r[5] ? `<span>VOL <b>${{fmtV(r[5])}}</b></span>` : '');
+  }}).on('mouseleave', () => {{
+    crossX.style('display', 'none'); crossY.style('display', 'none');
+    tagY.style('display', 'none'); out.innerHTML = '';
+    const v = svg.node().__view; if (v) legend(v.i1);
+  }});
 }}
 
 document.getElementById('cmodal').addEventListener('click', ev => {{
