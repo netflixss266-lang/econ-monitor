@@ -1484,12 +1484,12 @@ def render(news, markets, charts=None, logos=None, streams=None):
     # ตัว T แบบเซริฟในกรอบเส้นคู่ อย่างหัวหนังสือพิมพ์
     favicon = ("data:image/svg+xml,"
                "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
-               "%3Crect width='100' height='100' fill='%23EFE8D9'/%3E"
+               "%3Crect width='100' height='100' fill='%230A0E1A'/%3E"
                "%3Crect x='7' y='7' width='86' height='86' fill='none'"
-               " stroke='%23191612' stroke-width='5'/%3E"
+               " stroke='%23C6A961' stroke-width='5'/%3E"
                "%3Crect x='16' y='16' width='68' height='68' fill='none'"
-               " stroke='%23191612' stroke-width='1.6'/%3E"
-               "%3Cg fill='%23191612'%3E"
+               " stroke='%23C6A961' stroke-width='1.6'/%3E"
+               "%3Cg fill='%23F4EFE3'%3E"
                "%3Crect x='26' y='30' width='48' height='10'/%3E"
                "%3Crect x='45' y='30' width='10' height='40'/%3E"
                "%3Crect x='37' y='64' width='26' height='6'/%3E%3C/g%3E%3C/svg%3E")
@@ -1507,12 +1507,12 @@ def render(news, markets, charts=None, logos=None, streams=None):
 <meta property="og:description" content="{html.escape(page_desc)}">
 <meta property="og:url" content="https://netflixss266-lang.github.io/econ-monitor/">
 <meta name="twitter:card" content="summary">
-<meta name="theme-color" content="#EFE8D9">
+<meta name="theme-color" content="#0A0E1A">
 <link rel="icon" href="{favicon}">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Tribune">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Serif+Thai:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,700&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
@@ -1527,15 +1527,14 @@ try{{
 </script>
 <style>
 :root{{
-  /* กระดาษหนังสือพิมพ์ + หมึกดำ — โทนสิ่งพิมพ์ต้นศตวรรษที่ 20 */
-  --bg:#EFE8D9; --panel:#F8F3E7; --panel2:#E9E1CD; --panel3:#E2D8C0;
-  --line:#CCC0A6; --line2:#A4977A; --faint:#BCAF94;
-  --ink:#191612; --mute:#4B453B; --dim:#7C7261;
-  --hover:#EAE1CC; --sel:#E3D9C0;
-  --econ:#26456F; --poli:#8A5518; --biz:#1D6350; --env:#4C6A24; --mixed:#5A4A78;
-  --up:#1C6B45; --down:#A32C24;
-  --brass:#8A6A28; --cream:#14110C;
-  --scrim:rgba(30,25,17,.55);
+  --bg:#0A0E1A; --panel:#111726; --panel2:#0E1420; --panel3:#0C1220;
+  --line:#1E2637; --line2:#2A3548; --faint:#2E3A4E;
+  --ink:#E7ECF5; --mute:#7A879C; --dim:#4E5A70;
+  --hover:#151C2C; --sel:#182133;
+  --econ:#4C8DFF; --poli:#F5A524; --biz:#2DD4BF; --env:#4ADE80; --mixed:#9B8AFB;
+  --up:#3FB68B; --down:#E5484D;
+  --brass:#C6A961; --cream:#F4EFE3;
+  --scrim:rgba(4,6,11,.82);
 }}
 *{{box-sizing:border-box;margin:0;padding:0}}
 button,input{{font-family:inherit}}
@@ -1548,7 +1547,7 @@ a{{color:inherit;text-decoration:none}}
 /* ── หัวหนังสือพิมพ์ ──────────────────────────────────── */
 header{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px;
   padding:6px 0 12px;margin-bottom:18px;
-  border-top:3px solid var(--ink);border-bottom:3px double var(--ink)}}
+  border-top:2px solid var(--brass);border-bottom:3px double var(--brass)}}
 .mast-top{{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;
   gap:9px;width:100%;padding-bottom:9px;margin-bottom:2px;
   border-bottom:1px solid var(--line);
@@ -1562,23 +1561,27 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   margin-bottom:-4px}}
 .logo-mark{{font-family:'UnifrakturMaguntia','Playfair Display',Georgia,serif;font-weight:400;
   font-size:clamp(3rem,10.5vw,5.6rem);line-height:1.02;letter-spacing:.02em;
-  color:var(--ink)}}
+  color:var(--cream)}}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){{
+  .logo-mark{{background:linear-gradient(176deg,#FBF7EE 6%,var(--cream) 42%,var(--brass) 122%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}}
+}}
 .logo-rule{{display:flex;align-items:center;justify-content:center;gap:12px;
   width:min(760px,94vw);margin-top:2px;color:var(--brass)}}
-.logo-rule::before,.logo-rule::after{{content:"";flex:1;height:1px;background:var(--line2)}}
+.logo-rule::before,.logo-rule::after{{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--brass) 30%,var(--brass) 70%,transparent)}}
 .logo-rule span{{font-size:.6rem;letter-spacing:.1em}}
 .logo-sub{{font-family:'Playfair Display',Georgia,serif;
   font-size:clamp(.6rem,1.7vw,.78rem);font-weight:600;
   letter-spacing:.2em;text-transform:uppercase;color:var(--mute);
   max-width:900px;line-height:1.9}}
-.logo-sub b{{font-size:1.24em;font-weight:700;color:var(--ink)}}
+.logo-sub b{{font-size:1.24em;font-weight:700;color:var(--cream)}}
 .logo-sub i{{font-style:normal;color:var(--brass);padding:0 2px}}
 .stamp{{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;
   font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.06em;
   text-transform:uppercase;color:var(--mute)}}
 .pulse{{width:7px;height:7px;border-radius:50%;background:var(--up);
-  box-shadow:0 0 0 0 rgba(28,107,69,.55);animation:p 2.4s infinite}}
-@keyframes p{{70%{{box-shadow:0 0 0 9px rgba(28,107,69,0)}}100%{{box-shadow:0 0 0 0 rgba(28,107,69,0)}}}}
+  box-shadow:0 0 0 0 rgba(63,182,139,.6);animation:p 2.4s infinite}}
+@keyframes p{{70%{{box-shadow:0 0 0 9px rgba(63,182,139,0)}}100%{{box-shadow:0 0 0 0 rgba(63,182,139,0)}}}}
 
 /* แถบราคาเลื่อนไปทางซ้ายต่อเนื่องแบบรายการทีวี — วิ่งตลอด ไม่หยุดตอนชี้เมาส์ */
 .tickers{{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}}
@@ -1601,7 +1604,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   border:0;border-right:1px solid var(--line);background:none;color:inherit;
   font-family:'IBM Plex Mono',monospace;font-size:.8rem;cursor:pointer;
   display:flex;align-items:baseline;gap:7px;transition:background .15s}}
-.tick:hover{{background:rgba(25,22,18,.05)}}
+.tick:hover{{background:rgba(255,255,255,.06)}}
 .tick:focus-visible{{outline:2px solid var(--econ);outline-offset:-2px}}
 .t-chg{{font-size:.76rem}}
 
@@ -1610,7 +1613,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   background:var(--scrim)}}
 .tmodal-box{{width:min(760px,100%);max-height:86vh;display:flex;flex-direction:column;
   background:var(--panel);border:1px solid var(--line);border-radius:2px;overflow:hidden;
-  box-shadow:0 24px 60px rgba(46,38,24,.28)}}
+  box-shadow:0 30px 80px rgba(0,0,0,.6)}}
 .tmodal-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
   padding:16px 18px 12px;border-bottom:1px solid var(--line);background:var(--panel2)}}
 .tmodal-head h3{{font-size:1.1rem;font-weight:700;letter-spacing:.02em}}
@@ -1620,7 +1623,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 #tmodal-c{{font-size:.8rem}}
 .tmodal-x{{flex:none;width:30px;height:30px;border-radius:2px;cursor:pointer;font-size:1.2rem;
   line-height:1;color:var(--mute);background:transparent;border:1px solid var(--line)}}
-.tmodal-x:hover{{color:var(--ink);background:rgba(25,22,18,.06)}}
+.tmodal-x:hover{{color:var(--ink);background:rgba(255,255,255,.07)}}
 .backbtn{{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:2px;
   cursor:pointer;color:var(--mute);background:var(--panel);border:1px solid var(--line)}}
 .backbtn svg{{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;
@@ -1643,9 +1646,9 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .score{{flex:none;min-width:52px;text-align:center;padding:5px 8px;border-radius:2px;
   font-family:'IBM Plex Mono',monospace;font-size:.78rem;font-weight:600}}
 /* >50 เขียว · 10-49 เหลือง · <10 แดง */
-.score.hi{{color:#12513A;background:rgba(28,107,69,.14);border:1px solid rgba(28,107,69,.42)}}
-.score.mid{{color:#6E4310;background:rgba(138,85,24,.14);border:1px solid rgba(138,85,24,.4)}}
-.score.low{{color:#7E211B;background:rgba(163,44,36,.13);border:1px solid rgba(163,44,36,.4)}}
+.score.hi{{color:#8CF0C6;background:rgba(63,182,139,.16);border:1px solid rgba(63,182,139,.4)}}
+.score.mid{{color:#FFD27A;background:rgba(245,165,36,.14);border:1px solid rgba(245,165,36,.38)}}
+.score.low{{color:#FFA9AC;background:rgba(229,72,77,.14);border:1px solid rgba(229,72,77,.38)}}
 .tmodal-empty{{padding:26px 18px;color:var(--mute);font-size:.85rem;text-align:center}}
 
 /* ── หน้ากราฟแท่งเทียน ─────────────────────────────────── */
@@ -1671,7 +1674,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .tfbtn{{padding:5px 11px;border-radius:2px;cursor:pointer;font-family:'IBM Plex Mono',monospace;
   font-size:.72rem;color:var(--mute);background:transparent;border:1px solid var(--line)}}
 .tfbtn:hover{{color:var(--ink)}}
-.tfbtn.on{{color:#FBF7EC;background:var(--brass);border-color:var(--brass);font-weight:600}}
+.tfbtn.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:600}}
 .cmodal-body{{flex:1;display:flex;min-height:0}}
 .cmodal-pick{{width:210px;flex:none;display:flex;flex-direction:column;min-height:0;
   border-right:1px solid var(--line)}}
@@ -1690,7 +1693,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.06em;
   color:var(--mute);background:transparent;border:1px solid var(--line)}}
 .cfav-tab:hover{{color:var(--ink)}}
-.cfav-tab.on{{color:#FBF7EC;background:var(--brass);border-color:var(--brass);font-weight:700}}
+.cfav-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
 .cpct{{font-family:'IBM Plex Mono',monospace;font-size:.7rem}}
 .cfav{{flex:none;width:20px;text-align:center;font-size:.82rem;line-height:1;
   color:var(--faint);cursor:pointer}}
@@ -1720,7 +1723,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .c-axis text{{fill:var(--dim);font-family:'IBM Plex Mono',monospace;font-size:10px}}
 .c-up{{fill:var(--up);stroke:var(--up)}}
 .c-down{{fill:var(--down);stroke:var(--down)}}
-.c-cross{{stroke:var(--line2);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}}
+.c-cross{{stroke:var(--dim);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}}
 .creadout{{min-height:19px;font-family:'IBM Plex Mono',monospace;font-size:.7rem;
   color:var(--mute);display:flex;gap:12px;flex-wrap:wrap}}
 .creadout b{{color:var(--ink);font-weight:500}}
@@ -1804,16 +1807,16 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .row-panel{{margin-bottom:16px}}
 
 .map-wrap{{position:relative;height:440px;
-  background:radial-gradient(ellipse at 50% 45%,#F3ECDC 0%,#E5DCC5 72%)}}
+  background:radial-gradient(ellipse at 50% 45%,#101827 0%,#0B111C 70%)}}
 #map{{width:100%;height:100%;display:block;cursor:grab;touch-action:none}}
 #map:active{{cursor:grabbing}}
 /* เส้นขอบไม่หนาขึ้นตอนซูม */
-.sphere{{fill:#F1EADA;stroke:var(--line2);stroke-width:.8;vector-effect:non-scaling-stroke}}
-.grat{{fill:none;stroke:#D8CDB2;stroke-width:.45;vector-effect:non-scaling-stroke}}
-.country{{fill:#E0D5BB;stroke:#9E9075;stroke-width:.45;vector-effect:non-scaling-stroke}}
+.sphere{{fill:#0C1220;stroke:#1A2333;stroke-width:.8;vector-effect:non-scaling-stroke}}
+.grat{{fill:none;stroke:#141C2B;stroke-width:.45;vector-effect:non-scaling-stroke}}
+.country{{fill:#172030;stroke:#232E42;stroke-width:.45;vector-effect:non-scaling-stroke}}
 .zoom-ctl{{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:5px;z-index:5}}
 .zoom-ctl button{{width:27px;height:27px;font-family:inherit;font-size:.95rem;line-height:1;
-  color:var(--mute);background:rgba(248,243,231,.9);border:1px solid var(--line);
+  color:var(--mute);background:rgba(10,14,26,.85);border:1px solid var(--line);
   border-radius:2px;cursor:pointer}}
 .zoom-ctl button:hover{{color:var(--ink);border-color:var(--dim)}}
 .mk{{cursor:pointer}}
@@ -1823,11 +1826,11 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .mk-label{{font-family:'Noto Serif Thai',Georgia,serif;font-size:10px;
   fill:var(--mute);pointer-events:none}}
 #tip{{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;
-  background:rgba(248,243,231,.96);border:1px solid var(--line);border-radius:2px;
+  background:rgba(10,14,26,.95);border:1px solid var(--line);border-radius:2px;
   padding:7px 10px;font-size:.74rem;display:flex;flex-direction:column;gap:2px;z-index:5}}
 #tip span{{color:var(--mute);font-family:'IBM Plex Mono',monospace;font-size:.66rem}}
 .legend{{position:absolute;left:14px;bottom:12px;display:flex;flex-wrap:wrap;gap:6px 14px;
-  font-size:.68rem;color:var(--mute);background:rgba(248,243,231,.88);
+  font-size:.68rem;color:var(--mute);background:rgba(10,14,26,.8);
   border:1px solid var(--line);border-radius:2px;padding:6px 11px}}
 .legend span{{display:flex;align-items:center;gap:5px}}
 
@@ -1884,14 +1887,14 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .hero-sep{{color:#A99C82}}
 .hero-title{{font-size:clamp(1.35rem,3.1vw,2.55rem);font-weight:700;line-height:1.18;
   margin:11px 0 12px;text-shadow:0 2px 20px rgba(0,0,0,.65)}}
-.hero-sum{{color:#EDE5D2;font-size:.92rem;line-height:1.6;max-width:640px;
+.hero-sum{{color:#C2CCDD;font-size:.92rem;line-height:1.6;max-width:640px;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}}
 .hero-actions{{display:flex;flex-wrap:wrap;gap:10px;margin-top:17px}}
 .btn{{display:inline-flex;align-items:center;gap:7px;padding:9px 19px;border-radius:2px;
   font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;
   border:1px solid transparent;transition:background .16s}}
-.btn-main{{background:#F7F2E7;color:#191612}}
-.btn-main:hover{{background:#fff}}
+.btn-main{{background:#fff;color:#0A0E1A}}
+.btn-main:hover{{background:#D7E0EF}}
 .btn-ghost{{background:rgba(246,241,227,.16);color:#F6F1E3;
   border-color:rgba(246,241,227,.45)}}
 .btn-ghost:hover{{background:rgba(246,241,227,.3)}}
@@ -1906,17 +1909,17 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 /* ป้าย LIVE บนหัวข้อกลุ่ม — เห็นชัดแม้ตอนพับเก็บ */
 .live-dot{{display:inline-flex;align-items:center;gap:5px;font-size:.62rem;
   font-weight:700;padding:3px 9px;
-  box-shadow:0 0 0 0 rgba(163,44,36,.5);animation:livePulse 2.2s infinite}}
+  box-shadow:0 0 0 0 rgba(229,72,77,.55);animation:livePulse 2.2s infinite}}
 .live-dot::before{{content:"";width:6px;height:6px;border-radius:50%;background:#fff}}
 @keyframes livePulse{{
-  70%{{box-shadow:0 0 0 8px rgba(163,44,36,0)}}
-  100%{{box-shadow:0 0 0 0 rgba(163,44,36,0)}}
+  70%{{box-shadow:0 0 0 8px rgba(229,72,77,0)}}
+  100%{{box-shadow:0 0 0 0 rgba(229,72,77,0)}}
 }}
 .row-tools{{display:flex;align-items:center;gap:7px}}
 .row-tools .search{{width:150px}}
 .row-nav{{width:30px;height:30px;flex:none;border-radius:50%;cursor:pointer;font-size:1.05rem;
-  line-height:1;color:var(--ink);background:rgba(25,22,18,.05);border:1px solid var(--line)}}
-.row-nav:hover{{background:rgba(25,22,18,.12)}}
+  line-height:1;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line)}}
+.row-nav:hover{{background:rgba(255,255,255,.15)}}
 /* padding + margin ติดลบ เพื่อให้การ์ดที่ขยายตอน hover ไม่โดนตัดขอบ */
 .row-track{{display:flex;gap:12px;overflow-x:auto;scroll-behavior:smooth;
   scroll-snap-type:x proximity;padding:24px 4px 28px;margin:-24px -4px -28px}}
@@ -1931,7 +1934,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .lcard-thumb{{position:relative;display:block;aspect-ratio:16/9;overflow:hidden;
   border-radius:2px;background:var(--panel3);border:1px solid var(--line);
   transition:border-color .28s,box-shadow .28s}}
-.lcard:hover .lcard-thumb{{border-color:var(--down);box-shadow:0 14px 30px rgba(46,38,24,.26)}}
+.lcard:hover .lcard-thumb{{border-color:var(--down);box-shadow:0 18px 42px rgba(0,0,0,.62)}}
 .lcard-thumb img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
 .lcard-badge{{position:absolute;left:9px;top:9px;z-index:2;display:inline-flex;align-items:center;
   gap:5px;padding:3px 8px;border-radius:2px;background:var(--down);color:#fff;
@@ -1958,7 +1961,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   border:1px solid var(--line);border-radius:2px;overflow:hidden;
   transition:transform .28s cubic-bezier(.2,.7,.3,1),box-shadow .28s,border-color .28s}}
 .poster:hover{{transform:scale(1.07);z-index:3;border-color:var(--line2);
-  box-shadow:0 14px 30px rgba(46,38,24,.26)}}
+  box-shadow:0 18px 42px rgba(0,0,0,.62)}}
 .poster.hidden{{display:none}}
 .poster-img{{position:relative;display:grid;place-items:center;aspect-ratio:16/9}}
 .poster-img img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}}
@@ -1973,11 +1976,11 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}}
 .poster-meta{{display:flex;justify-content:space-between;gap:8px;margin-top:8px}}
 /* พื้นไล่สีตามหมวด ใช้ตอนข่าวไม่มีรูป */
-.pf-econ{{background:linear-gradient(135deg,rgba(38,69,111,.22),rgba(38,69,111,.05))}}
-.pf-poli{{background:linear-gradient(135deg,rgba(138,85,24,.22),rgba(138,85,24,.05))}}
-.pf-biz{{background:linear-gradient(135deg,rgba(29,99,80,.22),rgba(29,99,80,.05))}}
-.pf-env{{background:linear-gradient(135deg,rgba(76,106,36,.22),rgba(76,106,36,.05))}}
-.pf-mixed{{background:linear-gradient(135deg,rgba(90,74,120,.22),rgba(90,74,120,.05))}}
+.pf-econ{{background:linear-gradient(135deg,rgba(76,141,255,.34),rgba(76,141,255,.05))}}
+.pf-poli{{background:linear-gradient(135deg,rgba(245,165,36,.34),rgba(245,165,36,.05))}}
+.pf-biz{{background:linear-gradient(135deg,rgba(45,212,191,.34),rgba(45,212,191,.05))}}
+.pf-env{{background:linear-gradient(135deg,rgba(74,222,128,.34),rgba(74,222,128,.05))}}
+.pf-mixed{{background:linear-gradient(135deg,rgba(155,138,251,.34),rgba(155,138,251,.05))}}
 
 .src{{font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--mute);
   text-transform:uppercase;letter-spacing:.05em}}
@@ -1993,12 +1996,13 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 #intro{{position:fixed;inset:0;z-index:99;background:var(--bg);display:grid;place-items:center;
   animation:introFade .6s 1.95s forwards}}
 .intro-inner{{display:flex;flex-direction:column;align-items:center;gap:12px;
-  padding:26px 34px;border-top:3px solid var(--ink);border-bottom:3px double var(--ink);
+  padding:26px 34px;border-top:2px solid var(--brass);border-bottom:3px double var(--brass);
   animation:introIn 1.05s cubic-bezier(.2,.7,.3,1) backwards,
             introZoom .8s 1.72s ease-in forwards}}
 .intro-mark{{font-family:'UnifrakturMaguntia','Playfair Display',Georgia,serif;font-weight:400;
-  font-size:clamp(3rem,12vw,5.6rem);line-height:1.04;color:var(--ink)}}
-.intro-rule{{width:min(320px,58vw);height:1px;background:var(--line2)}}
+  font-size:clamp(3rem,12vw,5.6rem);line-height:1.04;color:var(--cream);
+  text-shadow:0 0 42px rgba(198,169,97,.4),0 0 110px rgba(198,169,97,.16)}}
+.intro-rule{{width:min(320px,58vw);height:1px;background:linear-gradient(90deg,transparent,var(--brass) 24%,var(--brass) 76%,transparent)}}
 .intro-inner b{{font-family:'Playfair Display',Georgia,serif;
   font-size:clamp(.55rem,1.9vw,.74rem);letter-spacing:.24em;
   font-weight:600;text-transform:uppercase;color:var(--mute);text-align:center;
@@ -2036,7 +2040,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .navdim.on{{opacity:1;visibility:visible}}
 .navpanel{{position:fixed;left:0;top:0;bottom:0;z-index:59;width:252px;max-width:84vw;
   display:flex;flex-direction:column;background:var(--panel);
-  border-right:1px solid var(--line);box-shadow:14px 0 38px rgba(46,38,24,.24);
+  border-right:1px solid var(--line);box-shadow:18px 0 46px rgba(0,0,0,.45);
   transform:translateX(-100%);visibility:hidden;
   transition:transform .22s cubic-bezier(.4,0,.2,1),visibility .22s}}
 .navpanel.open{{transform:none;visibility:visible}}
@@ -2055,7 +2059,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   color:var(--mute);background:none;border:0;padding:11px 13px;border-radius:2px;
   transition:color .16s,background .16s}}
 .tab .tab-n{{margin-left:auto}}
-.tab:hover{{color:var(--ink);background:rgba(25,22,18,.045)}}
+.tab:hover{{color:var(--ink);background:rgba(255,255,255,.05)}}
 .tab.active{{color:var(--ink);background:var(--sel)}}
 .tab.active::after{{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;
   border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--econ),var(--poli))}}
@@ -2076,12 +2080,12 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .live-scope{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.1em;
   color:var(--mute);font-weight:500}}
 .tag-news{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.1em;
-  font-weight:700;color:var(--bg);background:var(--ink);border:1px solid var(--ink);
+  font-weight:700;color:var(--cream);background:#1D2739;border:1px solid #2C3548;
   border-radius:2px;padding:3px 9px}}
 .live-group .scope-title{{font-size:.9rem}}
 .tab-live{{color:var(--down)}}
 .live-dot-sm{{width:7px;height:7px;border-radius:50%;background:var(--down);
-  box-shadow:0 0 0 0 rgba(163,44,36,.5);animation:livePulse 2.2s infinite}}
+  box-shadow:0 0 0 0 rgba(229,72,77,.55);animation:livePulse 2.2s infinite}}
 .live-list{{flex:1;overflow-y:auto}}
 .live-list .cnews-row{{padding:11px 16px}}
 .tab-n{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;font-weight:400;
@@ -2097,12 +2101,12 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .kws{{display:flex;flex-wrap:wrap;gap:7px 12px;padding:15px;align-items:baseline}}
 .kw{{font-weight:500;line-height:1.2}}
 
-footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--ink);
+footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
   display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;
   font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.05em;
   text-transform:uppercase;color:var(--dim)}}
 .foot-mark{{font-family:'UnifrakturMaguntia','Playfair Display',Georgia,serif;
-  font-size:1.05rem;letter-spacing:0;text-transform:none;color:var(--ink)}}
+  font-size:1.05rem;letter-spacing:0;text-transform:none;color:var(--cream)}}
 
 /* ── หัวข้อทุกระดับใช้ตัวเซริฟแบบหนังสือพิมพ์ ─────────────── */
 .row-head h2,.scope-title,.panel-head h2,.cmodal-title h3,.tmodal-head h3,
@@ -2127,7 +2131,7 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--ink);
 
 <div id="intro" aria-hidden="true"><div class="intro-inner">
   <span class="intro-mark">The Tribune</span><span class="intro-rule"></span>
-  <b>Thai · Regional · International · Business · Updates · News · Exchange</b></div></div>
+  <b>Thai Regional &amp; International Business Updates, News and Exchange</b></div></div>
 
 <div id="tmodal" class="tmodal" hidden>
   <div class="tmodal-box" role="dialog" aria-modal="true" aria-labelledby="tmodal-name">
@@ -2156,8 +2160,8 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--ink);
   </h1>
   <div class="logo-rule"><span>◆ ◆ ◆</span></div>
   <div class="logo-sub">
-    <b>T</b>hai <i>·</i> <b>R</b>egional <i>·</i> <b>I</b>nternational <i>·</i> <b>B</b>usiness
-    <i>·</i> <b>U</b>pdates <i>·</i> <b>N</b>ews <i>·</i> <b>E</b>xchange
+    <b>T</b>hai <b>R</b>egional &amp; <b>I</b>nternational <b>B</b>usiness
+    <b>U</b>pdates, <b>N</b>ews and <b>E</b>xchange
   </div>
   <div class="stamp">
     <span class="pulse"></span>

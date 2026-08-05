@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""สร้างไอคอน PWA — ตัว T เซริฟบนกระดาษหนังสือพิมพ์
+"""สร้างไอคอน PWA — ตัว T เซริฟในกรอบเส้นคาด อย่างหัวหนังสือพิมพ์
 
 เขียน PNG เองด้วย zlib ล้วนๆ จะได้ไม่ต้องพึ่ง Pillow บน GitHub Actions
 รัน:  python make_icons.py
@@ -8,8 +8,8 @@
 import struct
 import zlib
 
-PAPER = (0xEF, 0xE8, 0xD9)
-INK = (0x19, 0x16, 0x12)
+PAPER = (0x0A, 0x0E, 0x1A)      # พื้นเข้มแบบธีมเว็บ
+INK = (0xF4, 0xEF, 0xE3)        # ตัวอักษรสีครีม
 
 # สัดส่วนแบบ 0–1 ของด้านกว้าง (x0, y0, x1, y1) — วางไว้ในโซนปลอดภัยของ maskable icon
 SHAPES = [
