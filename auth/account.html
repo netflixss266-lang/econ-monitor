@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Account · The Tribune</title>
+<meta name="theme-color" content="#0A0E1A">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Serif+Thai:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0E1A; --panel:#111726; --panel2:#0E1420; --line:#1E2637; --line2:#2A3548;
+  --ink:#E7ECF5; --mute:#7A879C; --dim:#4E5A70; --hover:#151C2C;
+  --brass:#C6A961; --cream:#F4EFE3; --up:#3FB68B; --down:#E5484D;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);
+  font-family:'Noto Serif Thai',Georgia,serif;font-size:15px;line-height:1.65;
+  padding:22px;max-width:940px;margin:0 auto}
+a{color:var(--brass)}
+
+header{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;
+  padding:6px 0 14px;margin-bottom:22px;
+  border-top:2px solid var(--brass);border-bottom:3px double var(--brass)}
+.logo-the{font-family:'Playfair Display',Georgia,serif;font-style:italic;font-weight:700;
+  font-size:.95rem;letter-spacing:.12em;color:var(--mute);margin-bottom:-6px}
+.logo-mark{font-family:'UnifrakturMaguntia',Georgia,serif;
+  font-size:clamp(2.2rem,7vw,3.2rem);line-height:1.05;color:var(--cream)}
+.logo-sub{font-family:'Playfair Display',Georgia,serif;font-size:.66rem;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--mute)}
+
+.notice{display:flex;flex-direction:column;gap:6px;padding:13px 16px;margin-bottom:20px;
+  background:rgba(245,165,36,.1);border:1px solid rgba(245,165,36,.4);border-radius:2px;
+  font-size:.85rem;color:var(--ink)}
+.notice b{font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.16em;
+  text-transform:uppercase;color:#F5A524;font-weight:600}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:2px;
+  overflow:hidden;margin-bottom:18px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel2)}
+.card-head h2{font-family:'Playfair Display',Georgia,serif;font-size:.86rem;
+  font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+.card-body{padding:18px 16px;display:flex;flex-direction:column;gap:14px}
+
+.tabs{display:flex;gap:4px;padding:9px 16px 0;background:var(--panel2)}
+.tab{flex:1;padding:9px 10px;cursor:pointer;border:1px solid var(--line);border-bottom:0;
+  border-radius:2px 2px 0 0;background:transparent;color:var(--mute);
+  font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.12em;
+  text-transform:uppercase}
+.tab.on{background:var(--panel);color:var(--brass);border-color:var(--line2)}
+
+label{display:flex;flex-direction:column;gap:5px;
+  font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--mute)}
+input{width:100%;padding:10px 12px;border-radius:2px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+  font-family:'Noto Serif Thai',Georgia,serif;font-size:.95rem}
+input:focus{outline:none;border-color:var(--brass)}
+.hint{font-family:'Noto Serif Thai',serif;font-size:.75rem;letter-spacing:0;
+  text-transform:none;color:var(--dim)}
+
+button.go{padding:11px 16px;cursor:pointer;border-radius:2px;font-weight:700;
+  font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.14em;
+  text-transform:uppercase;color:#0A0E1A;background:var(--brass);border:1px solid var(--brass)}
+button.go:hover{filter:brightness(1.08)}
+button.go:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{padding:9px 14px;cursor:pointer;border-radius:2px;
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--mute);background:transparent;
+  border:1px solid var(--line)}
+button.ghost:hover{color:var(--ink);border-color:var(--line2)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.linkbtn{background:none;border:0;cursor:pointer;color:var(--brass);
+  font-family:'Noto Serif Thai',serif;font-size:.8rem;padding:0}
+
+.msg{padding:10px 13px;border-radius:2px;font-size:.86rem;display:none}
+.msg.show{display:block}
+.msg.err{background:rgba(229,72,77,.12);border:1px solid rgba(229,72,77,.4);color:#FFA9AC}
+.msg.ok{background:rgba(63,182,139,.12);border:1px solid rgba(63,182,139,.4);color:#8CF0C6}
+
+.who{display:flex;flex-direction:column;gap:2px}
+.who b{font-size:1.05rem}
+.who span{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--dim)}
+
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.82rem;min-width:560px}
+th,td{padding:9px 13px;text-align:left;border-bottom:1px solid var(--line);
+  white-space:nowrap}
+thead th{background:var(--panel2);font-family:'IBM Plex Mono',monospace;
+  font-size:.58rem;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);
+  font-weight:500}
+tbody tr:hover{background:var(--hover)}
+td.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;
+  color:var(--mute)}
+td.dev{white-space:normal;color:var(--dim);font-size:.76rem;max-width:280px}
+.pill{display:inline-block;padding:2px 8px;border-radius:2px;
+  font-family:'IBM Plex Mono',monospace;font-size:.58rem;letter-spacing:.1em}
+.pill.success{background:rgba(63,182,139,.14);color:#8CF0C6}
+.pill.fail{background:rgba(229,72,77,.14);color:#FFA9AC}
+.pill.logout,.pill.reset_request,.pill.reset_done,.pill.lockout{
+  background:rgba(198,169,97,.14);color:var(--brass)}
+.empty{padding:26px 16px;text-align:center;color:var(--mute);font-size:.86rem}
+
+footer{margin-top:26px;padding-top:14px;border-top:3px double var(--line2);
+  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--dim)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo-the">The</span>
+  <span class="logo-mark">Tribune</span>
+  <span class="logo-sub">Account</span>
+</header>
+
+<div class="notice" id="mode-note" hidden>
+  <b id="mode-tag">โหมดทดลอง</b>
+  <span id="mode-text"></span>
+</div>
+
+<!-- ยังไม่ได้เข้าสู่ระบบ -->
+<div class="card" id="gate">
+  <div class="tabs">
+    <button class="tab on" type="button" data-view="signin">เข้าสู่ระบบ</button>
+    <button class="tab" type="button" data-view="signup">สมัครสมาชิก</button>
+  </div>
+  <div class="card-body">
+    <div class="msg" id="gate-msg"></div>
+    <label>อีเมล
+      <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
+    </label>
+    <label>รหัสผ่าน
+      <input id="password" type="password" autocomplete="current-password">
+      <span class="hint" id="pw-hint"></span>
+    </label>
+    <div class="row">
+      <button class="linkbtn" type="button" id="forgot">ลืมรหัสผ่าน?</button>
+      <button class="go" type="button" id="submit">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- เข้าสู่ระบบแล้ว -->
+<div id="app" hidden>
+  <div class="card">
+    <div class="card-head">
+      <h2>Signed in</h2>
+      <button class="ghost" type="button" id="signout">ออกจากระบบ</button>
+    </div>
+    <div class="card-body">
+      <div class="who">
+        <b id="who-email">—</b>
+        <span id="who-id"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Login history</h2>
+      <span class="hint">เก็บ 90 วัน แล้วลบอัตโนมัติ</span>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>เวลา</th><th>เหตุการณ์</th><th>IP</th><th>ประเทศ</th><th>อุปกรณ์</th></tr>
+        </thead>
+        <tbody id="events"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="events-empty" hidden>ยังไม่มีประวัติการเข้าใช้</div>
+  </div>
+</div>
+
+<footer>
+  <span><a href="privacy.html">นโยบายความเป็นส่วนตัว</a></span>
+  <span><a href="../index.html">กลับหน้าแรก</a></span>
+</footer>
+
+<script src="auth.js"></script>
+<script>
+(() => {
+  "use strict";
+  const A = window.TribuneAuth;
+  const $ = (id) => document.getElementById(id);
+  const LOCAL = ["localhost", "127.0.0.1", ""].includes(location.hostname);
+
+  // ร่างทดลองเก็บข้อมูลไว้ในเบราว์เซอร์ ไม่ใช่ระบบจริง
+  // จึงยอมให้ใช้เฉพาะตอนรันในเครื่องตัวเอง กันคนเข้าใจผิดว่าสมัครกับเว็บจริงแล้ว
+  const BLOCKED = A.mode === "mock" && !LOCAL;
+
+  $("pw-hint").textContent = `อย่างน้อย ${A.MIN_PASSWORD} ตัวอักษร`;
+
+  const note = $("mode-note");
+  if (BLOCKED) {
+    note.hidden = false;
+    $("mode-tag").textContent = "ยังไม่เปิดใช้งาน";
+    $("mode-text").textContent =
+      "หน้านี้ยังไม่ได้เชื่อมกับระบบบัญชีจริง จึงยังสมัครหรือเข้าสู่ระบบไม่ได้ " +
+      "อย่ากรอกรหัสผ่านที่ใช้จริงที่ไหนลงไป";
+    ["email", "password", "submit", "forgot"].forEach((id) => $(id).disabled = true);
+  } else if (A.mode === "mock") {
+    note.hidden = false;
+    $("mode-tag").textContent = "โหมดทดลอง";
+    $("mode-text").textContent =
+      "กำลังใช้ข้อมูลจำลองในเบราว์เซอร์เครื่องนี้ ไม่มีการส่งข้อมูลออกไปไหน " +
+      "และ IP ที่เห็นเป็นเลขสมมติ ใช้ดูหน้าตาและลำดับขั้นตอนเท่านั้น";
+  }
+
+  let view = "signin";
+  const msg = (text, kind) => {
+    const el = $("gate-msg");
+    el.textContent = text;
+    el.className = "msg show " + (kind || "err");
+  };
+  const clearMsg = () => { $("gate-msg").className = "msg"; };
+
+  document.querySelectorAll(".tab").forEach((t) => {
+    t.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x === t));
+      view = t.dataset.view;
+      $("submit").textContent = view === "signin" ? "เข้าสู่ระบบ" : "สมัครสมาชิก";
+      $("password").autocomplete = view === "signin" ? "current-password" : "new-password";
+      clearMsg();
+    });
+  });
+
+  const fmt = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleString("th-TH", { day: "2-digit", month: "short",
+      hour: "2-digit", minute: "2-digit" });
+  };
+  const LABEL = { success: "เข้าสู่ระบบ", fail: "รหัสผิด", logout: "ออกจากระบบ",
+    lockout: "ถูกล็อกชั่วคราว", reset_request: "ขอรีเซ็ตรหัส", reset_done: "ตั้งรหัสใหม่" };
+
+  async function paint() {
+    const s = await A.getSession();
+    $("gate").hidden = !!s;
+    $("app").hidden = !s;
+    if (!s) return;
+    $("who-email").textContent = s.email;
+    $("who-id").textContent = s.id;
+    const rows = await A.listEvents();
+    $("events").innerHTML = rows.map((e) => `
+      <tr>
+        <td class="mono">${fmt(e.created_at)}</td>
+        <td><span class="pill ${e.event}">${LABEL[e.event] || e.event}</span></td>
+        <td class="mono">${e.ip || "—"}</td>
+        <td class="mono">${e.country || "—"}</td>
+        <td class="dev">${(e.user_agent || "—").slice(0, 90)}</td>
+      </tr>`).join("");
+    $("events-empty").hidden = rows.length > 0;
+  }
+
+  $("submit").addEventListener("click", async () => {
+    const email = $("email").value.trim(), pw = $("password").value;
+    $("submit").disabled = true;
+    clearMsg();
+    try {
+      if (view === "signup") {
+        await A.signUp(email, pw);
+        msg("สมัครเรียบร้อย — เปิดอีเมลแล้วกดยืนยันก่อนเข้าสู่ระบบครั้งแรก", "ok");
+      } else {
+        await A.signIn(email, pw);
+        $("password").value = "";
+        await paint();
+      }
+    } catch (e) {
+      msg(e.message);
+    } finally {
+      $("submit").disabled = false;
+    }
+  });
+
+  $("password").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") $("submit").click();
+  });
+
+  $("forgot").addEventListener("click", async () => {
+    const email = $("email").value.trim();
+    if (!email) return msg("กรอกอีเมลก่อน แล้วกดลืมรหัสผ่านอีกครั้ง");
+    await A.resetRequest(email);
+    // ตอบเหมือนกันเสมอ ไม่ว่าอีเมลนั้นจะมีอยู่จริงหรือไม่
+    msg("ถ้าอีเมลนี้มีบัญชีอยู่ ระบบได้ส่งลิงก์ตั้งรหัสใหม่ไปให้แล้ว", "ok");
+  });
+
+  $("signout").addEventListener("click", async () => {
+    await A.signOut();
+    await paint();
+  });
+
+  paint();
+})();
+</script>
+</body>
+</html>
