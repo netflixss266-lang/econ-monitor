@@ -145,6 +145,25 @@ footer{margin-top:26px;padding-top:14px;border-top:3px double var(--line2);
   </div>
 </div>
 
+<!-- ตั้งรหัสผ่านใหม่ (มาจากลิงก์ในอีเมล) -->
+<div class="card" id="reset" hidden>
+  <div class="card-head"><h2>ตั้งรหัสผ่านใหม่</h2></div>
+  <div class="card-body">
+    <div class="msg" id="reset-msg"></div>
+    <label>รหัสผ่านใหม่
+      <input id="pw1" type="password" autocomplete="new-password">
+      <span class="hint" id="pw1-hint"></span>
+    </label>
+    <label>พิมพ์รหัสผ่านใหม่อีกครั้ง
+      <input id="pw2" type="password" autocomplete="new-password">
+    </label>
+    <div class="row">
+      <span class="hint">ตั้งรหัสใหม่แล้วอุปกรณ์อื่นที่ยังค้างอยู่จะถูกให้ออกจากระบบทั้งหมด</span>
+      <button class="go" type="button" id="reset-go">บันทึกรหัสใหม่</button>
+    </div>
+  </div>
+</div>
+
 <!-- เข้าสู่ระบบแล้ว -->
 <div id="app" hidden>
   <div class="card">
@@ -182,6 +201,8 @@ footer{margin-top:26px;padding-top:14px;border-top:3px double var(--line2);
   <span><a href="../index.html">กลับหน้าแรก</a></span>
 </footer>
 
+<!-- ไลบรารีของ Supabase — โหลดไว้ก่อนเสมอ แต่จะถูกใช้ก็ต่อเมื่อใส่ค่า CONFIG ใน auth.js แล้ว -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="auth.js"></script>
 <script>
 (() => {
@@ -213,12 +234,18 @@ footer{margin-top:26px;padding-top:14px;border-top:3px double var(--line2);
   }
 
   let view = "signin";
-  const msg = (text, kind) => {
-    const el = $("gate-msg");
+  const say = (id, text, kind) => {
+    const el = $(id);
     el.textContent = text;
     el.className = "msg show " + (kind || "err");
   };
+  const msg = (text, kind) => say("gate-msg", text, kind);
   const clearMsg = () => { $("gate-msg").className = "msg"; };
+  $("pw1-hint").textContent = `อย่างน้อย ${A.MIN_PASSWORD} ตัวอักษร`;
+
+  // ผู้ใช้กดลิงก์ตั้งรหัสใหม่จากอีเมลมา — Supabase จะติด type=recovery มาใน hash
+  const recovering = !BLOCKED &&
+    (location.hash.includes("type=recovery") || location.search.includes("reset=1"));
 
   document.querySelectorAll(".tab").forEach((t) => {
     t.addEventListener("click", () => {
@@ -240,6 +267,12 @@ footer{margin-top:26px;padding-top:14px;border-top:3px double var(--line2);
 
   async function paint() {
     const s = await A.getSession();
+    if (recovering) {                 // หน้าตั้งรหัสใหม่มาก่อนทุกอย่าง
+      $("reset").hidden = false;
+      $("gate").hidden = true;
+      $("app").hidden = true;
+      return;
+    }
     $("gate").hidden = !!s;
     $("app").hidden = !s;
     if (!s) return;
@@ -287,6 +320,20 @@ footer{margin-top:26px;padding-top:14px;border-top:3px double var(--line2);
     await A.resetRequest(email);
     // ตอบเหมือนกันเสมอ ไม่ว่าอีเมลนั้นจะมีอยู่จริงหรือไม่
     msg("ถ้าอีเมลนี้มีบัญชีอยู่ ระบบได้ส่งลิงก์ตั้งรหัสใหม่ไปให้แล้ว", "ok");
+  });
+
+  $("reset-go").addEventListener("click", async () => {
+    const a = $("pw1").value, b = $("pw2").value;
+    if (a !== b) return say("reset-msg", "รหัสผ่านสองช่องไม่ตรงกัน");
+    $("reset-go").disabled = true;
+    try {
+      await A.setPassword(a);
+      say("reset-msg", "ตั้งรหัสผ่านใหม่เรียบร้อย กำลังพากลับไปหน้าเข้าสู่ระบบ", "ok");
+      setTimeout(() => { location.href = location.pathname; }, 1600);
+    } catch (e) {
+      say("reset-msg", e.message);
+      $("reset-go").disabled = false;
+    }
   });
 
   $("signout").addEventListener("click", async () => {

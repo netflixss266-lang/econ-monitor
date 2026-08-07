@@ -110,6 +110,19 @@
         log("reset_request", email, null);
         return true;      // ตอบสำเร็จเสมอ ไม่บอกว่าอีเมลนี้มีอยู่จริงไหม
       },
+      async setPassword(password) {
+        check("mock@local.test", password);
+        await wait(300);
+        const s = read(SESSION, null);
+        const users = read(KEY, {});
+        const email = s?.email || Object.keys(users)[0];
+        if (!email || !users[email]) throw new Error("ลิงก์ตั้งรหัสใหม่หมดอายุแล้ว");
+        users[email].hash = await digest(password);
+        write(KEY, users);
+        log("reset_done", email, users[email].id);
+        try { localStorage.removeItem(SESSION); } catch {}   // ให้ออกจากระบบทุกเครื่อง
+        return true;
+      },
       async listEvents() {
         const s = read(SESSION, null);
         if (!s) return [];
@@ -185,6 +198,15 @@
           redirectTo: location.origin + location.pathname + "?reset=1",
         });
         await logEvent("reset_request", email);
+        return true;
+      },
+      async setPassword(password) {
+        check("x@y.tld", password);
+        const { error } = await sb().auth.updateUser({ password });
+        if (error) throw new Error("ลิงก์ตั้งรหัสใหม่หมดอายุหรือถูกใช้ไปแล้ว");
+        await logEvent("reset_done");
+        // ตัด session ทุกเครื่องทิ้ง เผื่อรหัสเดิมหลุดไปแล้ว
+        await sb().auth.signOut({ scope: "global" });
         return true;
       },
       async listEvents() {
