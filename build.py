@@ -30,6 +30,7 @@ TZ = timezone(timedelta(hours=7))          # Asia/Bangkok
 NOW = datetime.now(TZ)
 MAX_AGE_HOURS = 24
 LIVE_WINDOW_MIN = 90   # ข่าวที่ถือว่า "สด ณ ตอนนี้" ต้องมีเวลาเผยแพร่จริงและใหม่กว่านี้
+REBUILD_HOURS = 2      # ต้องตรงกับ cron ใน .github/workflows/update.yml
 PER_CATEGORY = 18
 PER_ROW = 14          # จำนวนการ์ดต่อแถว (แยกไทย/ต่างประเทศแล้วจึงลดลงจาก PER_CATEGORY)
 CACHE_FILE = "cache.json"
@@ -1500,7 +1501,7 @@ def render(news, markets, charts=None, logos=None, streams=None):
                                     for c in CAT_NAMES))
         for sc, lb in SCOPES)
 
-    next_run = (NOW + timedelta(hours=3)).strftime("%H:%M")
+    next_run = (NOW + timedelta(hours=REBUILD_HOURS)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
     icons_json = json.dumps({c: cat_icon(c, "ci-sm") for c in CAT_NAMES}, ensure_ascii=False)
     tnews_json = json.dumps(
@@ -2437,7 +2438,7 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
 <footer>
   <span><span class="foot-mark">The Tribune</span> · {len(FEEDS)} sources ·
     {len(news)} stories in 24h · {located} geolocated</span>
-  <span>auto-refresh every 15 min · rebuilt every 3 h</span>
+  <span>auto-refresh every 15 min · rebuilt every {REBUILD_HOURS} h</span>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
