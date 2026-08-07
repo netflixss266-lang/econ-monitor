@@ -4,9 +4,8 @@ on:
   push:
     branches: [main]            # แก้โค้ดแล้ว push → build + deploy ทันที
   schedule:
-    # GitHub ตัดคิว cron ที่ตั้งไว้ต้นชั่วโมงทิ้งบ่อยมาก (ช่วงที่คนตั้งกันเยอะสุด)
-    # จึงเลี่ยงไปนาทีที่ 37 และยิงถี่ขึ้นเป็นทุก 2 ชม. เผื่อโดนตัดไปบางรอบ
-    - cron: "37 */2 * * *"     # เวลา UTC
+    # ทุกครึ่งชั่วโมง — เลี่ยงนาทีที่ 0/30 เพราะ GitHub ตัดคิวช่วงนั้นทิ้งบ่อยที่สุด
+    - cron: "7,37 * * * *"     # เวลา UTC
   workflow_dispatch:            # ปุ่มกดรันเองได้ในหน้า Actions
 
 permissions:
@@ -32,12 +31,15 @@ jobs:
       - name: ติดตั้ง dependencies
         run: pip install feedparser requests
 
-      - name: กู้คืน cache ข่าว/ราคาย้อนหลัง
+      # เก็บชุดแท่งเทียนข้ามรอบไว้ด้วย รอบครึ่งชั่วโมงจะได้ไม่ต้องยิง Yahoo ใหม่ทั้งหมด
+      - name: กู้คืน cache ข่าว/ราคา/กราฟ
         uses: actions/cache@v4
         with:
           path: |
             cache.json
             market_history.json
+            logos.json
+            chart
           key: state-${{ github.run_id }}
           restore-keys: |
             state-

@@ -30,10 +30,12 @@ TZ = timezone(timedelta(hours=7))          # Asia/Bangkok
 NOW = datetime.now(TZ)
 MAX_AGE_HOURS = 24
 LIVE_WINDOW_MIN = 90   # ข่าวที่ถือว่า "สด ณ ตอนนี้" ต้องมีเวลาเผยแพร่จริงและใหม่กว่านี้
-REBUILD_HOURS = 2      # ต้องตรงกับ cron ใน .github/workflows/update.yml
+REBUILD_MIN = 30       # ต้องตรงกับ cron ใน .github/workflows/update.yml
+CHART_FULL_HOURS = 6   # ดึงแท่งเทียนชุดเต็มทุกกี่ชั่วโมง (รอบอื่นอัปเดตแค่กราฟรายวัน)
 PER_CATEGORY = 18
 PER_ROW = 14          # จำนวนการ์ดต่อแถว (แยกไทย/ต่างประเทศแล้วจึงลดลงจาก PER_CATEGORY)
 CACHE_FILE = "cache.json"
+LOGO_FILE = "logos.json"
 HISTORY_FILE = "market_history.json"
 HISTORY_POINTS = 60     # 60 รอบ x 3 ชม. ≈ 7.5 วัน
 
@@ -228,7 +230,19 @@ TICKER_DOMAIN = {
 
 
 def fetch_logos():
-    """เก็บเฉพาะโลโก้ที่มีจริง (บางโดเมนคืน 404 พร้อมรูปลูกโลกกลางๆ มา)"""
+    """เก็บเฉพาะโลโก้ที่มีจริง (บางโดเมนคืน 404 พร้อมรูปลูกโลกกลางๆ มา)
+
+    โลโก้แทบไม่เปลี่ยน จึงเก็บไว้ใช้ซ้ำ ไม่ต้องยิงทุกรอบ build
+    """
+    cached = load_json(LOGO_FILE)
+    if cached.get("logos") and cached.get("at"):
+        try:
+            if (NOW - datetime.fromisoformat(cached["at"])).total_seconds() < 86400:
+                print(f"  ↻ ใช้โลโก้เดิม {len(cached['logos'])} สินทรัพย์")
+                return cached["logos"]
+        except Exception:
+            pass
+
     def one(item):
         label, dom = item
         url = f"https://www.google.com/s2/favicons?domain={dom}&sz=64"
@@ -244,6 +258,8 @@ def fetch_logos():
             if url:
                 out[label] = url
     print(f"  ✓ โลโก้ {len(out)}/{len(TICKER_DOMAIN)} สินทรัพย์")
+    if out:
+        save_json(LOGO_FILE, {"at": NOW.isoformat(), "logos": out})
     return out
 
 
@@ -416,12 +432,58 @@ def synth_thai_gold(frames, spot=None):
     return out or None
 
 
+def refresh_intraday(index):
+    """รอบย่อย: อัปเดตเฉพาะกราฟ 1 วันของสินทรัพย์ในแถบราคา
+
+    เว็บ build ทุกครึ่งชั่วโมง ถ้าดึงครบทุกตัวทุกช่วงเวลาทุกรอบจะเป็นหลักพันคำขอ
+    เสี่ยงโดน Yahoo บล็อกจนราคาทั้งเว็บพัง — ตัวที่คนดูจริงคือกราฟวันของแถบราคา
+    """
+    tape = [(sym, label) for label, sym, _ in TICKERS
+            if sym != THAI_GOLD and label in index]
+    tf, rng, iv = CHART_RANGES[0]        # 1D
+
+    def one(job):
+        sym, label = job
+        try:
+            return label, fetch_candles(sym, rng, iv)
+        except Exception:
+            return label, None
+
+    n = 0
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for label, candles in pool.map(one, tape):
+            if not candles:
+                continue
+            path = f"{CHART_DIR}/{index[label]['s']}.json"
+            d = load_json(path)
+            if not d.get("tf"):
+                continue
+            d["tf"][tf] = candles
+            save_json(path, d)
+            n += 1
+    print(f"  ✓ อัปเดตกราฟรายวัน {n}/{len(tape)} สินทรัพย์ (ชุดเต็มรอบหน้าอีก "
+          f"{CHART_FULL_HOURS} ชม.)")
+    return index
+
+
 def build_charts(markets=None):
     """เขียนไฟล์แท่งเทียนแยกรายสินทรัพย์ไว้ให้หน้าเว็บโหลดตอนเปิดกราฟ
 
     แยกเป็นไฟล์ย่อยแทนที่จะฝังใน index.html เพราะข้อมูลรวมกันหลายสิบเมกะไบต์
+    ชุดเต็มดึงทุก CHART_FULL_HOURS ชม. รอบระหว่างนั้นอัปเดตแค่กราฟรายวัน
     """
     os.makedirs(CHART_DIR, exist_ok=True)
+    idx_path = f"{CHART_DIR}/index.json"
+    cached = load_json(idx_path)
+    if cached.get("index") and cached.get("at"):
+        try:
+            age = (NOW - datetime.fromisoformat(cached["at"])).total_seconds() / 3600
+            if 0 <= age < CHART_FULL_HOURS:
+                print(f"  ↻ ใช้ชุดกราฟเดิมที่ดึงมา {age:.1f} ชม.ที่แล้ว")
+                return refresh_intraday(cached["index"])
+        except Exception:
+            pass
+
     uni = universe_symbols()
     jobs = [(sym, label, tf, rng, iv) for sym, label, _ in uni
             for tf, rng, iv in CHART_RANGES]
@@ -460,6 +522,8 @@ def build_charts(markets=None):
         index[label] = {"s": slug, "g": group}
     total = sum(len(c) for tfs in frames.values() for c in tfs.values())
     print(f"  ✓ กราฟ {len(index)}/{len(uni)} สินทรัพย์ · {total:,} แท่งเทียน")
+    if index:
+        save_json(idx_path, {"at": NOW.isoformat(), "index": index})
     return index
 
 
@@ -1501,7 +1565,7 @@ def render(news, markets, charts=None, logos=None, streams=None):
                                     for c in CAT_NAMES))
         for sc, lb in SCOPES)
 
-    next_run = (NOW + timedelta(hours=REBUILD_HOURS)).strftime("%H:%M")
+    next_run = (NOW + timedelta(minutes=REBUILD_MIN)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
     icons_json = json.dumps({c: cat_icon(c, "ci-sm") for c in CAT_NAMES}, ensure_ascii=False)
     tnews_json = json.dumps(
@@ -2438,7 +2502,7 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
 <footer>
   <span><span class="foot-mark">The Tribune</span> · {len(FEEDS)} sources ·
     {len(news)} stories in 24h · {located} geolocated</span>
-  <span>auto-refresh every 15 min · rebuilt every {REBUILD_HOURS} h</span>
+  <span>auto-refresh every 15 min · rebuilt every {REBUILD_MIN} min</span>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
