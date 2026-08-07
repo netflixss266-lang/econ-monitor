@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]            # แก้โค้ดแล้ว push → build + deploy ทันที
   schedule:
-    - cron: "0 */3 * * *"      # ทุก 3 ชั่วโมง (เวลา UTC)
+    # GitHub ตัดคิว cron ที่ตั้งไว้ต้นชั่วโมงทิ้งบ่อยมาก (ช่วงที่คนตั้งกันเยอะสุด)
+    # จึงเลี่ยงไปนาทีที่ 37 และยิงถี่ขึ้นเป็นทุก 2 ชม. เผื่อโดนตัดไปบางรอบ
+    - cron: "37 */2 * * *"     # เวลา UTC
   workflow_dispatch:            # ปุ่มกดรันเองได้ในหน้า Actions
 
 permissions:
@@ -19,6 +21,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25         # ถ้าค้างให้ตายไปเลย รอบถัดไปจะได้เริ่มใหม่ได้
     steps:
       - uses: actions/checkout@v4
 
@@ -49,6 +52,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
