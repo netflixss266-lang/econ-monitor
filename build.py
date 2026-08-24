@@ -1436,7 +1436,6 @@ def render(news, markets, charts=None, logos=None, streams=None):
   <div class="row-head">
     <h2>{cat_icon(cat)}{label}{badge}<span class="row-n">{len(items)}</span></h2>
     <div class="row-tools">
-      <input class="search" type="search" placeholder="Search…" oninput="filterItems(this)">
       <button class="row-nav" type="button" onclick="scrollRow('{rid}',-1)" aria-label="Scroll left">‹</button>
       <button class="row-nav" type="button" onclick="scrollRow('{rid}',1)" aria-label="Scroll right">›</button>
     </div>
@@ -1560,10 +1559,29 @@ def render(news, markets, charts=None, logos=None, streams=None):
   </div>
 </div>""" if (live_all or streams) else ""
 
-    category_blocks = "".join(
-        scope_block(sc, lb, "".join(row_section(c, groups[sc]["cats"][c], f"row-{sc}-{c}")
-                                    for c in CAT_NAMES))
-        for sc, lb in SCOPES)
+    def cat_tabs_block(sc, label):
+        """หมวดข่าวเป็นแท็บเดียวสลับได้ แทนการเรียงเป็น 4 แถวเต็มจอ — ลดความยาวหน้าแรกลงครึ่งหนึ่ง"""
+        present = [c for c in CAT_NAMES if groups[sc]["cats"][c]]
+        if not present:
+            return ""
+        flag = "TH" if sc == "th" else "INTL"
+        tabs = "".join(
+            f'<button class="cat-tab{" on" if i == 0 else ""}" type="button" '
+            f'data-cat="{c}" onclick="switchCat(this,\'{sc}\',\'{c}\')">'
+            f'{cat_icon(c, "ci-sm")}{CAT_LABELS[c]}'
+            f'<span class="cat-n">{len(groups[sc]["cats"][c])}</span></button>'
+            for i, c in enumerate(present))
+        panels = "".join(
+            f'<div class="cat-panel" data-cat="{c}"{"" if i == 0 else " hidden"}>'
+            f'{row_section(c, groups[sc]["cats"][c], f"row-{sc}-{c}")}</div>'
+            for i, c in enumerate(present))
+        return f"""<div class="scope-group" data-scope="{sc}">
+  <h2 class="scope-title">{label}<span class="scope-flag">{flag}</span></h2>
+  <div class="cat-tabs" role="tablist">{tabs}</div>
+  <div class="cat-panels">{panels}</div>
+</div>"""
+
+    category_blocks = "".join(cat_tabs_block(sc, lb) for sc, lb in SCOPES)
 
     next_run = (NOW + timedelta(minutes=REBUILD_MIN)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
@@ -2073,10 +2091,22 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   100%{{box-shadow:0 0 0 0 rgba(229,72,77,0)}}
 }}
 .row-tools{{display:flex;align-items:center;gap:7px}}
-.row-tools .search{{width:150px}}
 .row-nav{{width:30px;height:30px;flex:none;border-radius:50%;cursor:pointer;font-size:1.05rem;
   line-height:1;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line)}}
 .row-nav:hover{{background:rgba(255,255,255,.15)}}
+
+/* หมวดข่าวเป็นแท็บเดียวสลับได้ แทนการเรียง 4 แถวเต็มจอ */
+.cat-tabs{{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}}
+.cat-tab{{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;
+  border-radius:2px;cursor:pointer;font-family:inherit;font-size:.83rem;font-weight:600;
+  color:var(--mute);background:var(--panel);border:1px solid var(--line)}}
+.cat-tab:hover{{color:var(--ink);border-color:var(--line2)}}
+.cat-tab.on{{color:var(--ink);background:var(--sel);border-color:var(--line2)}}
+.cat-tab .cicon{{width:15px;height:15px}}
+.cat-n{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;font-weight:400;color:var(--dim)}}
+.cat-panel .row-head{{border-bottom:0;padding-bottom:0}}
+.cat-panel .row-head h2{{display:none}}
+.cat-panel .row-head{{justify-content:flex-end}}
 /* padding + margin ติดลบ เพื่อให้การ์ดที่ขยายตอน hover ไม่โดนตัดขอบ */
 .row-track{{display:flex;gap:12px;overflow-x:auto;scroll-behavior:smooth;
   scroll-snap-type:x proximity;padding:24px 4px 28px;margin:-24px -4px -28px}}
@@ -2189,8 +2219,29 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .burger[aria-expanded="true"] .burger-bars span:nth-child(2){{opacity:0}}
 .burger[aria-expanded="true"] .burger-bars span:nth-child(3){{transform:translateY(-6px) rotate(-45deg)}}
 .navbar-now{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.12em;
-  color:var(--dim)}}
+  color:var(--dim);white-space:nowrap}}
 .navbar-now::before{{content:"› "}}
+
+/* ── ช่องค้นหาข่าวทั้งเว็บ อยู่ในแถบบนสุดเสมอ อย่างเว็บข่าวลงทุน ── */
+.gsearch{{position:relative;flex:1;min-width:80px;max-width:380px;margin-left:auto}}
+.gsearch-ic{{position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  width:14px;height:14px;fill:none;stroke:var(--dim);stroke-width:2;pointer-events:none}}
+.gsearch input{{width:100%;padding:8px 30px 8px 32px;border-radius:2px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+  font-family:inherit;font-size:.82rem}}
+.gsearch input:focus{{outline:none;border-color:var(--brass)}}
+.gsearch input::placeholder{{color:var(--dim)}}
+.gsearch-x{{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:22px;height:22px;font-size:1rem;line-height:1;cursor:pointer;
+  color:var(--dim);background:none;border:0}}
+.gsearch-x:hover{{color:var(--ink)}}
+.gsearch-empty{{padding:34px 18px;text-align:center;color:var(--mute);font-size:.9rem;
+  border:1px solid var(--line);border-radius:2px;background:var(--panel);margin-bottom:20px}}
+/* ตอนค้นหาทั้งเว็บ ต้องดึงข่าวที่ถูกซ่อนไว้ (พับ/สลับแท็บ) ออกมาให้เจอด้วย */
+body.searching .cat-panel[hidden]{{display:block!important}}
+body.searching .scope-group[hidden]{{display:block!important}}
+body.searching .scope-group.folded .row{{display:block!important}}
+.row.no-match{{display:none}}
 
 .navdim{{position:fixed;inset:0;z-index:58;background:var(--scrim);
   opacity:0;visibility:hidden;transition:opacity .2s,visibility .2s}}
@@ -2227,13 +2278,30 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   stroke-linecap:round;stroke-linejoin:round}}
 .tab-icon:hover{{color:var(--cream)}}
 
+/* ── จอกว้าง: เมนูหลักเป็นแถบแนวนอนที่เห็นตลอด ไม่ต้องกดปุ่ม 3 ขีด ──
+   อย่างเว็บข่าวลงทุนทั่วไป (Bloomberg/Investing.com) — hamburger เหลือไว้
+   เฉพาะจอแคบที่ไม่มีที่พอให้วางแท็บทั้งหมด */
+@media(min-width:861px){{
+  .navbar{{border-bottom:0;margin-bottom:8px;padding-bottom:0}}
+  .burger,.navdim{{display:none}}
+  .navpanel{{position:static;transform:none;visibility:visible;width:auto;max-width:none;
+    height:auto;box-shadow:none;border:0;background:transparent;
+    border-bottom:1px solid var(--line);margin-bottom:20px}}
+  .nav-head,.nav-foot{{display:none}}
+  .tabs{{flex-direction:row;flex-wrap:wrap;overflow:visible;padding:0 0 12px}}
+  .tab{{width:auto;padding:9px 15px;border-radius:2px}}
+  .tab .tab-n{{margin-left:8px}}
+  .tab.active::after{{left:12px;right:12px;top:auto;bottom:-9px;width:auto;height:2px;
+    border-radius:2px 2px 0 0}}
+}}
+
 /* หัวข้อกลุ่มข่าว พับเก็บได้ */
 .scope-title{{cursor:pointer;user-select:none}}
 .scope-caret{{width:14px;height:14px;flex:none;fill:none;stroke:currentColor;
   stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;color:var(--dim);
   transition:transform .2s}}
 .scope-group.folded .scope-caret{{transform:rotate(-90deg)}}
-.scope-group.folded .row{{display:none}}
+.scope-group.folded .row,.scope-group.folded .cat-tabs{{display:none}}
 .live-scope{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.1em;
   color:var(--mute);font-weight:500}}
 .tag-news{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.1em;
@@ -2460,6 +2528,15 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
     <span class="burger-txt">MENU</span>
   </button>
   <span class="navbar-now" id="navbar-now">HOME</span>
+  <div class="gsearch">
+    <svg class="gsearch-ic" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    <input id="gsearch" type="search" autocomplete="off" placeholder="Search all news…"
+           oninput="globalSearch(this.value)">
+    <button class="gsearch-x" type="button" id="gsearch-x" hidden
+            onclick="document.getElementById('gsearch').value='';globalSearch('');"
+            aria-label="Clear search">×</button>
+  </div>
 </div>
 
 <div class="navdim" id="navdim" onclick="toggleNav(false)"></div>
@@ -2479,6 +2556,8 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
   </nav>
   <div class="nav-foot">drag to reorder</div>
 </aside>
+
+<div class="gsearch-empty" id="gsearch-empty" hidden>No stories match your search.</div>
 
 {heroes}
 
@@ -2512,13 +2591,48 @@ window.__TNEWS__ = {tnews_json}; window.__CHARTS__ = {charts_json};
 window.__LOGOS__ = {logos_json};</script>
 <script>{MAP_JS}</script>
 <script>
-function filterItems(input){{
-  const q = input.value.trim().toLowerCase();
-  input.closest('section').querySelectorAll('.poster').forEach(it => {{
-    const hit = !q || it.textContent.toLowerCase().includes(q);
-    it.classList.toggle('hidden', !hit);
-  }});
+// ── ค้นหาข่าวทั้งเว็บ (แถบบนสุด) ───────────────────────────
+// ระหว่างค้นหา ต้องดึงข่าวที่พับ/ซ่อนไว้ในแท็บหมวดออกมาด้วย (คุมด้วย body.searching ใน CSS)
+let gsearchT = null;
+function globalSearch(q){{
+  clearTimeout(gsearchT);
+  gsearchT = setTimeout(() => applyGlobalSearch(q.trim().toLowerCase()), 90);
 }}
+function applyGlobalSearch(q){{
+  document.body.classList.toggle('searching', !!q);
+  document.getElementById('gsearch-x').hidden = !q;
+  let anySite = false;
+  document.querySelectorAll('.row').forEach(row => {{
+    if (row.closest('#cmodal')) return;      // ไม่ยุ่งกับหน้ากราฟ
+    let any = false;
+    row.querySelectorAll('.poster').forEach(p => {{
+      const hit = !q || p.textContent.toLowerCase().includes(q);
+      p.classList.toggle('hidden', !hit);
+      if (hit) any = true;
+    }});
+    row.classList.toggle('no-match', !!q && !any);
+    if (any) anySite = true;
+  }});
+  document.getElementById('gsearch-empty').hidden = !q || anySite;
+}}
+
+// ── สลับแท็บหมวดข่าว (Economy/Politics/Business/Environment) ──
+function switchCat(btn, sc, cat){{
+  const group = btn.closest('.scope-group');
+  group.querySelectorAll('.cat-tab').forEach(b => b.classList.toggle('on', b === btn));
+  group.querySelectorAll('.cat-panel').forEach(p => p.hidden = p.dataset.cat !== cat);
+  try {{ sessionStorage.setItem('cat-' + sc, cat); }} catch(e) {{}}
+}}
+// จำหมวดที่เลือกไว้ล่าสุดของแต่ละฝั่ง ไม่ให้เด้งกลับตอนหน้ารีเฟรชอัตโนมัติ
+document.querySelectorAll('.scope-group').forEach(group => {{
+  const tabs = group.querySelectorAll('.cat-tab');
+  if (!tabs.length) return;
+  const sc = group.dataset.scope;
+  let want = null;
+  try {{ want = sessionStorage.getItem('cat-' + sc); }} catch(e) {{}}
+  const btn = [...tabs].find(b => b.dataset.cat === want);
+  if (btn) switchCat(btn, sc, want);
+}});
 
 function scrollRow(id, dir){{
   const el = document.getElementById(id);
@@ -2621,6 +2735,16 @@ const IND = [
       w: 'เส้นถดถอยกำลังสองน้อยสุดของราคาปิดในกรอบที่มองเห็น พร้อมช่องเบี่ยงเบนมาตรฐาน 2 เท่า',
       t: 'ใช้เมื่ออยากวัดว่าเทรนด์ชันขึ้นหรือลงจริงไหม และตอนนี้ราคาแพงหรือถูกเทียบกับเส้นเทรนด์',
       u: 'ราคาชนขอบบน = ยืดเกินเทรนด์ · ชนขอบล่าง = ต่ำกว่าเทรนด์ · ความชันบอกทิศทาง'}}}},
+    {{k: 'trend',  n: 'Trend Map', c: '#F5A524', d: {{
+      f: 'Trend Map — ZigZag + trend channel + volatility cone',
+      w: 'ลากขาขึ้น-ขาลงจริงของราคาจากจุดกลับตัว (ZigZag) แล้วต่อยอดสามอย่าง: ' +
+         'ช่องแนวโน้มของขาปัจจุบัน · แนวรับแนวต้านที่ราคากำลังจะไปชน · ' +
+         'และกรวยความผันผวนข้างหน้า',
+      t: 'ใช้ตอนอยากเห็นภาพรวมว่าตอนนี้อยู่ขาไหน ขามาแล้วกี่ % กี่แท่ง ' +
+         'และถ้าไปต่อจะไปชนอะไร ถ้าหลุดจะหลุดที่ไหน',
+      u: 'ดูโครงสร้างเทรนด์ (ยอดสูงขึ้น-ฐานสูงขึ้น = ขาขึ้นจริง) · ' +
+         'ตั้งจุดตัดขาดทุนใต้ฐานล่าสุด · ' +
+         'กรวยบอกแค่ "ช่วงที่ราคาแกว่งได้" ไม่ได้บอกว่าจะขึ้นหรือลง'}}}},
     {{k: 'dc',     n: 'Donchian 20',   c: '#8FA0BC', d: {{
       f: 'Donchian Channel (20) — Richard Donchian',
       w: 'ราคาสูงสุดและต่ำสุดของ 20 แท่งล่าสุด วาดเป็นกรอบครอบราคา',
@@ -2781,6 +2905,111 @@ function regrChannel(vis){{
   for (let i = 0; i < n; i++) {{ const d = vis[i][4] - (a + b * i); se += d * d; }}
   return {{a, b, sd: 2 * Math.sqrt(se / n), n}};
 }}
+// ── โมเดลเทรนด์: ลากขาขึ้น-ขาลงจริงจากจุดกลับตัว ─────────────
+// เกณฑ์การกลับตัวปรับตามความผันผวนของช่วงที่ดูอยู่ ไม่ใช้ค่าคงที่
+// เพราะ 5% ของบิตคอยน์กับ 5% ของหุ้นธนาคารไม่ใช่เรื่องเดียวกัน
+function zigzagPivots(vis){{
+  const n = vis.length;
+  if (n < 12) return [];
+  const rets = [];
+  for (let i = 1; i < n; i++) {{
+    const a = vis[i - 1][4], b = vis[i][4];
+    if (a > 0 && b > 0) rets.push(Math.abs(Math.log(b / a)));
+  }}
+  if (!rets.length) return [];
+  rets.sort((x, y) => x - y);
+  const med = rets[Math.floor(rets.length / 2)] || 0.01;
+  const thr = Math.max(0.028, Math.min(0.15, med * 2.2 * Math.sqrt(10)));
+
+  const piv = [];
+  let dir = 0, hiI = 0, hiV = vis[0][2], loI = 0, loV = vis[0][3];
+  for (let i = 1; i < n; i++) {{
+    const hi = vis[i][2], lo = vis[i][3];
+    if (dir === 0) {{
+      if (hi > hiV) {{ hiV = hi; hiI = i; }}
+      if (lo < loV) {{ loV = lo; loI = i; }}
+      if (hi >= loV * (1 + thr)) {{
+        piv.push({{i: loI, v: loV, t: 'L'}}); dir = 1; hiV = hi; hiI = i;
+      }} else if (lo <= hiV * (1 - thr)) {{
+        piv.push({{i: hiI, v: hiV, t: 'H'}}); dir = -1; loV = lo; loI = i;
+      }}
+    }} else if (dir === 1) {{
+      if (hi > hiV) {{ hiV = hi; hiI = i; }}
+      else if (lo <= hiV * (1 - thr)) {{
+        piv.push({{i: hiI, v: hiV, t: 'H'}}); dir = -1; loV = lo; loI = i;
+      }}
+    }} else {{
+      if (lo < loV) {{ loV = lo; loI = i; }}
+      else if (hi >= loV * (1 + thr)) {{
+        piv.push({{i: loI, v: loV, t: 'L'}}); dir = 1; hiV = hi; hiI = i;
+      }}
+    }}
+  }}
+  if (!piv.length) return [];
+  // ปลายขาปัจจุบันยังไม่ถูกยืนยันว่าเป็นจุดกลับตัว แต่ต้องมีไว้ลากขาที่กำลังวิ่งอยู่
+  piv.push(dir === 1 ? {{i: hiI, v: hiV, t: 'H', open: true}}
+                     : {{i: loI, v: loV, t: 'L', open: true}});
+  return piv.length >= 2 ? piv : [];
+}}
+
+// ช่องแนวโน้มของขาปัจจุบัน + กรวยความผันผวนข้างหน้า
+function trendModel(vis){{
+  const piv = zigzagPivots(vis);
+  if (piv.length < 2) return null;
+
+  const legs = [];
+  for (let k = 0; k + 1 < piv.length; k++) {{
+    const a = piv[k], b = piv[k + 1];
+    if (b.i <= a.i) continue;
+    legs.push({{a, b, up: b.v > a.v, pct: (b.v / a.v - 1) * 100, bars: b.i - a.i}});
+  }}
+  if (!legs.length) return null;
+  const cur = legs[legs.length - 1];
+
+  // เส้นช่อง: ขาขึ้นลากผ่านจุดต่ำของแท่งในขานั้น ขาลงลากผ่านจุดสูง
+  const s = cur.a.i, e = cur.b.i;
+  const idx = [];
+  for (let i = s; i <= e; i++) idx.push(i);
+  const pick = i => cur.up ? vis[i][3] : vis[i][2];
+  let sx = 0, sy = 0, sxy = 0, sxx = 0;
+  for (const i of idx) {{
+    const y = pick(i);
+    sx += i; sy += y; sxy += i * y; sxx += i * i;
+  }}
+  const m = idx.length, den = m * sxx - sx * sx;
+  const slope = den ? (m * sxy - sx * sy) / den : 0;
+  const inter = (sy - slope * sx) / m;
+  // ยกเส้นคู่ขนานไปแตะฝั่งตรงข้ามที่ไกลที่สุด
+  let off = 0;
+  for (const i of idx) {{
+    const other = cur.up ? vis[i][2] : vis[i][3];
+    const d = other - (inter + slope * i);
+    if (cur.up ? d > off : d < off) off = d;
+  }}
+
+  // โครงสร้างเทรนด์: ยอดสูงขึ้น + ฐานสูงขึ้น = ขาขึ้นจริง
+  const highs = piv.filter(p => p.t === 'H').slice(-3);
+  const lows = piv.filter(p => p.t === 'L').slice(-3);
+  const rising = a => a.length >= 2 && a[a.length - 1].v > a[a.length - 2].v;
+  const falling = a => a.length >= 2 && a[a.length - 1].v < a[a.length - 2].v;
+  let structure = 'ไม่ชัด';
+  if (rising(highs) && rising(lows)) structure = 'ยอดสูงขึ้น ฐานสูงขึ้น';
+  else if (falling(highs) && falling(lows)) structure = 'ยอดต่ำลง ฐานต่ำลง';
+
+  // ความผันผวนต่อแท่ง ใช้กางกรวยข้างหน้า (ส่วนนี้ทำนายได้จริง ต่างจากทิศทาง)
+  const tail = vis.slice(Math.max(0, vis.length - 20));
+  const lr = [];
+  for (let i = 1; i < tail.length; i++) {{
+    const a = tail[i - 1][4], b = tail[i][4];
+    if (a > 0 && b > 0) lr.push(Math.log(b / a));
+  }}
+  const mu = lr.reduce((x, y) => x + y, 0) / (lr.length || 1);
+  const sd = Math.sqrt(lr.reduce((x, y) => x + (y - mu) * (y - mu), 0) / Math.max(1, lr.length - 1));
+
+  return {{piv, legs, cur, slope, inter, off, structure, sd,
+           last: vis[vis.length - 1][4], lastI: vis.length - 1}};
+}}
+
 let chLevels = {{}}, chOverlays = new Set();
 const OV_STYLE = {{
   fair:   {{color: 'var(--biz)',   label: 'FAIR VALUE'}},
@@ -3155,7 +3384,9 @@ function renderChart(){{
   host.innerHTML = '';
   const svg = d3.select(host).append('svg').attr('viewBox', `0 0 ${{W}} ${{H}}`);
   const defs = svg.append('defs');
-  const x0 = d3.scaleLinear().domain([-0.6, rows.length - 0.4]).range([0, iw]);
+  // เปิดโหมดเทรนด์ต้องเผื่อที่ว่างขวามือไว้กางกรวยข้างหน้า
+  const fcast = has('trend') ? Math.max(6, Math.round(rows.length * 0.14)) : 0;
+  const x0 = d3.scaleLinear().domain([-0.6, rows.length - 0.4 + fcast]).range([0, iw]);
 
   // แต่ละแพเนลมีสเกล y ของตัวเอง แต่ใช้แกนเวลาร่วมกัน
   const panes = [];
@@ -3221,6 +3452,7 @@ function renderChart(){{
       .attr('x', 6).attr('y', p.y).attr('dy', '.32em').text(fmt);
   }}
 
+  let lastTM = null;             // เก็บผลโมเดลเทรนด์ไว้ให้ป้ายกำกับใช้ต่อ
   function draw(t){{
     const zx = t.rescaleX(x0);
     const i0 = Math.max(0, Math.floor(zx.invert(0)));
@@ -3236,7 +3468,16 @@ function renderChart(){{
       if (seg.length) {{ lo = Math.min(lo, d3.min(seg)); hi = Math.max(hi, d3.max(seg)); }}
     }});
     // แนวรับ-ต้าน กับ ช่องแนวโน้ม คำนวณจากกรอบที่มองเห็น จึงขยับตามการซูม
-    const sr = has('sr') ? srLevels(vis) : [];
+    const sr = has('sr') || has('trend') ? srLevels(vis) : [];
+    const tm = has('trend') ? trendModel(vis) : null;
+    lastTM = tm;
+    if (tm) {{
+      // เผื่อกรอบให้เห็นทั้งช่องแนวโน้มและกรวย
+      const k = fcast;
+      const band = tm.last * (Math.exp(2 * tm.sd * Math.sqrt(k)) - 1);
+      lo = Math.min(lo, tm.last - band, tm.inter + tm.slope * (tm.lastI + k) + Math.min(0, tm.off));
+      hi = Math.max(hi, tm.last + band, tm.inter + tm.slope * (tm.lastI + k) + Math.max(0, tm.off));
+    }}
     const rc = has('regr') ? regrChannel(vis) : null;
     if (rc) {{
       const ends = [rc.a - rc.sd, rc.a + rc.sd,
@@ -3317,6 +3558,68 @@ function renderChart(){{
       .attr('font-size', 9.5).attr('font-family', "'IBM Plex Mono',monospace")
       .attr('fill', d => d.v >= lastC ? 'var(--down)' : 'var(--up)')
       .text(d => (d.v >= lastC ? 'R ' : 'S ') + fmtP(d.v) + '  ×' + d.n);
+
+    // ── แผนที่เทรนด์: ขาขึ้น-ขาลง + ช่องแนวโน้ม + กรวยข้างหน้า ──
+    const legG = gC.selectAll('g.c-trend').data(tm ? [0] : []).join(
+      en => en.append('g').attr('class', 'c-trend'));
+    if (tm) {{
+      const X = i => zx(i0 + i);
+      const Y = v => main.y(v);
+
+      // กรวยความผันผวนข้างหน้า — วาดก่อนเพื่อให้อยู่ใต้เส้นอื่น
+      const steps = [];
+      for (let k = 0; k <= fcast; k++) steps.push(k);
+      const band = (k, mult) => tm.last * (Math.exp(mult * tm.sd * Math.sqrt(k)) - 1);
+      const cone = (mult, cls) => {{
+        const up = steps.map(k => [X(tm.lastI + k), Y(tm.last + band(k, mult))]);
+        const dn = steps.map(k => [X(tm.lastI + k), Y(tm.last - band(k, mult))]).reverse();
+        return 'M' + up.concat(dn).map(p => p.join(',')).join('L') + 'Z';
+      }};
+      legG.selectAll('path.c-cone').data([[2, .10], [1, .16]]).join('path')
+        .attr('class', 'c-cone')
+        .attr('d', d => cone(d[0]))
+        .attr('fill', IND_MAP.trend.c).attr('opacity', d => d[1]).attr('stroke', 'none');
+
+      // ช่องแนวโน้มของขาปัจจุบัน ต่อเส้นประออกไปข้างหน้า
+      const s = tm.cur.a.i, e = tm.lastI + fcast;
+      const chan = [{{k: 'base', off: 0}}, {{k: 'par', off: tm.off}}];
+      legG.selectAll('line.c-chan').data(chan, d => d.k).join('line')
+        .attr('class', 'c-chan')
+        .attr('x1', X(s)).attr('x2', X(e))
+        .attr('y1', d => Y(tm.inter + tm.slope * s + d.off))
+        .attr('y2', d => Y(tm.inter + tm.slope * e + d.off))
+        .attr('stroke', tm.cur.up ? 'var(--up)' : 'var(--down)')
+        .attr('stroke-width', 1.2).attr('opacity', .55)
+        .attr('stroke-dasharray', '6 5');
+
+      // ขาขึ้น-ขาลงจริง ลากจากจุดกลับตัวถึงจุดกลับตัว
+      legG.selectAll('line.c-leg').data(tm.legs, d => d.a.i + '-' + d.b.i).join('line')
+        .attr('class', 'c-leg')
+        .attr('x1', d => X(d.a.i)).attr('y1', d => Y(d.a.v))
+        .attr('x2', d => X(d.b.i)).attr('y2', d => Y(d.b.v))
+        .attr('stroke', d => d.up ? 'var(--up)' : 'var(--down)')
+        .attr('stroke-width', d => d === tm.cur ? 2.6 : 1.6)
+        .attr('opacity', d => d === tm.cur ? .95 : .5)
+        .attr('stroke-linecap', 'round');
+
+      // จุดกลับตัว
+      legG.selectAll('circle.c-piv').data(tm.piv, d => d.i + d.t).join('circle')
+        .attr('class', 'c-piv')
+        .attr('cx', d => X(d.i)).attr('cy', d => Y(d.v)).attr('r', 2.6)
+        .attr('fill', d => d.t === 'H' ? 'var(--down)' : 'var(--up)')
+        .attr('stroke', 'var(--bg)').attr('stroke-width', 1);
+
+      // ป้าย % ของแต่ละขา เขียนเฉพาะขาที่กว้างพอ ไม่งั้นตัวหนังสือทับกัน
+      const wide = tm.legs.filter(d => Math.abs(X(d.b.i) - X(d.a.i)) > 46);
+      legG.selectAll('text.c-legt').data(wide, d => d.a.i + '-' + d.b.i).join('text')
+        .attr('class', 'c-legt')
+        .attr('x', d => (X(d.a.i) + X(d.b.i)) / 2)
+        .attr('y', d => (Y(d.a.v) + Y(d.b.v)) / 2 - 5)
+        .attr('text-anchor', 'middle').attr('font-size', 9.5)
+        .attr('font-family', "'IBM Plex Mono',monospace")
+        .attr('fill', d => d.up ? 'var(--up)' : 'var(--down)')
+        .text(d => (d.pct >= 0 ? '+' : '') + d.pct.toFixed(1) + '%');
+    }}
 
     // ── ช่องแนวโน้มจากเส้นถดถอย ──
     const rcLines = rc ? [
@@ -3429,6 +3732,14 @@ function renderChart(){{
     }});
     if (has('sr')) items.push({{t: 'S/R', c: IND_MAP.sr.c}});
     if (has('regr')) items.push({{t: 'REGR ±2σ', c: IND_MAP.regr.c}});
+    if (lastTM) {{
+      const c = lastTM.cur;
+      items.push({{
+        t: (c.up ? '▲ ขาขึ้น ' : '▼ ขาลง ') +
+           (c.pct >= 0 ? '+' : '') + c.pct.toFixed(1) + '% · ' + c.bars + ' แท่ง · ' +
+           lastTM.structure,
+        c: c.up ? 'var(--up)' : 'var(--down)'}});
+    }}
     main.leg.selectAll('text').data(items).join('text')
       .attr('x', (d, k) => k === 0 ? 0 : null)
       .attr('fill', d => d.c).attr('y', 0)
