@@ -2,5 +2,6 @@ cache.json
 logos.json
 market_history.json
 chart/
+fin/
 __pycache__/
 .claude/

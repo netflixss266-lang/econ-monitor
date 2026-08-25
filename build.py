@@ -527,6 +527,111 @@ def build_charts(markets=None):
     return index
 
 
+# ─────────────────────────────────────────────────────────────
+# งบการเงิน — รายได้/ค่าใช้จ่าย/กำไร/สินทรัพย์/หนี้สิน ย้อนหลังสูงสุด 4 ปี
+# + รายไตรมาสของปีที่ดำเนินอยู่ ไว้ให้กดดูจากรายการโปรดในหน้ากราฟ
+# ─────────────────────────────────────────────────────────────
+FIN_DIR = "fin"
+FIN_FULL_DAYS = 7      # งบเปลี่ยนแค่รายไตรมาส ไม่ต้องดึงถี่เท่ากราฟ
+
+# (คีย์สั้นในไฟล์ JSON, ชื่อฟิลด์ที่ Yahoo ใช้, ชื่อที่แสดงผล, หมวด)
+FIN_FIELDS = [
+    ("rev",    "TotalRevenue",                          "Revenue",              "income"),
+    ("cogs",   "CostOfRevenue",                          "Cost of Revenue",      "income"),
+    ("gp",     "GrossProfit",                             "Gross Profit",         "income"),
+    ("opex",   "OperatingExpense",                        "Operating Expense",    "income"),
+    ("opinc",  "OperatingIncome",                          "Operating Income",     "income"),
+    ("ni",     "NetIncome",                                "Net Income",           "income"),
+    ("eps",    "DilutedEPS",                               "Diluted EPS",          "income"),
+    ("assets", "TotalAssets",                              "Total Assets",         "balance"),
+    ("liab",   "TotalLiabilitiesNetMinorityInterest",      "Total Liabilities",    "balance"),
+    ("equity", "TotalEquityGrossMinorityInterest",         "Total Equity",         "balance"),
+    ("cash",   "CashAndCashEquivalents",                   "Cash & Equivalents",   "balance"),
+    ("debt",   "TotalDebt",                                "Total Debt",           "balance"),
+]
+_FIN_TYPES = [f"{p}{y}" for p in ("annual", "quarterly") for _, y, _, _ in FIN_FIELDS]
+
+
+def _parse_fin_periods(result):
+    """แปลงผลตอบจาก fundamentals-timeseries เป็น {{annual: [...], quarterly: [...]}}
+    แต่ละงวดรวมทุกฟิลด์ที่มีค่าในวันเดียวกันไว้แถวเดียว เรียงเก่าไปใหม่"""
+    by_period = {"annual": {}, "quarterly": {}}
+    for item in result or []:
+        typ = ((item.get("meta") or {}).get("type") or [None])[0]
+        if not typ:
+            continue
+        span = "annual" if typ.startswith("annual") else "quarterly"
+        suffix = typ[len(span):]
+        short = next((s for s, y, _, _ in FIN_FIELDS if y == suffix), None)
+        if not short:
+            continue
+        for pt in item.get(typ) or []:
+            date = pt.get("asOfDate")
+            val = (pt.get("reportedValue") or {}).get("raw")
+            if date is None or val is None:
+                continue
+            by_period[span].setdefault(date, {})[short] = val
+    out = {}
+    for span, rows in by_period.items():
+        out[span] = [{"date": d, **vals} for d, vals in sorted(rows.items())]
+    return out
+
+
+def fetch_financials():
+    """งบการเงินย่อ (ไม่ใช่งบเต็ม) ของหุ้นทุกตัวในจักรวาลค้นหา — ธนาคาร/ประกัน
+    มักไม่มี cost of revenue / gross profit ตามธรรมชาติของธุรกิจ ปล่อยว่างไว้เฉยๆ
+
+    ดัชนี ค่าเงิน ทองคำ คริปโต ไม่มีงบการเงิน — ยิงขอไปเฉยๆ แล้วข้ามถ้าไม่มีข้อมูลจริง
+    """
+    idx_path = f"{FIN_DIR}/index.json"
+    cached = load_json(idx_path)
+    if cached.get("labels") and cached.get("at"):
+        try:
+            age_days = (NOW - datetime.fromisoformat(cached["at"])).total_seconds() / 86400
+            if 0 <= age_days < FIN_FULL_DAYS:
+                print(f"  ↻ ใช้งบการเงินเดิมที่ดึงมา {age_days:.1f} วันที่แล้ว")
+                return set(cached["labels"])
+        except Exception:
+            pass
+
+    sess, crumb = yahoo_session()
+    if not sess:
+        return set()
+    uni = universe_symbols()
+
+    def one(job):
+        sym, label, _ = job
+        try:
+            r = sess.get(
+                "https://query2.finance.yahoo.com/ws/fundamentals-timeseries/"
+                f"v1/finance/timeseries/{sym}",
+                params={"symbol": sym, "type": ",".join(_FIN_TYPES),
+                        "period1": "1000000000", "period2": str(int(NOW.timestamp()) + 86400),
+                        "crumb": crumb}, timeout=15)
+            if r.status_code != 200:
+                return label, None
+            result = r.json().get("timeseries", {}).get("result")
+            periods = _parse_fin_periods(result)
+            if not periods.get("annual") and not periods.get("quarterly"):
+                return label, None
+            return label, periods
+        except Exception:
+            return label, None
+
+    os.makedirs(FIN_DIR, exist_ok=True)
+    got = set()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for label, periods in pool.map(one, uni):
+            if not periods:
+                continue
+            slug = chart_slug(label)
+            save_json(f"{FIN_DIR}/{slug}.json", {"label": label, **periods})
+            got.add(label)
+    print(f"  ✓ งบการเงิน {len(got)}/{len(uni)} สินทรัพย์")
+    save_json(idx_path, {"at": NOW.isoformat(), "labels": sorted(got)})
+    return got
+
+
 def attach_ticker_news(markets, news):
     """แนบข่าวที่เกี่ยวข้องกับแต่ละสินทรัพย์ เรียงตามคะแนนความเกี่ยวข้อง"""
     for m in markets:
@@ -1788,8 +1893,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .tfbtn:hover{{color:var(--ink)}}
 .tfbtn.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:600}}
 .cmodal-body{{flex:1;display:flex;min-height:0}}
-.cmodal-pick{{width:210px;flex:none;display:flex;flex-direction:column;min-height:0;
-  border-right:1px solid var(--line)}}
+.cmodal-pick{{width:210px;flex:none;display:flex;flex-direction:column;min-height:0}}
 .csearch{{margin:8px 10px;width:auto;flex:none}}
 .cmodal-list{{flex:1;overflow-y:auto;padding:2px 0}}
 .cmodal-list .cnone{{padding:16px 14px;color:var(--dim);font-size:.76rem}}
@@ -1842,7 +1946,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cmodal-note{{font-size:.65rem;line-height:1.5;color:var(--dim);margin-top:3px;max-width:560px}}
 .cempty{{display:grid;place-items:center;height:100%;color:var(--mute);font-size:.85rem}}
 
-/* ── แถบเครื่องมือเทคนิคฝั่งขวา (อย่างโปรแกรมเทรด) ────────── */
+/* ── แถบเครื่องมือเทคนิคฝั่งซ้าย (อย่างโปรแกรมเทรด) ────────── */
 .crail{{position:relative;flex:none;width:46px;display:flex;flex-direction:column;
   align-items:center;gap:5px;padding:9px 0;background:var(--panel2);
   border-left:1px solid var(--line);border-right:1px solid var(--line)}}
@@ -1857,7 +1961,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   display:grid;place-items:center;border-radius:7px;background:var(--brass);
   color:#0A0E1A;font-size:.52rem;font-weight:700}}
 .crail-sep{{width:22px;height:1px;background:var(--line);margin:3px 0}}
-.cpop{{position:absolute;right:52px;top:8px;z-index:8;width:232px;
+.cpop{{position:absolute;left:52px;top:8px;z-index:8;width:232px;
   background:var(--panel);border:1px solid var(--line2);border-radius:2px;
   box-shadow:0 18px 44px rgba(0,0,0,.55)}}
 .cpop-head{{padding:9px 12px;border-bottom:1px solid var(--line);background:var(--panel2);
@@ -1890,6 +1994,55 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   border:0;border-top:1px solid var(--line);font-family:'IBM Plex Mono',monospace;
   font-size:.58rem;letter-spacing:.12em}}
 .cpop-clear:hover{{color:var(--down)}}
+
+/* ── ปุ่ม + หน้าต่างงบการเงิน ────────────────────────────── */
+.fin-btn{{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;
+  margin-left:auto;flex:none;cursor:pointer;border-radius:2px;
+  font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.08em;
+  font-weight:600;color:var(--mute);background:var(--panel2);border:1px solid var(--line)}}
+.fin-btn:hover{{color:var(--ink);border-color:var(--brass)}}
+.fin-btn svg{{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}}
+.fin-tabs{{display:flex;gap:4px;flex:none}}
+.fin-tab{{padding:8px 14px;border-radius:2px;cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.08em;
+  color:var(--mute);background:transparent;border:1px solid var(--line)}}
+.fin-tab:hover{{color:var(--ink)}}
+.fin-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
+.fin-body{{flex:1;overflow:auto;padding:16px 18px}}
+.fin-note{{padding:9px 18px;font-size:.65rem;line-height:1.5;color:var(--dim);
+  border-top:1px solid var(--line);background:var(--panel2)}}
+.fin-empty{{display:grid;place-items:center;height:100%;color:var(--mute);
+  font-size:.85rem;text-align:center;gap:8px;padding:30px}}
+.fin-table{{border-collapse:collapse;font-family:'IBM Plex Mono',monospace;
+  font-size:.78rem;font-variant-numeric:tabular-nums}}
+.fin-table th,.fin-table td{{padding:9px 16px;text-align:right;white-space:nowrap;
+  border-bottom:1px solid var(--line)}}
+.fin-table thead th{{position:sticky;top:0;background:var(--panel);z-index:2;
+  color:var(--dim);font-size:.62rem;letter-spacing:.06em;font-weight:600;
+  border-bottom:1px solid var(--line2)}}
+.fin-table th:first-child,.fin-table td:first-child{{position:sticky;left:0;
+  background:var(--panel);z-index:1;text-align:left;font-family:'Noto Serif Thai',Georgia,serif;
+  font-size:.82rem;color:var(--mute);white-space:normal;min-width:150px}}
+.fin-table thead th:first-child{{z-index:3}}
+.fin-table tbody tr:hover td{{background:var(--hover)}}
+.fin-table tbody tr:hover td:first-child{{background:var(--hover)}}
+.fin-table .fin-val{{color:var(--ink);font-weight:500}}
+.fin-table .fin-na{{color:var(--dim)}}
+.fin-table .fin-delta{{display:block;font-size:.64rem;font-weight:400;margin-top:2px}}
+.fin-table .fin-delta.up{{color:var(--up)}}
+.fin-table .fin-delta.down{{color:var(--down)}}
+.fin-table .fin-delta.flat{{color:var(--dim)}}
+.fin-sec{{background:var(--panel2)}}
+.fin-sec td{{padding:7px 16px;font-family:'IBM Plex Mono',monospace;font-size:.6rem;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--brass);font-weight:600;
+  border-bottom:1px solid var(--line2)}}
+@media(max-width:700px){{
+  .cmodal-head{{position:relative}}
+  .fin-btn{{margin-left:0}}
+  .fin-tabs{{width:100%;order:3}}
+}}
+
 /* ป้ายค่าอินดิเคเตอร์มุมซ้ายบนของแต่ละแพเนล */
 .c-leg text{{font-family:'IBM Plex Mono',monospace;font-size:10px}}
 .c-pane-sep{{stroke:var(--line);stroke-width:1;shape-rendering:crispEdges}}
@@ -2459,6 +2612,9 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
         <div class="cmodal-price"><span id="cmodal-p"></span><span id="cmodal-c"></span></div>
         <div class="cmodal-note" id="cnote" hidden></div>
       </div>
+      <button class="fin-btn" type="button" id="fin-btn" onclick="openFinancials()" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M7 19V9M12 19V5M17 19v-7"/></svg>
+        FINANCIALS</button>
     </div>
 
     <div class="tickers cmodal-tape">
@@ -2477,20 +2633,7 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
                placeholder="Search symbol…" oninput="filterAssets(this.value)">
         <div class="cmodal-list" id="cmodal-list"></div>
       </div>
-      <div class="cmodal-chart">
-        <div id="cchart"></div>
-        <div class="cbottom">
-          <div id="creadout" class="creadout"></div>
-          <div class="cctrl">
-            <div class="tfbar" id="cmodal-tf"></div>
-            <div class="tfbar ctype">
-              <button class="tfbtn on" type="button" data-ct="candle" onclick="pickType('candle')">CANDLES</button>
-              <button class="tfbtn" type="button" data-ct="line" onclick="pickType('line')">LINE</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- แถบเครื่องมือเทคนิคฝั่งขวาของกราฟ -->
+      <!-- แถบเครื่องมือเทคนิค ยื่นออกมาจากขอบซ้ายของกราฟ -->
       <div class="crail" id="crail">
         <button class="crbtn" type="button" data-pop="ind" onclick="togglePop('ind')"
                 title="Indicators"><b>ƒ</b><span class="crbadge" id="crn" hidden>0</span></button>
@@ -2509,6 +2652,19 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
           <button class="cpop-clear" type="button" onclick="clearInd()">CLEAR ALL</button>
         </div>
       </div>
+      <div class="cmodal-chart">
+        <div id="cchart"></div>
+        <div class="cbottom">
+          <div id="creadout" class="creadout"></div>
+          <div class="cctrl">
+            <div class="tfbar" id="cmodal-tf"></div>
+            <div class="tfbar ctype">
+              <button class="tfbtn on" type="button" data-ct="candle" onclick="pickType('candle')">CANDLES</button>
+              <button class="tfbtn" type="button" data-ct="line" onclick="pickType('line')">LINE</button>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="cmodal-side" id="cmodal-side">
         <button class="cnews-head cfold" type="button" onclick="toggleCalc()"
                 aria-expanded="true" aria-controls="ccalc">
@@ -2518,6 +2674,31 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
         <div class="cnews-list" id="cnews-list"></div>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="finmodal" class="tmodal" hidden>
+  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="Financial statements">
+    <div class="cmodal-head">
+      <button type="button" class="backbtn" onclick="closeFinancials()" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="cmodal-title">
+        <h3 id="fin-name">—</h3>
+        <div class="cmodal-price"><span id="fin-currency"></span></div>
+      </div>
+      <div class="fin-tabs" role="tablist">
+        <button class="fin-tab on" type="button" data-span="annual"
+                onclick="pickFinSpan('annual')">ANNUAL</button>
+        <button class="fin-tab" type="button" data-span="quarterly"
+                onclick="pickFinSpan('quarterly')">QUARTERLY · THIS YEAR</button>
+      </div>
+    </div>
+    <div class="fin-body" id="fin-body"><div class="cempty">Loading…</div></div>
+    <p class="fin-note">Figures are company-reported financial statements sourced from Yahoo
+      Finance, up to the last 4 fiscal years / most recent reported quarters — banks and
+      insurers often show "—" for cost of revenue / gross profit, which doesn't apply to
+      their business model. Indicators only, not investment advice.</p>
   </div>
 </div>
 
@@ -3189,6 +3370,7 @@ function openCharts(){{
 
 function closeCharts(){{
   document.getElementById('cmodal').hidden = true;
+  document.getElementById('finmodal').hidden = true;
   document.body.style.overflow = '';
 }}
 
@@ -3224,8 +3406,121 @@ async function pickChart(label){{
   const note = document.getElementById('cnote');
   note.textContent = chData.note || '';
   note.hidden = !chData.note;
+  document.getElementById('fin-btn').hidden = !CHARTS[label].f;
   renderChart();
 }}
+
+// ── งบการเงิน (เปิดจากปุ่ม FINANCIALS ในหน้ากราฟ) ─────────
+// รายการฟิลด์ต้องตรงกับ FIN_FIELDS ฝั่ง build.py — คีย์สั้นในไฟล์ JSON เหมือนกัน
+const FIN_FIELDS = [
+  ['rev',    'Revenue',              'income'],
+  ['cogs',   'Cost of Revenue',      'income'],
+  ['gp',     'Gross Profit',         'income'],
+  ['opex',   'Operating Expense',    'income'],
+  ['opinc',  'Operating Income',     'income'],
+  ['ni',     'Net Income',           'income'],
+  ['eps',    'Diluted EPS',          'income'],
+  ['assets', 'Total Assets',         'balance'],
+  ['liab',   'Total Liabilities',    'balance'],
+  ['equity', 'Total Equity',         'balance'],
+  ['cash',   'Cash & Equivalents',   'balance'],
+  ['debt',   'Total Debt',           'balance'],
+];
+const FIN_SEC = {{income: 'INCOME STATEMENT', balance: 'BALANCE SHEET'}};
+let finCache = {{}}, finSpan = 'annual';
+
+const finFmt = (v, isEps) => {{
+  if (v == null || !isFinite(v)) return null;
+  if (isEps) return (v < 0 ? '-' : '') + '$' + Math.abs(v).toFixed(2);
+  const a = Math.abs(v), sign = v < 0 ? '-' : '';
+  if (a >= 1e12) return sign + (a / 1e12).toFixed(2) + 'T';
+  if (a >= 1e9)  return sign + (a / 1e9).toFixed(2) + 'B';
+  if (a >= 1e6)  return sign + (a / 1e6).toFixed(1) + 'M';
+  if (a >= 1e3)  return sign + (a / 1e3).toFixed(0) + 'K';
+  return sign + a.toFixed(0);
+}};
+
+function periodLabel(date, span){{
+  const d = new Date(date);
+  if (span === 'annual') return 'FY ' + d.getUTCFullYear();
+  return 'Q' + (Math.floor(d.getUTCMonth() / 3) + 1) + ' ' + d.getUTCFullYear();
+}}
+
+// เอาเฉพาะไตรมาสของปีที่ดำเนินอยู่ ถ้าปีนี้ยังไม่มีงบออกเลยค่อยโชว์ 4 ไตรมาสล่าสุดแทน
+function currentYearQuarters(rows){{
+  const y = new Date().getUTCFullYear();
+  const thisYear = rows.filter(r => new Date(r.date).getUTCFullYear() === y);
+  // ปีนี้ยังไม่มีงบออกเลย (เช่นเพิ่งขึ้นปีใหม่) โชว์ 4 ไตรมาสล่าสุดที่มีแทน ดีกว่าโชว์ตารางว่าง
+  return thisYear.length ? thisYear : rows.slice(-4);
+}}
+
+function renderFinTable(){{
+  const body = document.getElementById('fin-body');
+  const data = finCache[chCur];
+  if (!data) {{ body.innerHTML = '<div class="cempty">Loading…</div>'; return; }}
+  let rows = data[finSpan] || [];
+  if (finSpan === 'quarterly') rows = currentYearQuarters(rows);
+  if (!rows.length) {{
+    body.innerHTML = `<div class="fin-empty"><b>No ${{finSpan}} data reported yet</b>` +
+      '<span>Try the other tab, or check back after the next earnings release.</span></div>';
+    return;
+  }}
+  const cols = rows.map(r => periodLabel(r.date, finSpan));
+  let html = '<table class="fin-table"><thead><tr><th>Line item</th>' +
+    cols.map(c => `<th>${{esc(c)}}</th>`).join('') + '</tr></thead><tbody>';
+  let sec = null;
+  for (const [key, label, group] of FIN_FIELDS) {{
+    if (group !== sec) {{
+      sec = group;
+      html += `<tr class="fin-sec"><td colspan="${{cols.length + 1}}">${{FIN_SEC[sec]}}</td></tr>`;
+    }}
+    html += `<tr><td>${{esc(label)}}</td>` + rows.map((r, i) => {{
+      const v = r[key];
+      const txt = finFmt(v, key === 'eps');
+      if (txt == null) return '<td class="fin-na">—</td>';
+      const prev = i > 0 ? rows[i - 1][key] : null;
+      let delta = '';
+      if (prev != null && prev !== 0 && v != null) {{
+        const pct = (v / prev - 1) * 100;
+        const dir = pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat';
+        delta = `<span class="fin-delta ${{dir}}">${{pct >= 0 ? '+' : ''}}${{pct.toFixed(1)}}%</span>`;
+      }}
+      return `<td><span class="fin-val">${{txt}}</span>${{delta}}</td>`;
+    }}).join('') + '</tr>';
+  }}
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}}
+
+function pickFinSpan(span){{
+  finSpan = span;
+  document.querySelectorAll('.fin-tab').forEach(b =>
+    b.classList.toggle('on', b.dataset.span === span));
+  renderFinTable();
+}}
+
+async function openFinancials(){{
+  if (!chCur || !CHARTS[chCur]?.f) return;
+  document.getElementById('fin-name').textContent = chCur;
+  document.getElementById('fin-currency').textContent =
+    TNEWS[chCur]?.group === 'th' ? 'THB' : '';
+  document.getElementById('finmodal').hidden = false;
+  document.body.style.overflow = 'hidden';
+  if (!finCache[chCur]) {{
+    document.getElementById('fin-body').innerHTML = '<div class="cempty">Loading…</div>';
+    try {{
+      finCache[chCur] = await fetch('{FIN_DIR}/' + CHARTS[chCur].s + '.json').then(r => r.json());
+    }} catch (e) {{ finCache[chCur] = {{annual: [], quarterly: []}}; }}
+  }}
+  renderFinTable();
+}}
+function closeFinancials(){{
+  document.getElementById('finmodal').hidden = true;
+  if (document.getElementById('cmodal').hidden) document.body.style.overflow = '';
+}}
+document.getElementById('finmodal').addEventListener('click', ev => {{
+  if (ev.target.id === 'finmodal') closeFinancials();
+}});
 
 // ── แถบเครื่องมือ: เปิด/ปิดอินดิเคเตอร์ ────────────────────
 function renderIndList(){{
@@ -4019,6 +4314,11 @@ if __name__ == "__main__":
         logos = fetch_logos()
         print("ดึงข้อมูลแท่งเทียน...")
         charts = build_charts(markets)
+        print("ดึงงบการเงิน...")
+        fin_labels = fetch_financials()
+        for label in fin_labels:
+            if label in charts:
+                charts[label]["f"] = True
     print()
 
     with open("index.html", "w", encoding="utf-8") as f:
