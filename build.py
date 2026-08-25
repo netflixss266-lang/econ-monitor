@@ -2024,7 +2024,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   color:var(--mute);background:transparent;border:1px solid var(--line)}}
 .fin-tab:hover{{color:var(--ink)}}
 .fin-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
-/* charts คงที่ด้านบนเสมอ ส่วนตารางเป็นกล่องเลื่อนของตัวเองทั้งสองแกน —
+/* dashboard คงที่ด้านบนเสมอ ส่วนตารางเป็นกล่องเลื่อนของตัวเองทั้งสองแกน —
    ถ้าให้ทั้ง fin-body เลื่อนแนวนอนด้วย จะลากการ์ดกราฟเลื่อนตามตารางไปด้วย
    (ตั้ง overflow แค่แกนเดียวบน element เดียวกันใช้ไม่ได้ เบราว์เซอร์จะปัดอีกแกนเป็น auto
    ให้เองเสมอ ทำให้ตัวเลื่อนจริงกลายเป็น element นั้นแทน sticky header เลยพังตาม) */
@@ -2039,11 +2039,38 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .fin-empty{{display:grid;place-items:center;color:var(--mute);
   font-size:.95rem;text-align:center;gap:8px;padding:30px}}
 
-/* กราฟแท่งสรุปเมตริกหลัก — อยู่นิ่งด้านบน เห็นแนวโน้มตลอดแม้เลื่อนตารางด้านล่าง */
-.fin-charts{{flex:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
-  gap:16px;margin-bottom:26px;max-width:1400px}}
+/* ── แถบสรุป KPI + เลือกหุ้นเทียบ — หัวแดชบอร์ด ─────────────── */
+.fin-kpis-head{{display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;margin-bottom:14px}}
+.fin-cmp{{display:flex;align-items:center;gap:9px;font-family:'IBM Plex Mono',monospace;
+  font-size:.68rem;letter-spacing:.06em;color:var(--mute)}}
+.fin-cmp select{{padding:7px 10px;border-radius:2px;background:var(--panel2);
+  border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:.74rem;
+  cursor:pointer;max-width:200px}}
+.fin-cmp select:hover{{border-color:var(--brass)}}
+.fin-kpis{{flex:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));
+  gap:14px;margin-bottom:30px;max-width:1400px}}
+.fin-kpi{{background:var(--panel2);border:1px solid var(--line);border-radius:2px;
+  padding:16px 18px}}
+.fin-kpi-lbl{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--mute);margin-bottom:9px}}
+.fin-kpi-val{{font-family:'IBM Plex Mono',monospace;font-size:1.6rem;font-weight:700;
+  color:var(--ink);line-height:1.15;white-space:nowrap}}
+.fin-kpi .fin-delta{{font-size:.78rem;margin-top:7px}}
+.fin-kpi-cmp{{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--mixed);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+
+/* ── กลุ่มแผงกราฟ แบ่งเป็นหัวข้อวิเคราะห์อย่างแดชบอร์ดจริง ───── */
+.fin-panels{{flex:none;display:flex;flex-direction:column;gap:26px;max-width:1400px}}
+.fin-section-h{{font-family:'IBM Plex Mono',monospace;font-size:.78rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--brass);padding-bottom:8px;
+  border-bottom:1px solid var(--line);margin-bottom:14px}}
+.fin-panel-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:16px}}
 .fin-chart{{background:var(--panel2);border:1px solid var(--line);border-radius:2px;
   padding:14px 16px}}
+.fin-chart-wide{{grid-column:1/-1}}
 .fin-chart-h{{font-family:'IBM Plex Mono',monospace;font-size:.76rem;letter-spacing:.08em;
   text-transform:uppercase;color:var(--mute);margin-bottom:14px}}
 .fin-chart-plot{{position:relative;height:130px;display:flex;gap:10px}}
@@ -2059,6 +2086,15 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .fin-bar.neg{{background:var(--down)}}
 .fin-bar-lbl{{font-family:'IBM Plex Mono',monospace;font-size:.64rem;color:var(--dim);
   white-space:nowrap}}
+/* เส้นแนวโน้มมาร์จิ้น % — สีตายตัวตามลำดับเดิมเสมอ ไม่สลับสีตามการกรอง */
+.fin-legend{{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px}}
+.fin-legend-item{{display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;
+  font-size:.66rem;color:var(--mute)}}
+.fin-legend-item i{{width:10px;height:10px;border-radius:2px;flex:none}}
+.fin-line-svg{{width:100%;height:150px;display:block;overflow:visible}}
+.fin-line-path{{stroke-width:2;stroke-linecap:round;stroke-linejoin:round}}
+.fin-line-dot{{cursor:pointer}}
+.fin-zero-ln{{stroke:var(--line2);stroke-width:1;stroke-dasharray:3 3}}
 
 /* separate ไม่ใช่ collapse — sticky บน <th> พังกับ border-collapse:collapse ในเบราว์เซอร์
    ตระกูล Chromium หลายรุ่น (แถวหัวตารางไม่ยอมค้างเวลาเลื่อน) */
@@ -2093,7 +2129,8 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   .cmodal-head{{position:relative;flex-wrap:wrap}}
   .fin-btn{{margin-left:0}}
   .fin-tabs{{width:100%;order:3;margin-left:0}}
-  .fin-charts{{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
+  .fin-kpis{{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}}
+  .fin-panel-grid{{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
 }}
 
 /* ป้ายค่าอินดิเคเตอร์มุมซ้ายบนของแต่ละแพเนล */
@@ -3483,16 +3520,20 @@ const FIN_FIELDS = [
   ['equity', 'Total Equity',         'balance'],
   ['cash',   'Cash & Equivalents',   'balance'],
   ['debt',   'Total Debt',           'balance'],
+  // อัตราส่วนคำนวณฝั่งไคลเอนต์เอง ไม่ได้ยิงขอ Yahoo เพิ่ม — มาจาก 12 ฟิลด์ด้านบนล้วนๆ
+  ['gm',     'Gross Margin',         'ratios'],
+  ['om',     'Operating Margin',     'ratios'],
+  ['nm',     'Net Margin',           'ratios'],
+  ['roe',    'Return on Equity',     'ratios'],
+  ['roa',    'Return on Assets',     'ratios'],
+  ['de',     'Debt / Equity',        'ratios'],
 ];
-const FIN_SEC = {{income: 'INCOME STATEMENT', balance: 'BALANCE SHEET'}};
-let finCache = {{}}, finSpan = 'annual', finSortCol = -1, finSortDir = -1;
-// เมตริกหลักที่ทำกราฟแท่งให้ — เลือกตัวที่มีครบทุกประเภทธุรกิจ (แบงก์ก็มี)
-const FIN_CHART_METRICS = [['rev', 'Revenue'], ['ni', 'Net Income'],
-  ['assets', 'Total Assets'], ['equity', 'Total Equity']];
+const FIN_SEC = {{income: 'INCOME STATEMENT', balance: 'BALANCE SHEET', ratios: 'KEY RATIOS'}};
+const FIN_PCT_KEYS = new Set(['gm', 'om', 'nm', 'roe', 'roa']);
+let finCache = {{}}, finSpan = 'annual', finSortCol = -1, finSortDir = -1, finCompareSym = null;
 
-const finFmt = (v, isEps) => {{
+const finFmt = v => {{
   if (v == null || !isFinite(v)) return null;
-  if (isEps) return (v < 0 ? '-' : '') + '$' + Math.abs(v).toFixed(2);
   const a = Math.abs(v), sign = v < 0 ? '-' : '';
   if (a >= 1e12) return sign + (a / 1e12).toFixed(2) + 'T';
   if (a >= 1e9)  return sign + (a / 1e9).toFixed(2) + 'B';
@@ -3500,6 +3541,41 @@ const finFmt = (v, isEps) => {{
   if (a >= 1e3)  return sign + (a / 1e3).toFixed(0) + 'K';
   return sign + a.toFixed(0);
 }};
+// ตัวเลือกฟอร์แมตต่อฟิลด์ — เงิน / EPS ($) / มาร์จิ้น-ผลตอบแทน (%) / หนี้สินต่อทุน (x)
+function finCellText(key, v){{
+  if (v == null || !isFinite(v)) return null;
+  if (key === 'eps') return (v < 0 ? '-' : '') + '$' + Math.abs(v).toFixed(2);
+  if (FIN_PCT_KEYS.has(key)) return v.toFixed(1) + '%';
+  if (key === 'de') return v.toFixed(2) + 'x';
+  return finFmt(v);
+}}
+// ฟิลด์ที่เป็น % อยู่แล้วต้องโชว์ผลต่างเป็นจุดเปอร์เซ็นต์ (pp) ไม่ใช่ % เปลี่ยนแปลง —
+// ไม่งั้นมาร์จิ้นขยับ 20%→22% จะโชว์ "+10%" ทำให้เข้าใจผิดว่ากำไรพุ่งแรงกว่าที่เป็นจริง
+function finDelta(key, v, prev){{
+  if (v == null || prev == null || !isFinite(v) || !isFinite(prev)) return '';
+  if (FIN_PCT_KEYS.has(key)) {{
+    const d = v - prev;
+    const dir = d > 0.05 ? 'up' : d < -0.05 ? 'down' : 'flat';
+    const dtxt = dir === 'flat' ? '0.0' : (d >= 0 ? '+' : '') + d.toFixed(1);
+    return `<span class="fin-delta ${{dir}}">${{dtxt}}pp</span>`;
+  }}
+  if (prev === 0) return '';
+  const pct = (v / prev - 1) * 100;
+  const dir = pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat';
+  return `<span class="fin-delta ${{dir}}">${{pct >= 0 ? '+' : ''}}${{pct.toFixed(1)}}%</span>`;
+}}
+// เติมอัตราส่วนจากฟิลด์ดิบ — คืนแถวใหม่ ไม่แก้ของเดิมใน finCache
+function withRatios(rows){{
+  return rows.map(r => ({{
+    ...r,
+    gm:  (r.gp != null && r.rev)    ? r.gp / r.rev * 100    : null,
+    om:  (r.opinc != null && r.rev) ? r.opinc / r.rev * 100 : null,
+    nm:  (r.ni != null && r.rev)    ? r.ni / r.rev * 100     : null,
+    de:  (r.debt != null && r.equity) ? r.debt / r.equity   : null,
+    roe: (r.ni != null && r.equity) ? r.ni / r.equity * 100  : null,
+    roa: (r.ni != null && r.assets) ? r.ni / r.assets * 100  : null,
+  }}));
+}}
 
 function periodLabel(date, span){{
   const d = new Date(date);
@@ -3516,7 +3592,9 @@ function currentYearQuarters(rows){{
 }}
 
 // กราฟแท่งแบบมีเส้นศูนย์ — แท่งชี้ลงได้ถ้าค่าติดลบ (เช่นปีขาดทุน) ไม่ปัดให้เป็น 0 ที่ทำให้เข้าใจผิด
-function divergingBarChart(title, periods, values){{
+// fmt: ฟังก์ชันฟอร์แมตค่าที่โชว์บนแท่ง — ปล่อยว่างใช้ finFmt (หน่วยเงิน) ตัวอัตราส่วน/% ส่งของตัวเองมา
+function divergingBarChart(title, periods, values, fmt){{
+  fmt = fmt || finFmt;
   const have = values.filter(v => v != null && isFinite(v));
   if (!have.length) return '';
   const max = Math.max(0, ...have), min = Math.min(0, ...have);
@@ -3531,7 +3609,7 @@ function divergingBarChart(title, periods, values){{
     const pct = Math.abs(v) / range * 100, neg = v < 0;
     const top = neg ? zeroPct : zeroPct - pct;
     return `<div class="fin-bar-col">
-        <div class="fin-bar-v">${{finFmt(v)}}</div>
+        <div class="fin-bar-v">${{fmt(v)}}</div>
         <div class="fin-bar-track">
           <div class="fin-bar ${{neg ? 'neg' : 'pos'}}" style="top:${{top}}%;height:${{pct}}%"></div>
         </div>
@@ -3544,12 +3622,111 @@ function divergingBarChart(title, periods, values){{
     </div>`;
 }}
 
-function renderFinCharts(rows){{
+// เส้นแนวโน้ม % หลายชุดบนแกนเดียวกัน (มาร์จิ้น) — สีตายตัวตามลำดับ ไม่มีทางสลับ
+const FIN_LINE_COLORS = ['var(--econ)', 'var(--biz)', 'var(--mixed)'];
+function marginLineChart(title, periods, series){{
+  const n = periods.length;
+  if (n < 2) return '';
+  const allVals = [];
+  series.forEach(s => s.vals.forEach(v => {{ if (v != null && isFinite(v)) allVals.push(v); }}));
+  if (!allVals.length) return '';
+  let max = Math.max(...allVals), min = Math.min(...allVals);
+  if (max === min) {{ max += 1; min -= 1; }}
+  const pad = (max - min) * 0.12;
+  max += pad; min -= pad;
+  const W = 640, H = 150, padL = 8, padR = 8, padT = 14, padB = 22;
+  const x = i => padL + (i / (n - 1)) * (W - padL - padR);
+  const y = v => padT + (1 - (v - min) / (max - min)) * (H - padT - padB);
+  const zeroY = (min <= 0 && max >= 0) ? y(0) : null;
+
+  let svg = `<svg class="fin-line-svg" viewBox="0 0 ${{W}} ${{H}}" preserveAspectRatio="none" ` +
+    `role="img" aria-label="${{esc(title)}}">`;
+  if (zeroY != null) {{
+    svg += `<line class="fin-zero-ln" x1="${{padL}}" x2="${{W - padR}}" y1="${{zeroY.toFixed(1)}}" y2="${{zeroY.toFixed(1)}}"/>`;
+  }}
+  // สีอิงตำแหน่งเดิมในชุดเสมอ (ไม่ไล่เลขใหม่) ให้ธุรกิจแบงก์ที่ไม่มี Gross/Operating
+  // ยังโชว์ Net Margin เป็นสีเดิมทุกครั้ง ไม่ใช่สีของสล็อตแรกที่ว่างไป
+  const legendParts = [];
+  series.forEach((s, si) => {{
+    const color = FIN_LINE_COLORS[si % FIN_LINE_COLORS.length];
+    let d = '', started = false, any = false;
+    const dots = [];
+    s.vals.forEach((v, i) => {{
+      if (v == null || !isFinite(v)) {{ started = false; return; }}
+      any = true;
+      const px = x(i), py = y(v);
+      d += (started ? 'L' : 'M') + px.toFixed(1) + ' ' + py.toFixed(1) + ' ';
+      started = true;
+      dots.push(`<circle class="fin-line-dot" cx="${{px.toFixed(1)}}" cy="${{py.toFixed(1)}}" r="3.5" ` +
+        `fill="${{color}}"><title>${{esc(periods[i])}} · ${{esc(s.name)}}: ${{v.toFixed(1)}}%</title></circle>`);
+    }});
+    if (!any) return;                        // ไม่มีข้อมูลเลย (เช่นแบงก์ไม่มี Gross Margin) ข้ามทั้งเส้นและ legend
+    if (d) svg += `<path class="fin-line-path" d="${{d.trim()}}" stroke="${{color}}" fill="none"/>`;
+    svg += dots.join('');
+    legendParts.push(`<span class="fin-legend-item"><i style="background:${{color}}"></i>${{esc(s.name)}}</span>`);
+  }});
+  svg += '</svg>';
+  const legend = legendParts.join('');
+  return `<div class="fin-chart fin-chart-wide">
+      <div class="fin-chart-h">${{esc(title)}}</div>
+      <div class="fin-legend">${{legend}}</div>
+      ${{svg}}
+    </div>`;
+}}
+
+// แถบ KPI หัวแดชบอร์ด — ตัวเลขงวดล่าสุด + เทียบงวดก่อน + เทียบกับหุ้นที่เลือก (ถ้ามี)
+const FIN_KPI_DEFS = [
+  ['rev', 'Revenue'], ['ni', 'Net Income'], ['nm', 'Net Margin'],
+  ['eps', 'Diluted EPS'], ['assets', 'Total Assets'], ['de', 'Debt / Equity'],
+];
+function renderFinKpiSection(rows){{
+  if (!rows.length) return '';
+  const last = rows[rows.length - 1], prev = rows.length > 1 ? rows[rows.length - 2] : null;
+  let cmpLast = null;
+  if (finCompareSym && finCache[finCompareSym]) {{
+    let cRows = finCache[finCompareSym][finSpan] || [];
+    if (finSpan === 'quarterly') cRows = currentYearQuarters(cRows);
+    cRows = withRatios(cRows);
+    if (cRows.length) cmpLast = cRows[cRows.length - 1];
+  }}
+  const cmpOptions = finNavList().filter(l => l !== chCur).map(l =>
+    `<option value="${{esc(l)}}" ${{l === finCompareSym ? 'selected' : ''}}>${{esc(l)}}</option>`
+  ).join('');
+  const head = `<div class="fin-kpis-head"><div class="fin-section-h">KEY METRICS</div>` +
+    `<div class="fin-cmp"><label for="fin-cmp-sel">⇄ Compare with</label>` +
+    `<select id="fin-cmp-sel" onchange="setFinCompare(this.value)">` +
+    `<option value="">— none —</option>${{cmpOptions}}</select></div></div>`;
+  const tiles = FIN_KPI_DEFS.map(([key, label]) => {{
+    const txt = finCellText(key, last[key]) ?? '—';
+    const delta = prev ? finDelta(key, last[key], prev[key]) : '';
+    const cmp = cmpLast ? `<div class="fin-kpi-cmp">vs ${{esc(finCompareSym)}}: ${{finCellText(key, cmpLast[key]) ?? '—'}}</div>` : '';
+    return `<div class="fin-kpi"><div class="fin-kpi-lbl">${{esc(label)}}</div>` +
+      `<div class="fin-kpi-val">${{esc(txt)}}</div>${{delta}}${{cmp}}</div>`;
+  }}).join('');
+  return head + `<div class="fin-kpis">${{tiles}}</div>`;
+}}
+
+// กลุ่มแผงกราฟแยกหัวข้อวิเคราะห์ — โตขึ้น/แข็งแรงแค่ไหน (Growth), กำไรต่อบาทรายได้ (Profitability),
+// ฐานะการเงิน (Balance Sheet), หนี้กับผลตอบแทนผู้ถือหุ้น (Leverage & Returns)
+function renderFinDashboard(rows){{
   const periods = rows.map(r => periodLabel(r.date, finSpan));
-  const html = FIN_CHART_METRICS
-    .map(([key, title]) => divergingBarChart(title, periods, rows.map(r => r[key])))
-    .filter(Boolean).join('');
-  return html ? `<div class="fin-charts">${{html}}</div>` : '';
+  const bar = (key, title, fmt) => divergingBarChart(title, periods, rows.map(r => r[key]), fmt);
+  const sections = [
+    ['GROWTH', [bar('rev', 'Revenue'), bar('ni', 'Net Income')]],
+    ['PROFITABILITY', [marginLineChart('Margins', periods, [
+      {{name: 'Gross', vals: rows.map(r => r.gm)}},
+      {{name: 'Operating', vals: rows.map(r => r.om)}},
+      {{name: 'Net', vals: rows.map(r => r.nm)}},
+    ])]],
+    ['BALANCE SHEET', [bar('assets', 'Total Assets'), bar('liab', 'Total Liabilities'), bar('equity', 'Total Equity')]],
+    ['LEVERAGE & RETURNS', [bar('de', 'Debt / Equity', v => v.toFixed(2) + 'x'), bar('roe', 'Return on Equity', v => v.toFixed(1) + '%')]],
+  ];
+  const html = sections.map(([title, parts]) => {{
+    const inner = parts.filter(Boolean).join('');
+    return inner ? `<div class="fin-section"><div class="fin-section-h">${{esc(title)}}</div>` +
+      `<div class="fin-panel-grid">${{inner}}</div></div>` : '';
+  }}).filter(Boolean).join('');
+  return html ? `<div class="fin-panels">${{html}}</div>` : '';
 }}
 
 function toggleFinSort(i){{
@@ -3569,10 +3746,11 @@ function renderFinTable(){{
       '<span>Try the other tab, or check back after the next earnings release.</span></div>';
     return;
   }}
+  rows = withRatios(rows);
   const cols = rows.map(r => periodLabel(r.date, finSpan));
   const sortKey = (finSortCol >= 0 && rows[finSortCol]) ? rows[finSortCol] : null;
 
-  let html = renderFinCharts(rows);
+  let html = renderFinKpiSection(rows) + renderFinDashboard(rows);
   html += '<div class="fin-table-wrap"><table class="fin-table"><thead><tr><th>Line item</th>' +
     cols.map((c, i) => {{
       const on = i === finSortCol;
@@ -3584,7 +3762,7 @@ function renderFinTable(){{
   // จัดกลุ่มตามหมวดก่อน แล้วค่อย sort ภายในแต่ละหมวด — ไม่ปนงบกำไรขาดทุนกับงบดุลตอนเรียง
   const bySec = {{}};
   for (const f of FIN_FIELDS) (bySec[f[2]] = bySec[f[2]] || []).push(f);
-  for (const secName of ['income', 'balance']) {{
+  for (const secName of ['income', 'balance', 'ratios']) {{
     let items = bySec[secName] || [];
     if (!items.length) continue;
     if (sortKey) {{
@@ -3600,15 +3778,9 @@ function renderFinTable(){{
     for (const [key, label] of items) {{
       html += `<tr><td>${{esc(label)}}</td>` + rows.map((r, i) => {{
         const v = r[key];
-        const txt = finFmt(v, key === 'eps');
+        const txt = finCellText(key, v);
         if (txt == null) return '<td class="fin-na">—</td>';
-        const prev = i > 0 ? rows[i - 1][key] : null;
-        let delta = '';
-        if (prev != null && prev !== 0 && v != null) {{
-          const pct = (v / prev - 1) * 100;
-          const dir = pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat';
-          delta = `<span class="fin-delta ${{dir}}">${{pct >= 0 ? '+' : ''}}${{pct.toFixed(1)}}%</span>`;
-        }}
+        const delta = i > 0 ? finDelta(key, v, rows[i - 1][key]) : '';
         return `<td><span class="fin-val">${{txt}}</span>${{delta}}</td>`;
       }}).join('') + '</tr>';
     }}
@@ -3644,7 +3816,7 @@ async function finNav(step){{
 
 async function openFinancials(){{
   if (!chCur || !CHARTS[chCur]?.f) return;
-  finSortCol = -1; finSortDir = -1;
+  finSortCol = -1; finSortDir = -1; finCompareSym = null;
   document.getElementById('fin-name').textContent = chCur;
   document.getElementById('fin-currency').textContent =
     TNEWS[chCur]?.group === 'th' ? 'THB' : '';
@@ -3664,6 +3836,18 @@ async function openFinancials(){{
 function closeFinancials(){{
   document.getElementById('finmodal').hidden = true;
   if (document.getElementById('cmodal').hidden) document.body.style.overflow = '';
+}}
+// เลือกหุ้นเทียบจากดรอปดาวน์ใน KPI header — ดึงงบมาเก็บใน finCache ก้อนเดียวกัน
+// แล้ว re-render ทั้งแดชบอร์ด (ตารางไม่แตะ เทียบแค่ตัวเลขงวดล่าสุดใน KPI tile)
+async function setFinCompare(label){{
+  finCompareSym = label || null;
+  if (finCompareSym && !finCache[finCompareSym]) {{
+    const slug = CHARTS[finCompareSym]?.s;
+    try {{
+      finCache[finCompareSym] = slug ? await fetch('{FIN_DIR}/' + slug + '.json').then(r => r.json()) : null;
+    }} catch (e) {{ finCache[finCompareSym] = null; }}
+  }}
+  renderFinTable();
 }}
 document.getElementById('finmodal').addEventListener('click', ev => {{
   if (ev.target.id === 'finmodal') closeFinancials();
