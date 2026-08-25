@@ -532,7 +532,9 @@ def build_charts(markets=None):
 # + รายไตรมาสของปีที่ดำเนินอยู่ ไว้ให้กดดูจากรายการโปรดในหน้ากราฟ
 # ─────────────────────────────────────────────────────────────
 FIN_DIR = "fin"
-FIN_FULL_DAYS = 7      # งบเปลี่ยนแค่รายไตรมาส ไม่ต้องดึงถี่เท่ากราฟ
+# เช็คทุกวัน ไม่ใช่ทุกสัปดาห์ — จะได้ตามงบใหม่ที่เพิ่งประกาศทันภายในไม่เกิน ~24 ชม.
+# (งบเปลี่ยนแค่ตอนมีไตรมาสใหม่ออก แต่ "ตอนไหน" คาดเดาล่วงหน้าไม่ได้ จึงต้องเช็คถี่พอ)
+FIN_FULL_DAYS = 1
 
 # (คีย์สั้นในไฟล์ JSON, ชื่อฟิลด์ที่ Yahoo ใช้, ชื่อที่แสดงผล, หมวด)
 FIN_FIELDS = [
@@ -582,6 +584,9 @@ def fetch_financials():
     มักไม่มี cost of revenue / gross profit ตามธรรมชาติของธุรกิจ ปล่อยว่างไว้เฉยๆ
 
     ดัชนี ค่าเงิน ทองคำ คริปโต ไม่มีงบการเงิน — ยิงขอไปเฉยๆ แล้วข้ามถ้าไม่มีข้อมูลจริง
+
+    คืนค่า (ชื่อสินทรัพย์ที่มีงบ, เวลาที่เช็คล่าสุด) — ใช้ตัวหลังโชว์ในหน้าเว็บว่า
+    "เช็คล่าสุดเมื่อไร" ให้ผู้ใช้เห็นว่าข้อมูลยังสดอยู่ ไม่ใช่ค้างเป็นเดือน
     """
     idx_path = f"{FIN_DIR}/index.json"
     cached = load_json(idx_path)
@@ -590,13 +595,13 @@ def fetch_financials():
             age_days = (NOW - datetime.fromisoformat(cached["at"])).total_seconds() / 86400
             if 0 <= age_days < FIN_FULL_DAYS:
                 print(f"  ↻ ใช้งบการเงินเดิมที่ดึงมา {age_days:.1f} วันที่แล้ว")
-                return set(cached["labels"])
+                return set(cached["labels"]), cached["at"]
         except Exception:
             pass
 
     sess, crumb = yahoo_session()
     if not sess:
-        return set()
+        return set(), cached.get("at")
     uni = universe_symbols()
 
     def one(job):
@@ -628,8 +633,9 @@ def fetch_financials():
             save_json(f"{FIN_DIR}/{slug}.json", {"label": label, **periods})
             got.add(label)
     print(f"  ✓ งบการเงิน {len(got)}/{len(uni)} สินทรัพย์")
-    save_json(idx_path, {"at": NOW.isoformat(), "labels": sorted(got)})
-    return got
+    at = NOW.isoformat()
+    save_json(idx_path, {"at": at, "labels": sorted(got)})
+    return got, at
 
 
 def attach_ticker_news(markets, news):
@@ -1416,7 +1422,7 @@ if (window.ResizeObserver) new ResizeObserver(() => redraw(120)).observe(svg.nod
 """
 
 
-def render(news, markets, charts=None, logos=None, streams=None):
+def render(news, markets, charts=None, logos=None, streams=None, fin_at=None):
     def pick(items, n):
         """หน้าตาเน้นรูป → เลือกข่าวที่มีรูปก่อน แล้วค่อยเรียงตามเวลาเหมือนเดิม
         (ทุกข่าวอยู่ในกรอบ 24 ชม.อยู่แล้ว ลำดับจึงไม่เพี้ยนมาก)"""
@@ -1699,6 +1705,13 @@ def render(news, markets, charts=None, logos=None, streams=None):
          for m in markets}, ensure_ascii=False)
     charts_json = json.dumps(charts or {}, ensure_ascii=False)
     logos_json = json.dumps(logos or {}, ensure_ascii=False)
+    fin_at_str = ""
+    if fin_at:
+        try:
+            fin_at_str = datetime.fromisoformat(fin_at).strftime("%d %b %Y · %H:%M")
+        except Exception:
+            pass
+    fin_at_json = json.dumps(fin_at_str, ensure_ascii=False)
     page_desc = f"{len(news)} economy, politics, business and environment stories in 24h from {len(FEEDS)} sources · updated {NOW.strftime('%d %b %Y %H:%M')}"
     # ตัว T แบบเซริฟในกรอบเส้นคู่ อย่างหัวหนังสือพิมพ์
     favicon = ("data:image/svg+xml,"
@@ -1995,7 +2008,8 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   font-size:.58rem;letter-spacing:.12em}}
 .cpop-clear:hover{{color:var(--down)}}
 
-/* ── ปุ่ม + หน้าต่างงบการเงิน ────────────────────────────── */
+/* ── ปุ่ม + หน้าต่างงบการเงิน (เต็มจอ อย่างหน้ากราฟ) ───────── */
+#finmodal{{padding:0}}
 .fin-btn{{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;
   margin-left:auto;flex:none;cursor:pointer;border-radius:2px;
   font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.08em;
@@ -2003,44 +2017,83 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .fin-btn:hover{{color:var(--ink);border-color:var(--brass)}}
 .fin-btn svg{{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
   stroke-linecap:round;stroke-linejoin:round}}
-.fin-tabs{{display:flex;gap:4px;flex:none}}
-.fin-tab{{padding:8px 14px;border-radius:2px;cursor:pointer;
-  font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.08em;
+.fin-nav{{flex:none;font-size:1.2rem}}
+.fin-tabs{{display:flex;gap:4px;flex:none;margin-left:12px}}
+.fin-tab{{padding:9px 16px;border-radius:2px;cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.08em;
   color:var(--mute);background:transparent;border:1px solid var(--line)}}
 .fin-tab:hover{{color:var(--ink)}}
 .fin-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
-.fin-body{{flex:1;overflow:auto;padding:16px 18px}}
-.fin-note{{padding:9px 18px;font-size:.65rem;line-height:1.5;color:var(--dim);
+/* charts คงที่ด้านบนเสมอ ส่วนตารางเป็นกล่องเลื่อนของตัวเองทั้งสองแกน —
+   ถ้าให้ทั้ง fin-body เลื่อนแนวนอนด้วย จะลากการ์ดกราฟเลื่อนตามตารางไปด้วย
+   (ตั้ง overflow แค่แกนเดียวบน element เดียวกันใช้ไม่ได้ เบราว์เซอร์จะปัดอีกแกนเป็น auto
+   ให้เองเสมอ ทำให้ตัวเลื่อนจริงกลายเป็น element นั้นแทน sticky header เลยพังตาม) */
+.fin-body{{flex:1;display:flex;flex-direction:column;min-height:0;
+  padding:22px clamp(16px,4vw,48px)}}
+.fin-table-wrap{{flex:1;min-height:0;overflow:auto;padding-bottom:2px}}
+.fin-body>.cempty,.fin-body>.fin-empty{{flex:1}}
+.fin-note{{padding:10px 18px;font-size:.72rem;line-height:1.6;color:var(--dim);
   border-top:1px solid var(--line);background:var(--panel2)}}
-.fin-empty{{display:grid;place-items:center;height:100%;color:var(--mute);
-  font-size:.85rem;text-align:center;gap:8px;padding:30px}}
-.fin-table{{border-collapse:collapse;font-family:'IBM Plex Mono',monospace;
-  font-size:.78rem;font-variant-numeric:tabular-nums}}
-.fin-table th,.fin-table td{{padding:9px 16px;text-align:right;white-space:nowrap;
+#fin-checked{{display:block;margin-top:3px;color:var(--mute);font-family:'IBM Plex Mono',monospace;
+  font-size:.66rem;letter-spacing:.04em}}
+.fin-empty{{display:grid;place-items:center;color:var(--mute);
+  font-size:.95rem;text-align:center;gap:8px;padding:30px}}
+
+/* กราฟแท่งสรุปเมตริกหลัก — อยู่นิ่งด้านบน เห็นแนวโน้มตลอดแม้เลื่อนตารางด้านล่าง */
+.fin-charts{{flex:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:16px;margin-bottom:26px;max-width:1400px}}
+.fin-chart{{background:var(--panel2);border:1px solid var(--line);border-radius:2px;
+  padding:14px 16px}}
+.fin-chart-h{{font-family:'IBM Plex Mono',monospace;font-size:.76rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--mute);margin-bottom:14px}}
+.fin-chart-plot{{position:relative;height:130px;display:flex;gap:10px}}
+.fin-zero-line{{position:absolute;left:0;right:0;height:1px;background:var(--line2)}}
+.fin-bar-col{{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;
+  min-width:0}}
+.fin-bar-v{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;font-weight:600;
+  color:var(--ink);white-space:nowrap}}
+.fin-bar-track{{position:relative;width:100%;height:96px}}
+.fin-bar{{position:absolute;left:10%;right:10%;border-radius:2px;min-height:2px;
+  transition:top .25s,height .25s}}
+.fin-bar.pos{{background:var(--brass)}}
+.fin-bar.neg{{background:var(--down)}}
+.fin-bar-lbl{{font-family:'IBM Plex Mono',monospace;font-size:.64rem;color:var(--dim);
+  white-space:nowrap}}
+
+/* separate ไม่ใช่ collapse — sticky บน <th> พังกับ border-collapse:collapse ในเบราว์เซอร์
+   ตระกูล Chromium หลายรุ่น (แถวหัวตารางไม่ยอมค้างเวลาเลื่อน) */
+.fin-table{{border-collapse:separate;border-spacing:0;font-family:'IBM Plex Mono',monospace;
+  font-size:.92rem;font-variant-numeric:tabular-nums}}
+.fin-table th,.fin-table td{{padding:12px 20px;text-align:right;white-space:nowrap;
   border-bottom:1px solid var(--line)}}
+.fin-table thead{{position:sticky;top:0;z-index:2}}
 .fin-table thead th{{position:sticky;top:0;background:var(--panel);z-index:2;
-  color:var(--dim);font-size:.62rem;letter-spacing:.06em;font-weight:600;
-  border-bottom:1px solid var(--line2)}}
+  color:var(--dim);font-size:.68rem;letter-spacing:.06em;font-weight:600;
+  border-bottom:1px solid var(--line2);cursor:pointer;user-select:none}}
+.fin-table thead th:hover{{color:var(--ink)}}
+.fin-table thead th.sorted{{color:var(--brass)}}
+.fin-table .fin-sort-ic{{margin-left:4px;opacity:.7}}
 .fin-table th:first-child,.fin-table td:first-child{{position:sticky;left:0;
   background:var(--panel);z-index:1;text-align:left;font-family:'Noto Serif Thai',Georgia,serif;
-  font-size:.82rem;color:var(--mute);white-space:normal;min-width:150px}}
+  font-size:1rem;color:var(--mute);white-space:normal;min-width:190px;cursor:default}}
 .fin-table thead th:first-child{{z-index:3}}
 .fin-table tbody tr:hover td{{background:var(--hover)}}
 .fin-table tbody tr:hover td:first-child{{background:var(--hover)}}
-.fin-table .fin-val{{color:var(--ink);font-weight:500}}
+.fin-table .fin-val{{color:var(--ink);font-weight:600}}
 .fin-table .fin-na{{color:var(--dim)}}
-.fin-table .fin-delta{{display:block;font-size:.64rem;font-weight:400;margin-top:2px}}
+.fin-table .fin-delta{{display:block;font-size:.72rem;font-weight:500;margin-top:3px}}
 .fin-table .fin-delta.up{{color:var(--up)}}
 .fin-table .fin-delta.down{{color:var(--down)}}
 .fin-table .fin-delta.flat{{color:var(--dim)}}
 .fin-sec{{background:var(--panel2)}}
-.fin-sec td{{padding:7px 16px;font-family:'IBM Plex Mono',monospace;font-size:.6rem;
+.fin-sec td{{padding:9px 20px;font-family:'IBM Plex Mono',monospace;font-size:.68rem;
   letter-spacing:.14em;text-transform:uppercase;color:var(--brass);font-weight:600;
   border-bottom:1px solid var(--line2)}}
-@media(max-width:700px){{
-  .cmodal-head{{position:relative}}
+@media(max-width:900px){{
+  .cmodal-head{{position:relative;flex-wrap:wrap}}
   .fin-btn{{margin-left:0}}
-  .fin-tabs{{width:100%;order:3}}
+  .fin-tabs{{width:100%;order:3;margin-left:0}}
+  .fin-charts{{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
 }}
 
 /* ป้ายค่าอินดิเคเตอร์มุมซ้ายบนของแต่ละแพเนล */
@@ -2683,10 +2736,14 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
       <button type="button" class="backbtn" onclick="closeFinancials()" aria-label="Back">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
+      <button class="row-nav fin-nav" type="button" onclick="finNav(-1)"
+              aria-label="Previous symbol">‹</button>
       <div class="cmodal-title">
         <h3 id="fin-name">—</h3>
         <div class="cmodal-price"><span id="fin-currency"></span></div>
       </div>
+      <button class="row-nav fin-nav" type="button" onclick="finNav(1)"
+              aria-label="Next symbol">›</button>
       <div class="fin-tabs" role="tablist">
         <button class="fin-tab on" type="button" data-span="annual"
                 onclick="pickFinSpan('annual')">ANNUAL</button>
@@ -2698,7 +2755,8 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
     <p class="fin-note">Figures are company-reported financial statements sourced from Yahoo
       Finance, up to the last 4 fiscal years / most recent reported quarters — banks and
       insurers often show "—" for cost of revenue / gross profit, which doesn't apply to
-      their business model. Indicators only, not investment advice.</p>
+      their business model. Indicators only, not investment advice.
+      <span id="fin-checked"></span></p>
   </div>
 </div>
 
@@ -2769,7 +2827,7 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 <script>window.__MARKERS__ = {markers_json}; window.__ICONS__ = {icons_json};
 window.__TNEWS__ = {tnews_json}; window.__CHARTS__ = {charts_json};
-window.__LOGOS__ = {logos_json};</script>
+window.__LOGOS__ = {logos_json}; window.__FIN_AT__ = {fin_at_json};</script>
 <script>{MAP_JS}</script>
 <script>
 // ── ค้นหาข่าวทั้งเว็บ (แถบบนสุด) ───────────────────────────
@@ -3427,7 +3485,10 @@ const FIN_FIELDS = [
   ['debt',   'Total Debt',           'balance'],
 ];
 const FIN_SEC = {{income: 'INCOME STATEMENT', balance: 'BALANCE SHEET'}};
-let finCache = {{}}, finSpan = 'annual';
+let finCache = {{}}, finSpan = 'annual', finSortCol = -1, finSortDir = -1;
+// เมตริกหลักที่ทำกราฟแท่งให้ — เลือกตัวที่มีครบทุกประเภทธุรกิจ (แบงก์ก็มี)
+const FIN_CHART_METRICS = [['rev', 'Revenue'], ['ni', 'Net Income'],
+  ['assets', 'Total Assets'], ['equity', 'Total Equity']];
 
 const finFmt = (v, isEps) => {{
   if (v == null || !isFinite(v)) return null;
@@ -3454,6 +3515,49 @@ function currentYearQuarters(rows){{
   return thisYear.length ? thisYear : rows.slice(-4);
 }}
 
+// กราฟแท่งแบบมีเส้นศูนย์ — แท่งชี้ลงได้ถ้าค่าติดลบ (เช่นปีขาดทุน) ไม่ปัดให้เป็น 0 ที่ทำให้เข้าใจผิด
+function divergingBarChart(title, periods, values){{
+  const have = values.filter(v => v != null && isFinite(v));
+  if (!have.length) return '';
+  const max = Math.max(0, ...have), min = Math.min(0, ...have);
+  const range = (max - min) || Math.abs(max) || 1;
+  const zeroPct = (max / range) * 100;
+  const cols = periods.map((p, i) => {{
+    const v = values[i];
+    if (v == null) {{
+      return `<div class="fin-bar-col"><div class="fin-bar-v fin-na">—</div>` +
+        `<div class="fin-bar-track"></div><div class="fin-bar-lbl">${{esc(p)}}</div></div>`;
+    }}
+    const pct = Math.abs(v) / range * 100, neg = v < 0;
+    const top = neg ? zeroPct : zeroPct - pct;
+    return `<div class="fin-bar-col">
+        <div class="fin-bar-v">${{finFmt(v)}}</div>
+        <div class="fin-bar-track">
+          <div class="fin-bar ${{neg ? 'neg' : 'pos'}}" style="top:${{top}}%;height:${{pct}}%"></div>
+        </div>
+        <div class="fin-bar-lbl">${{esc(p)}}</div>
+      </div>`;
+  }}).join('');
+  return `<div class="fin-chart">
+      <div class="fin-chart-h">${{esc(title)}}</div>
+      <div class="fin-chart-plot"><div class="fin-zero-line" style="top:${{zeroPct}}%"></div>${{cols}}</div>
+    </div>`;
+}}
+
+function renderFinCharts(rows){{
+  const periods = rows.map(r => periodLabel(r.date, finSpan));
+  const html = FIN_CHART_METRICS
+    .map(([key, title]) => divergingBarChart(title, periods, rows.map(r => r[key])))
+    .filter(Boolean).join('');
+  return html ? `<div class="fin-charts">${{html}}</div>` : '';
+}}
+
+function toggleFinSort(i){{
+  finSortDir = (finSortCol === i) ? -finSortDir : -1;   // คลิกแรกของคอลัมน์ = มากไปน้อย
+  finSortCol = i;
+  renderFinTable();
+}}
+
 function renderFinTable(){{
   const body = document.getElementById('fin-body');
   const data = finCache[chCur];
@@ -3466,44 +3570,87 @@ function renderFinTable(){{
     return;
   }}
   const cols = rows.map(r => periodLabel(r.date, finSpan));
-  let html = '<table class="fin-table"><thead><tr><th>Line item</th>' +
-    cols.map(c => `<th>${{esc(c)}}</th>`).join('') + '</tr></thead><tbody>';
-  let sec = null;
-  for (const [key, label, group] of FIN_FIELDS) {{
-    if (group !== sec) {{
-      sec = group;
-      html += `<tr class="fin-sec"><td colspan="${{cols.length + 1}}">${{FIN_SEC[sec]}}</td></tr>`;
+  const sortKey = (finSortCol >= 0 && rows[finSortCol]) ? rows[finSortCol] : null;
+
+  let html = renderFinCharts(rows);
+  html += '<div class="fin-table-wrap"><table class="fin-table"><thead><tr><th>Line item</th>' +
+    cols.map((c, i) => {{
+      const on = i === finSortCol;
+      const ic = on ? (finSortDir > 0 ? '▲' : '▼') : '';
+      return `<th class="${{on ? 'sorted' : ''}}" onclick="toggleFinSort(${{i}})">` +
+        `${{esc(c)}}${{ic ? `<span class="fin-sort-ic">${{ic}}</span>` : ''}}</th>`;
+    }}).join('') + '</tr></thead><tbody>';
+
+  // จัดกลุ่มตามหมวดก่อน แล้วค่อย sort ภายในแต่ละหมวด — ไม่ปนงบกำไรขาดทุนกับงบดุลตอนเรียง
+  const bySec = {{}};
+  for (const f of FIN_FIELDS) (bySec[f[2]] = bySec[f[2]] || []).push(f);
+  for (const secName of ['income', 'balance']) {{
+    let items = bySec[secName] || [];
+    if (!items.length) continue;
+    if (sortKey) {{
+      items = items.slice().sort((a, b) => {{
+        const av = sortKey[a[0]], bv = sortKey[b[0]];
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;              // ไม่มีข้อมูล ("—") ไปอยู่ท้ายเสมอ
+        if (bv == null) return -1;
+        return (av - bv) * finSortDir;
+      }});
     }}
-    html += `<tr><td>${{esc(label)}}</td>` + rows.map((r, i) => {{
-      const v = r[key];
-      const txt = finFmt(v, key === 'eps');
-      if (txt == null) return '<td class="fin-na">—</td>';
-      const prev = i > 0 ? rows[i - 1][key] : null;
-      let delta = '';
-      if (prev != null && prev !== 0 && v != null) {{
-        const pct = (v / prev - 1) * 100;
-        const dir = pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat';
-        delta = `<span class="fin-delta ${{dir}}">${{pct >= 0 ? '+' : ''}}${{pct.toFixed(1)}}%</span>`;
-      }}
-      return `<td><span class="fin-val">${{txt}}</span>${{delta}}</td>`;
-    }}).join('') + '</tr>';
+    html += `<tr class="fin-sec"><td colspan="${{cols.length + 1}}">${{FIN_SEC[secName]}}</td></tr>`;
+    for (const [key, label] of items) {{
+      html += `<tr><td>${{esc(label)}}</td>` + rows.map((r, i) => {{
+        const v = r[key];
+        const txt = finFmt(v, key === 'eps');
+        if (txt == null) return '<td class="fin-na">—</td>';
+        const prev = i > 0 ? rows[i - 1][key] : null;
+        let delta = '';
+        if (prev != null && prev !== 0 && v != null) {{
+          const pct = (v / prev - 1) * 100;
+          const dir = pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat';
+          delta = `<span class="fin-delta ${{dir}}">${{pct >= 0 ? '+' : ''}}${{pct.toFixed(1)}}%</span>`;
+        }}
+        return `<td><span class="fin-val">${{txt}}</span>${{delta}}</td>`;
+      }}).join('') + '</tr>';
+    }}
   }}
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   body.innerHTML = html;
 }}
 
 function pickFinSpan(span){{
   finSpan = span;
+  finSortCol = -1; finSortDir = -1;
   document.querySelectorAll('.fin-tab').forEach(b =>
     b.classList.toggle('on', b.dataset.span === span));
   renderFinTable();
 }}
 
+// ลูกศรเปลี่ยนหุ้นโดยไม่ต้องปิดหน้าต่าง — ไล่ในรายการโปรดก่อนถ้าหุ้นปัจจุบันติดดาวไว้
+// (และมีงบให้ดู) ไม่งั้นไล่ทุกตัวที่มีงบการเงิน กันเผื่อเข้ามาจากการค้นหา
+function finNavList(){{
+  const withData = Object.keys(CHARTS).filter(l => CHARTS[l].f);
+  const favs = withData.filter(l => chFavs.has(l));
+  const list = (favs.length > 1 && favs.includes(chCur)) ? favs : withData;
+  return list.slice().sort((a, b) => a.localeCompare(b));
+}}
+async function finNav(step){{
+  const list = finNavList();
+  if (list.length < 2) return;
+  const i = list.indexOf(chCur);
+  const next = list[((i < 0 ? 0 : i) + step + list.length) % list.length];
+  await pickChart(next);
+  await openFinancials();
+}}
+
 async function openFinancials(){{
   if (!chCur || !CHARTS[chCur]?.f) return;
+  finSortCol = -1; finSortDir = -1;
   document.getElementById('fin-name').textContent = chCur;
   document.getElementById('fin-currency').textContent =
     TNEWS[chCur]?.group === 'th' ? 'THB' : '';
+  document.getElementById('fin-checked').textContent =
+    window.__FIN_AT__ ? 'Statements last checked ' + window.__FIN_AT__ +
+      ' · rechecked daily, sooner if a new quarter is reported' : '';
   document.getElementById('finmodal').hidden = false;
   document.body.style.overflow = 'hidden';
   if (!finCache[chCur]) {{
@@ -3512,7 +3659,7 @@ async function openFinancials(){{
       finCache[chCur] = await fetch('{FIN_DIR}/' + CHARTS[chCur].s + '.json').then(r => r.json());
     }} catch (e) {{ finCache[chCur] = {{annual: [], quarterly: []}}; }}
   }}
-  renderFinTable();
+  if (chCur && CHARTS[chCur]?.f) renderFinTable();
 }}
 function closeFinancials(){{
   document.getElementById('finmodal').hidden = true;
@@ -4095,7 +4242,12 @@ document.getElementById('cmodal').addEventListener('click', ev => {{
   if (ev.target.id === 'cmodal') closeCharts();
 }});
 addEventListener('keydown', ev => {{
+  const fm = document.getElementById('finmodal');
+  const finOpen = fm && !fm.hidden;
+  if (finOpen && ev.key === 'ArrowLeft')  {{ finNav(-1); return; }}
+  if (finOpen && ev.key === 'ArrowRight') {{ finNav(1); return; }}
   if (ev.key !== 'Escape') return;
+  if (finOpen) {{ closeFinancials(); return; }}   // ปิดชั้นงบการเงินก่อน ไม่ปิดกราฟข้างใต้ไปด้วย
   const lm = document.getElementById('lmodal');
   if (!document.getElementById('cmodal').hidden) closeCharts();
   if (lm && !lm.hidden) closeLive();
@@ -4307,7 +4459,7 @@ if __name__ == "__main__":
         print(f"จับคู่ข่าวกับสินทรัพย์ได้ {linked} รายการ")
     save_cache(news, markets)
 
-    charts, logos = {}, {}
+    charts, logos, fin_at = {}, {}, None
     if markets:
         print("ดึงข้อมูลพื้นฐาน...")
         fetch_fundamentals(markets)
@@ -4315,12 +4467,12 @@ if __name__ == "__main__":
         print("ดึงข้อมูลแท่งเทียน...")
         charts = build_charts(markets)
         print("ดึงงบการเงิน...")
-        fin_labels = fetch_financials()
+        fin_labels, fin_at = fetch_financials()
         for label in fin_labels:
             if label in charts:
                 charts[label]["f"] = True
     print()
 
     with open("index.html", "w", encoding="utf-8") as f:
-        f.write(render(news, markets, charts, logos, streams))
+        f.write(render(news, markets, charts, logos, streams, fin_at))
     print(f"เสร็จ · index.html · {NOW.strftime('%H:%M')} น.")
