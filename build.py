@@ -1775,6 +1775,131 @@ def render(news, markets, charts=None, logos=None, streams=None, fin_at=None):
 </div>
 <div class="fp-cols">{''.join(fp_col(sc, lb) for sc, lb in SCOPES)}</div>"""
 
+    # ── variant C: หน้าหนึ่งหนังสือพิมพ์เต็มรูปแบบ ─────────────
+    # ข่าวชุดเดียวกับ A/B อีกเช่นกัน ต่างกันแค่การจัดหน้า จะได้เทียบผลกันได้
+    # ไม่มีเนื้อข่าวเต็มให้ (ฟีดส่งมาแค่พาดหัว+สรุป) จึงไม่แต่งย่อหน้าเนื้อข่าวปลอมขึ้นมา
+    # คอลัมน์ที่เหลือใช้ "พาดหัวข่าวจริงเรื่องอื่น" เติมแทน ให้ยังได้ฟีลคอลัมน์หนังสือพิมพ์
+    np_used = set()
+    np_splash = top_story
+    if np_splash:
+        np_used.add(id(np_splash))
+    np_live = [i for i in news if is_live(i) and id(i) not in np_used][:5]
+    # กันข่าวซ้ำ — ข่าวที่ขึ้นแถบด่วนแล้วไม่ต้องไปโผล่ในคอลัมน์ข้างล่างอีก
+    np_used.update(id(i) for i in np_live)
+    np_aside = [i for i in news if id(i) not in np_used][:5]
+    np_used.update(id(i) for i in np_aside)
+
+    np_sec = {}
+    for sc, _lb in SCOPES:
+        pool = sorted((i for i in news if i["scope"] == sc),
+                      key=lambda x: x["dt"], reverse=True)
+        if sc == "intl":
+            pool = ([i for i in pool if i["lang"] != "th"]
+                    + [i for i in pool if i["lang"] == "th"])
+        pool = [i for i in pool if id(i) not in np_used]
+        lead = next((i for i in pool if i.get("image")), pool[0] if pool else None)
+        if lead:
+            np_used.add(id(lead))
+        second = next((i for i in pool
+                       if i.get("image") and id(i) not in np_used), None)
+        if second:
+            np_used.add(id(second))
+        briefs = [i for i in pool if id(i) not in np_used][:7]
+        np_used.update(id(i) for i in briefs)
+        np_sec[sc] = {"lead": lead, "second": second, "briefs": briefs,
+                      "n": sum(1 for i in news if i["scope"] == sc)}
+
+    def np_fig(it, cls=""):
+        if not it.get("image"):
+            return ""
+        cap = html.escape(it["source"])
+        if it["place"]:
+            cap += " · " + html.escape(it["place"])
+        return (f'<figure class="np-fig {cls}">'
+                f'<img src="{html.escape(it["image"])}" loading="lazy" alt=""'
+                f' onerror="this.closest(\'figure\').remove()">'
+                f'<figcaption>{cap}</figcaption></figure>')
+
+    def np_link(it, inner, cls=""):
+        # พาดหัวที่เป็นลิงก์เดี่ยวๆ (แถบด่วน / ข่าวย่อ / คอลัมน์ข้าง) ต้องติดคลาส np-item ด้วย
+        # ไม่งั้นช่องค้นหาจะมองไม่เห็น แล้วขึ้น "ไม่พบข่าว" ทั้งที่มีอยู่ในหน้า
+        c = f' class="{cls}"' if cls else ""
+        return (f'<a{c} href="{html.escape(it["link"])}" target="_blank"'
+                f' rel="noopener">{inner}</a>')
+
+    def np_splash_html(it):
+        if not it:
+            return ""
+        place = f' · {html.escape(it["place"])}' if it["place"] else ""
+        stand = (f'<p class="np-standfirst">{html.escape(it["summary"])}</p>'
+                 if it["summary"] else "")
+        aside = "".join(
+            np_link(a, f'{html.escape(a["title"])}'
+                       f'<span class="np-src">{html.escape(a["source"])} · {a["age"]}</span>',
+                    "np-item")
+            for a in np_aside)
+        return f"""<article class="np-item np-splash" data-scope="{it['scope']}">
+  <span class="np-kicker">{CAT_LABELS[it['cat']]}{place} · {it['age']}</span>
+  <h2 class="np-splash-h">{np_link(it, html.escape(it['title']))}</h2>
+  {stand}
+  <div class="np-splash-body">
+    {np_fig(it, 'np-fig-splash')}
+    <div class="np-aside">
+      <div class="np-aside-h">ALSO IN THE NEWS</div>
+      {aside}
+    </div>
+  </div>
+</article>"""
+
+    def np_story(it, lead=False):
+        if not it:
+            return ""
+        cls = "np-story np-story-lead" if lead else "np-story"
+        summ = (f'<p class="np-story-sum">{html.escape(it["summary"])}</p>'
+                if (lead and it["summary"]) else "")
+        return f"""<article class="np-item {cls}">
+      {np_fig(it)}
+      <span class="np-kicker">{CAT_LABELS[it['cat']]}</span>
+      <h4 class="np-story-h">{np_link(it, html.escape(it['title']))}</h4>
+      {summ}
+      <span class="np-src">{html.escape(it['source'])} · {it['age']}</span>
+    </article>"""
+
+    def np_section(sc, label):
+        d = np_sec[sc]
+        if not d["lead"]:
+            return ""
+        briefs = "".join(
+            np_link(i, f'{html.escape(i["title"])}'
+                       f'<span class="np-src">{html.escape(i["source"])} · {i["age"]}</span>',
+                    "np-item")
+            for i in d["briefs"])
+        return f"""<section class="np-section scope-group" data-scope="{sc}">
+  <h3 class="np-sec-h">{html.escape(label)}<span>{d['n']} stories</span></h3>
+  <div class="np-grid">
+    <div>{np_story(d['lead'], True)}</div>
+    <div>{np_story(d['second'])}</div>
+    <div class="np-list"><div class="np-list-h">IN BRIEF</div>{briefs}</div>
+  </div>
+</section>"""
+
+    np_breaking = ""
+    if np_live:
+        items = '<span class="np-breaking-sep">·</span>'.join(
+            np_link(i, html.escape(i["title"]), "np-item") for i in np_live)
+        np_breaking = (f'<div class="np-breaking">'
+                       f'<span class="np-breaking-tag">BREAKING</span>'
+                       f'<span class="np-breaking-list">{items}</span></div>')
+
+    news_page = f"""<div class="np-flag">
+  <span>Vol. MMXXVI · No. {NOW.strftime('%j')}</span>
+  <span class="np-flag-name">The Tribune</span>
+  <span>{NOW.strftime('%a %d %b %Y')} · {NOW.strftime('%H:%M')}</span>
+</div>
+{np_breaking}
+{np_splash_html(np_splash)}
+{''.join(np_section(sc, lb) for sc, lb in SCOPES)}"""
+
     next_run = (NOW + timedelta(minutes=REBUILD_MIN)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
     icons_json = json.dumps({c: cat_icon(c, "ci-sm") for c in CAT_NAMES}, ensure_ascii=False)
@@ -2478,12 +2603,16 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cat-panel .row-head h2{{display:none}}
 .cat-panel .row-head{{justify-content:flex-end}}
 
-/* ── A/B test เลย์เอาต์หน้าแรก ─────────────────────────────
-   A = ฟีดการ์ดเลื่อนแนวนอน (ของเดิม) · B = หน้าหนึ่งหนังสือพิมพ์
-   สลับด้วยคลาสบน <html> เพราะสคริปต์เลือกฝั่งรันก่อน <body> จะมีเนื้อหา */
-#variant-b{{display:none}}
-html.vb #variant-a{{display:none}}
-html.vb #variant-b{{display:block}}
+/* ── A/B/C test เลย์เอาต์หน้าแรก ───────────────────────────
+   A = ฟีดการ์ดเลื่อนแนวนอน (ของเดิม) · B = หน้าหนึ่งสองคอลัมน์
+   C = หน้าหนึ่งหนังสือพิมพ์เต็มรูปแบบบนกระดาษนิวส์ปรินต์
+   สลับด้วย attribute บน <html> เพราะสคริปต์เลือกฝั่งรันก่อน <body> จะมีเนื้อหา */
+#variant-a,#variant-b,#variant-c{{display:none}}
+html[data-variant="a"] #variant-a,
+html[data-variant="b"] #variant-b,
+html[data-variant="c"] #variant-c{{display:block}}
+/* JS ปิดอยู่ก็ยังต้องเห็นหน้าเว็บ — ไม่มี attribute ให้ตกมาที่ A */
+html:not([data-variant]) #variant-a{{display:block}}
 .abtog{{display:flex;align-items:center;gap:0;flex:none;border:1px solid var(--line);
   border-radius:2px;overflow:hidden;background:var(--panel2)}}
 .abtog-lbl{{padding:0 9px;font-family:'IBM Plex Mono',monospace;font-size:.56rem;
@@ -2556,11 +2685,125 @@ html.vb #variant-b{{display:block}}
   line-height:1.45;color:var(--ink);margin-bottom:4px}}
 .fp-brief:hover .fp-brief-t{{color:var(--brass)}}
 .fp-col.no-match,.fp-item.hidden{{display:none}}
+
+/* ── variant C: หน้าหนึ่งหนังสือพิมพ์บนกระดาษนิวส์ปรินต์ ─────
+   ตัวแปรสีอยู่ในสโคปนี้ก้อนเดียว ที่เหลือของเว็บยังเป็นธีมมืดเหมือนเดิม
+   (ทุกสีตัวอักษรผ่าน WCAG AA บนพื้นกระดาษ: 16.1 / 8.2 / 5.1 / 5.8 : 1) */
+#variant-c{{
+  --pp:#F4F1E8; --pp2:#EAE6DA; --pi:#16151A; --pi2:#4A4741; --pm:#6B6659;
+  --pr:#C9C3B4; --pr2:#8E8878; --pred:#B3261E;
+  background:var(--pp);color:var(--pi);
+  padding:clamp(16px,3vw,40px) clamp(14px,3vw,44px) clamp(26px,4vw,52px);
+  border:1px solid var(--pr2);box-shadow:0 22px 60px rgba(0,0,0,.5);
+  font-family:'Noto Serif Thai',Georgia,'Times New Roman',serif}}
+.np-item a{{color:inherit}}
+/* หัวกระดาษในหน้า — เส้นคู่บน/ล่างแบบหัวหนังสือพิมพ์ */
+.np-flag{{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  flex-wrap:wrap;padding:7px 0;border-top:3px double var(--pr2);
+  border-bottom:1px solid var(--pr2);
+  font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--pm)}}
+.np-flag-name{{font-family:'UnifrakturMaguntia','Playfair Display',Georgia,serif;
+  font-size:clamp(1.5rem,3.6vw,2.5rem);letter-spacing:.02em;color:var(--pi);
+  text-transform:none;line-height:1.1}}
+/* แถบข่าวด่วน — แดงหนังสือพิมพ์ ไม่ใช่สีของกราฟ จึงไม่ชนกับชุดสีอินดิเคเตอร์ */
+.np-breaking{{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:8px 0;border-bottom:1px solid var(--pr);margin-bottom:clamp(14px,2vw,22px)}}
+.np-breaking-tag{{flex:none;padding:4px 10px;background:var(--pred);color:#FFF;
+  font-family:'IBM Plex Mono',monospace;font-size:.6rem;font-weight:700;
+  letter-spacing:.16em}}
+.np-breaking-list{{display:flex;gap:10px;flex-wrap:wrap;min-width:0;
+  font-size:.83rem;color:var(--pi2)}}
+.np-breaking-list a{{border-bottom:1px solid var(--pr)}}
+.np-breaking-list a:hover{{color:var(--pred);border-color:var(--pred)}}
+.np-breaking-sep{{color:var(--pr2)}}
+
+/* ── ข่าวเด่นตัวใหญ่สุด (splash) ────────────────────────── */
+.np-splash{{padding-bottom:clamp(16px,2.4vw,26px);
+  border-bottom:3px double var(--pr2);margin-bottom:clamp(16px,2.4vw,26px)}}
+.np-kicker{{display:block;margin-bottom:9px;font-family:'IBM Plex Mono',monospace;
+  font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--pred);
+  font-weight:600}}
+/* พาดหัวใหญ่แบบหนังสือพิมพ์ — บีบ leading ให้แน่น ตัวอักษรชิดกัน */
+.np-splash-h{{font-family:'Playfair Display',Georgia,'Noto Serif Thai',serif;
+  font-weight:900;font-size:clamp(2rem,6.2vw,4.6rem);line-height:1.02;
+  letter-spacing:-.015em;color:var(--pi);margin-bottom:12px;text-wrap:balance}}
+.np-splash-h a:hover{{color:var(--pred)}}
+.np-standfirst{{max-width:60ch;font-size:clamp(.95rem,1.5vw,1.12rem);line-height:1.55;
+  color:var(--pi2);padding-bottom:14px;margin-bottom:16px;
+  border-bottom:1px solid var(--pr)}}
+.np-splash-body{{display:grid;grid-template-columns:1.55fr 1fr;
+  gap:clamp(16px,2.4vw,32px);align-items:start}}
+/* รูปแบบหนังสือพิมพ์ — ขาวดำ มีกรอบบาง มีคำบรรยายใต้ภาพ สีกลับมาตอนชี้ */
+.np-fig{{margin:0}}
+.np-fig img{{display:block;width:100%;object-fit:cover;border:1px solid var(--pr2);
+  filter:grayscale(1) contrast(1.06) brightness(1.02);transition:filter .35s}}
+.np-fig:hover img{{filter:none}}
+.np-fig figcaption{{padding-top:6px;font-family:'IBM Plex Mono',monospace;
+  font-size:.63rem;line-height:1.5;color:var(--pm);
+  border-top:1px solid var(--pr);margin-top:6px}}
+.np-fig-splash img{{aspect-ratio:3/2}}
+.np-aside-h{{padding-bottom:5px;margin-bottom:10px;border-bottom:2px solid var(--pi);
+  font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--pi)}}
+.np-aside a{{display:block;padding:9px 0;border-bottom:1px solid var(--pr);
+  font-size:.9rem;line-height:1.42}}
+.np-aside a:hover{{color:var(--pred)}}
+.np-aside .np-src{{display:block;margin-top:3px;font-family:'IBM Plex Mono',monospace;
+  font-size:.6rem;letter-spacing:.05em;color:var(--pm)}}
+
+/* ── ส่วนข่าวไทย / ต่างประเทศ ───────────────────────────── */
+.np-section{{margin-top:clamp(18px,2.6vw,30px)}}
+.np-sec-h{{display:flex;align-items:center;gap:12px;padding-bottom:6px;margin-bottom:16px;
+  border-bottom:2px solid var(--pi);
+  font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:1.05rem;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--pi)}}
+.np-sec-h span{{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:.62rem;
+  letter-spacing:.1em;color:var(--pm)}}
+/* สามคอลัมน์มีเส้นคั่นแบบหน้าหนังสือพิมพ์ */
+.np-grid{{display:grid;grid-template-columns:1.25fr 1.25fr 1fr;gap:0}}
+.np-grid>*{{padding:0 clamp(10px,1.5vw,20px);min-width:0}}
+.np-grid>*:first-child{{padding-left:0}}
+.np-grid>*:last-child{{padding-right:0}}
+.np-grid>*+*{{border-left:1px solid var(--pr)}}
+.np-story-h{{font-family:'Playfair Display',Georgia,'Noto Serif Thai',serif;
+  font-weight:700;line-height:1.18;color:var(--pi);margin-bottom:8px;text-wrap:balance}}
+.np-story-lead .np-story-h{{font-size:clamp(1.2rem,2.1vw,1.6rem)}}
+.np-story-h a:hover{{color:var(--pred)}}
+.np-story-sum{{font-size:.86rem;line-height:1.6;color:var(--pi2);margin-bottom:8px}}
+.np-src{{font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.05em;
+  color:var(--pm)}}
+.np-story .np-fig{{margin-bottom:11px}}
+.np-story .np-fig img{{aspect-ratio:4/3}}
+/* คอลัมน์สุดท้าย = รายการพาดหัวล้วน อย่างคอลัมน์ "ข่าวย่อ" */
+.np-list-h{{padding-bottom:5px;margin-bottom:9px;border-bottom:2px solid var(--pi);
+  font-family:'IBM Plex Mono',monospace;font-size:.61rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--pi)}}
+.np-list a{{display:block;padding:9px 0;border-bottom:1px solid var(--pr);font-size:.88rem;
+  line-height:1.4}}
+.np-list a:hover{{color:var(--pred)}}
+.np-item.hidden,.np-section.no-match,
+.np-breaking.no-match,.np-aside.no-match{{display:none}}
+@media(max-width:1000px){{
+  .np-splash-body{{grid-template-columns:1fr}}
+  .np-grid{{grid-template-columns:1fr 1fr}}
+  .np-grid>*:nth-child(3){{grid-column:1/-1;padding:16px 0 0;
+    border-left:0;border-top:1px solid var(--pr);margin-top:16px}}
+}}
+@media(max-width:640px){{
+  .np-grid{{grid-template-columns:1fr}}
+  .np-grid>*+*{{border-left:0;border-top:1px solid var(--pr);
+    margin-top:16px;padding:16px 0 0}}
+  .np-grid>*{{padding-left:0;padding-right:0}}
+}}
 @media(max-width:900px){{
-  /* บนจอแคบเหลือแค่ A/B ไม่งั้นแถบบนดันช่องค้นหาล้นออกนอกจอ
-     ตัดตัวหนังสือออกแล้วเพิ่ม padding ชดเชย ปุ่มจะได้ยังกดถูกด้วยนิ้ว */
+  /* บนจอแคบเหลือแค่ตัวอักษร A/B/C — ตัดคำอธิบายออกแล้วเพิ่ม padding ชดเชย
+     ปุ่มจะได้ยังกดถูกด้วยนิ้ว และให้ช่องค้นหาตกลงไปบรรทัดล่างเต็มความกว้าง
+     (สามปุ่มเรียงแถวเดียวกับช่องค้นหาแล้วดันล้นขอบจอ) */
   .abtog-lbl,.abtog-b span{{display:none}}
   .abtog-b{{padding:9px 14px}}
+  .navbar{{flex-wrap:wrap}}
+  .gsearch{{flex:1 1 100%;max-width:none;margin-left:0}}
   .fp-col{{padding:0}}
   .fp-col+.fp-col{{border-left:0;border-top:1px solid var(--line);
     margin-top:26px;padding-top:24px}}
@@ -2834,16 +3077,19 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
 </head>
 <body>
 <script>
-// A/B test เลย์เอาต์หน้าแรก — ต้องรันก่อนวาดเนื้อหา ไม่งั้นจะเห็นหน้า A แวบนึงก่อนสลับเป็น B
-// ?v=a / ?v=b บังคับได้ตรงๆ (ไว้ส่งลิงก์ให้คนอื่นดูฝั่งเดียวกัน) นอกนั้นสุ่มครั้งแรกแล้วจำไว้
+// A/B/C test เลย์เอาต์หน้าแรก — ต้องรันก่อนวาดเนื้อหา ไม่งั้นจะเห็นเลย์เอาต์ผิดแวบนึงก่อนสลับ
+// ?v=a / ?v=b / ?v=c บังคับได้ตรงๆ (ไว้ส่งลิงก์ให้คนอื่นดูแบบเดียวกัน) นอกนั้นสุ่มครั้งแรกแล้วจำไว้
+// แยก try เป็นก้อนๆ เพราะโหมดส่วนตัวบางเบราว์เซอร์ localStorage โยน error — ต้องยังสุ่มได้อยู่
 (function(){{
-  try{{
+  var ok = ['a', 'b', 'c'], v = null;
+  try {{
     var p = new URLSearchParams(location.search).get('v');
-    var v = (p === 'a' || p === 'b') ? p : localStorage.getItem('layoutVariant');
-    if (v !== 'a' && v !== 'b') v = Math.random() < 0.5 ? 'a' : 'b';
-    localStorage.setItem('layoutVariant', v);
-    if (v === 'b') document.documentElement.classList.add('vb');
-  }}catch(e){{}}
+    if (ok.indexOf(p) >= 0) v = p;
+  }} catch(e) {{}}
+  if (!v) {{ try {{ v = localStorage.getItem('layoutVariant'); }} catch(e) {{}} }}
+  if (ok.indexOf(v) < 0) v = ok[Math.floor(Math.random() * ok.length)];
+  try {{ localStorage.setItem('layoutVariant', v); }} catch(e) {{}}
+  document.documentElement.setAttribute('data-variant', v);
 }})();
 </script>
 
@@ -3037,7 +3283,9 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
     <button class="abtog-b" type="button" data-v="a" onclick="setVariant('a')"
             title="Layout A — card feed"><b>A</b><span>FEED</span></button>
     <button class="abtog-b" type="button" data-v="b" onclick="setVariant('b')"
-            title="Layout B — newspaper front page"><b>B</b><span>FRONT PAGE</span></button>
+            title="Layout B — two-column front page"><b>B</b><span>FRONT PAGE</span></button>
+    <button class="abtog-b" type="button" data-v="c" onclick="setVariant('c')"
+            title="Layout C — full newspaper broadsheet"><b>C</b><span>BROADSHEET</span></button>
   </div>
   <div class="gsearch">
     <svg class="gsearch-ic" viewBox="0 0 24 24" aria-hidden="true">
@@ -3084,6 +3332,10 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
 {front_page}
 </div>
 
+<div id="variant-c">
+{news_page}
+</div>
+
 <div class="grid-side">
   <section class="panel">
     <div class="panel-head"><h2>TOP LOCATIONS</h2></div>
@@ -3118,37 +3370,39 @@ function globalSearch(q){{
 function applyGlobalSearch(q){{
   document.body.classList.toggle('searching', !!q);
   document.getElementById('gsearch-x').hidden = !q;
-  // นับ "เจอ/ไม่เจอ" จากเลย์เอาต์ที่กำลังโชว์อยู่เท่านั้น อีกฝั่งซ่อนอยู่แต่ยังอยู่ใน DOM
-  const vb = currentVariant() === 'b';
+  // นับ "เจอ/ไม่เจอ" จากเลย์เอาต์ที่กำลังโชว์อยู่เท่านั้น อีกสองแบบซ่อนอยู่แต่ยังอยู่ใน DOM
+  const v = currentVariant();
   let anySite = false;
-  document.querySelectorAll('.row').forEach(row => {{
-    if (row.closest('#cmodal')) return;      // ไม่ยุ่งกับหน้ากราฟ
-    let any = false;
-    row.querySelectorAll('.poster').forEach(p => {{
-      const hit = !q || p.textContent.toLowerCase().includes(q);
-      p.classList.toggle('hidden', !hit);
-      if (hit) any = true;
+  // แต่ละเลย์เอาต์: [ตัวครอบที่ยุบได้, ตัวข่าวข้างใน, ใช้กับ variant ไหน]
+  const scopes = [['.row', '.poster', 'a'], ['.fp-col', '.fp-item', 'b'],
+                  ['.np-section', '.np-item', 'c'], ['.np-breaking', '.np-item', 'c'],
+                  ['.np-aside', '.np-item', 'c']];
+  for (const [wrapSel, itemSel, forV] of scopes) {{
+    document.querySelectorAll(wrapSel).forEach(wrap => {{
+      if (wrap.closest('#cmodal')) return;   // ไม่ยุ่งกับหน้ากราฟ
+      let any = false;
+      wrap.querySelectorAll(itemSel).forEach(it => {{
+        const hit = !q || it.textContent.toLowerCase().includes(q);
+        it.classList.toggle('hidden', !hit);
+        if (hit) any = true;
+      }});
+      wrap.classList.toggle('no-match', !!q && !any);
+      if (any && v === forV) anySite = true;
     }});
-    row.classList.toggle('no-match', !!q && !any);
-    if (any && !vb) anySite = true;
-  }});
-  document.querySelectorAll('.fp-col').forEach(col => {{
-    let any = false;
-    col.querySelectorAll('.fp-item').forEach(it => {{
-      const hit = !q || it.textContent.toLowerCase().includes(q);
-      it.classList.toggle('hidden', !hit);
-      if (hit) any = true;
-    }});
-    col.classList.toggle('no-match', !!q && !any);
-    if (any && vb) anySite = true;
+  }}
+  // ข่าวเด่นตัวใหญ่ของ C อยู่นอก .np-section เลยต้องกรองแยก
+  document.querySelectorAll('.np-splash').forEach(sp => {{
+    const hit = !q || sp.textContent.toLowerCase().includes(q);
+    sp.classList.toggle('hidden', !hit);
+    if (hit && v === 'c') anySite = true;
   }});
   document.getElementById('gsearch-empty').hidden = !q || anySite;
 }}
 
-// ── A/B test เลย์เอาต์หน้าแรก ─────────────────────────────
-// ฝั่งที่จะเห็นถูกสุ่มไว้ตั้งแต่สคริปต์บนสุดของ <body> แล้ว ตรงนี้แค่ปุ่มสลับดูเอง
+// ── A/B/C test เลย์เอาต์หน้าแรก ───────────────────────────
+// แบบที่จะเห็นถูกสุ่มไว้ตั้งแต่สคริปต์บนสุดของ <body> แล้ว ตรงนี้แค่ปุ่มสลับดูเอง
 function currentVariant(){{
-  return document.documentElement.classList.contains('vb') ? 'b' : 'a';
+  return document.documentElement.getAttribute('data-variant') || 'a';
 }}
 function syncVariantToggle(){{
   const v = currentVariant();
@@ -3156,10 +3410,10 @@ function syncVariantToggle(){{
     b.classList.toggle('on', b.dataset.v === v));
 }}
 function setVariant(v){{
-  document.documentElement.classList.toggle('vb', v === 'b');
+  document.documentElement.setAttribute('data-variant', v);
   try {{ localStorage.setItem('layoutVariant', v); }} catch(e) {{}}
   syncVariantToggle();
-  // สองเลย์เอาต์สูงไม่เท่ากัน สลับกลางหน้าแล้วอาจไปค้างในที่ว่าง เลยดึงกลับขึ้นบน
+  // สามเลย์เอาต์สูงไม่เท่ากัน สลับกลางหน้าแล้วอาจไปค้างในที่ว่าง เลยดึงกลับขึ้นบน
   scrollTo({{top: 0, behavior: 'smooth'}});
 }}
 
@@ -4827,6 +5081,9 @@ function setScope(s){{
   // แท็บ "ทั้งหมด" โชว์เรื่องเด่นอันเดียว (ข่าวใหม่สุด) ไม่ใช่ทั้งสองฝั่ง
   document.querySelectorAll('.hero').forEach(h =>
     h.hidden = !(s === 'all' ? h.dataset.primary === '1' : h.dataset.scope === s));
+  // ข่าวเด่นตัวใหญ่ของ C มีฝั่งของมันเอง เลือกอีกฝั่งอยู่ก็ไม่ต้องโชว์
+  document.querySelectorAll('.np-splash').forEach(sp =>
+    sp.hidden = !(s === 'all' || sp.dataset.scope === s));
   try {{ sessionStorage.setItem('scope', s); }} catch(e) {{}}
 }}
 
