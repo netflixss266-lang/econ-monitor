@@ -1906,7 +1906,8 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .tfbtn:hover{{color:var(--ink)}}
 .tfbtn.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:600}}
 .cmodal-body{{flex:1;display:flex;min-height:0}}
-.cmodal-pick{{width:210px;flex:none;display:flex;flex-direction:column;min-height:0}}
+.cmodal-pick{{width:210px;flex:none;display:flex;flex-direction:column;min-height:0;
+  border-right:1px solid var(--line)}}
 .csearch{{margin:8px 10px;width:auto;flex:none}}
 .cmodal-list{{flex:1;overflow-y:auto;padding:2px 0}}
 .cmodal-list .cnone{{padding:16px 14px;color:var(--dim);font-size:.76rem}}
@@ -1959,10 +1960,10 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cmodal-note{{font-size:.65rem;line-height:1.5;color:var(--dim);margin-top:3px;max-width:560px}}
 .cempty{{display:grid;place-items:center;height:100%;color:var(--mute);font-size:.85rem}}
 
-/* ── แถบเครื่องมือเทคนิคฝั่งซ้าย (อย่างโปรแกรมเทรด) ────────── */
+/* ── แถบเครื่องมือเทคนิค ยื่นออกมาที่ขอบซ้ายสุด (อย่างโปรแกรมเทรด) ── */
 .crail{{position:relative;flex:none;width:46px;display:flex;flex-direction:column;
-  align-items:center;gap:5px;padding:9px 0;background:var(--panel2);
-  border-left:1px solid var(--line);border-right:1px solid var(--line)}}
+  align-items:center;gap:5px;padding:9px 0;background:var(--panel3);
+  border-right:1px solid var(--line)}}
 .crbtn{{position:relative;width:32px;height:30px;display:grid;place-items:center;
   cursor:pointer;color:var(--mute);background:transparent;border:1px solid transparent;
   border-radius:2px;font-family:'IBM Plex Mono',monospace;font-size:.58rem;
@@ -2024,14 +2025,14 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   color:var(--mute);background:transparent;border:1px solid var(--line)}}
 .fin-tab:hover{{color:var(--ink)}}
 .fin-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
-/* dashboard คงที่ด้านบนเสมอ ส่วนตารางเป็นกล่องเลื่อนของตัวเองทั้งสองแกน —
-   ถ้าให้ทั้ง fin-body เลื่อนแนวนอนด้วย จะลากการ์ดกราฟเลื่อนตามตารางไปด้วย
+/* ทั้งแดชบอร์ดเลื่อนแนวตั้งเป็นก้อนเดียว ส่วนตารางเป็นแผงย่อยที่เลื่อนในตัวเอง —
+   หัวตารางค้างได้เพราะ .fin-table-wrap เป็น scroll container ของตัวมันเอง
    (ตั้ง overflow แค่แกนเดียวบน element เดียวกันใช้ไม่ได้ เบราว์เซอร์จะปัดอีกแกนเป็น auto
    ให้เองเสมอ ทำให้ตัวเลื่อนจริงกลายเป็น element นั้นแทน sticky header เลยพังตาม) */
-.fin-body{{flex:1;display:flex;flex-direction:column;min-height:0;
-  padding:22px clamp(16px,4vw,48px)}}
-.fin-table-wrap{{flex:1;min-height:0;overflow:auto;padding-bottom:2px}}
-.fin-body>.cempty,.fin-body>.fin-empty{{flex:1}}
+.fin-body{{flex:1;min-height:0;overflow-y:auto;
+  padding:0 clamp(16px,4vw,48px) 30px}}
+.fin-inner{{max-width:1460px;margin:0 auto}}
+.fin-body>.cempty,.fin-body>.fin-empty{{min-height:60vh}}
 .fin-note{{padding:10px 18px;font-size:.72rem;line-height:1.6;color:var(--dim);
   border-top:1px solid var(--line);background:var(--panel2)}}
 #fin-checked{{display:block;margin-top:3px;color:var(--mute);font-family:'IBM Plex Mono',monospace;
@@ -2039,98 +2040,143 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .fin-empty{{display:grid;place-items:center;color:var(--mute);
   font-size:.95rem;text-align:center;gap:8px;padding:30px}}
 
-/* ── แถบสรุป KPI + เลือกหุ้นเทียบ — หัวแดชบอร์ด ─────────────── */
-.fin-kpis-head{{display:flex;align-items:center;justify-content:space-between;
-  flex-wrap:wrap;gap:10px;margin-bottom:14px}}
-.fin-cmp{{display:flex;align-items:center;gap:9px;font-family:'IBM Plex Mono',monospace;
-  font-size:.68rem;letter-spacing:.06em;color:var(--mute)}}
-.fin-cmp select{{padding:7px 10px;border-radius:2px;background:var(--panel2);
-  border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:.74rem;
-  cursor:pointer;max-width:200px}}
+/* ── แถบเครื่องมือแดชบอร์ด — ค้างบนสุดตอนเลื่อน ─────────────── */
+.fin-toolbar{{position:sticky;top:0;z-index:6;display:flex;align-items:center;
+  flex-wrap:wrap;gap:10px;padding:15px 0 13px;margin-bottom:22px;
+  background:var(--panel);border-bottom:1px solid var(--line)}}
+.fin-jump{{display:flex;gap:6px;flex-wrap:wrap}}
+.fin-jump button{{padding:7px 13px;border-radius:2px;cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.09em;
+  color:var(--mute);background:var(--panel2);border:1px solid var(--line)}}
+.fin-jump button:hover{{color:var(--ink);border-color:var(--brass)}}
+.fin-cmp{{display:flex;align-items:center;gap:8px;margin-left:auto;
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.06em;
+  color:var(--mute)}}
+.fin-cmp select{{padding:7px 11px;border-radius:2px;background:var(--panel2);
+  border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:.72rem;
+  cursor:pointer;max-width:210px}}
 .fin-cmp select:hover{{border-color:var(--brass)}}
-.fin-kpis{{flex:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));
-  gap:14px;margin-bottom:30px;max-width:1400px}}
-.fin-kpi{{background:var(--panel2);border:1px solid var(--line);border-radius:2px;
-  padding:16px 18px}}
-.fin-kpi-lbl{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--mute);margin-bottom:9px}}
-.fin-kpi-val{{font-family:'IBM Plex Mono',monospace;font-size:1.6rem;font-weight:700;
-  color:var(--ink);line-height:1.15;white-space:nowrap}}
-.fin-kpi .fin-delta{{font-size:.78rem;margin-top:7px}}
-.fin-kpi-cmp{{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);
-  font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--mixed);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.fin-cmpbar{{display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:11px 15px;margin:-8px 0 22px;border-radius:2px;
+  background:var(--panel2);border:1px solid var(--line);border-left:2px solid var(--econ)}}
+.fin-cmpbar em{{font-style:normal;font-size:.72rem;color:var(--dim);margin-left:auto}}
 
-/* ── กลุ่มแผงกราฟ แบ่งเป็นหัวข้อวิเคราะห์อย่างแดชบอร์ดจริง ───── */
-.fin-panels{{flex:none;display:flex;flex-direction:column;gap:26px;max-width:1400px}}
-.fin-section-h{{font-family:'IBM Plex Mono',monospace;font-size:.78rem;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--brass);padding-bottom:8px;
-  border-bottom:1px solid var(--line);margin-bottom:14px}}
-.fin-panel-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+/* ── หัวข้อวิเคราะห์แต่ละกลุ่ม ──────────────────────────────── */
+.fin-section{{margin-bottom:34px;scroll-margin-top:74px}}
+.fin-section-h{{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  padding-bottom:9px;border-bottom:1px solid var(--line2);margin-bottom:16px}}
+.fin-section-h b{{font-family:'IBM Plex Mono',monospace;font-size:.8rem;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--brass);font-weight:700}}
+.fin-section-h span{{font-size:.78rem;color:var(--dim);letter-spacing:0}}
+
+/* ── การ์ด KPI ตัวเลขงวดล่าสุด ─────────────────────────────── */
+.fin-kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}}
+.fin-kpi{{position:relative;background:var(--panel2);border:1px solid var(--line);
+  border-radius:2px;padding:15px 17px 16px;overflow:hidden}}
+.fin-kpi::before{{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;
+  background:var(--brass);opacity:.55}}
+.fin-kpi-lbl{{font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--mute);margin-bottom:10px}}
+.fin-kpi-val{{font-family:'IBM Plex Mono',monospace;font-size:1.55rem;font-weight:700;
+  color:var(--ink);line-height:1.1;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}}
+.fin-kpi .fin-delta{{font-size:.76rem;margin-top:8px}}
+.fin-kpi-cmp{{display:flex;justify-content:space-between;gap:8px;margin-top:10px;
+  padding-top:9px;border-top:1px solid var(--line);
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--mute)}}
+.fin-kpi-cmp b{{color:var(--mixed);font-weight:600;white-space:nowrap}}
+.fin-kpi-cmp span{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+
+/* ── แผงกราฟ ────────────────────────────────────────────── */
+.fin-panel-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
   gap:16px}}
 .fin-chart{{background:var(--panel2);border:1px solid var(--line);border-radius:2px;
-  padding:14px 16px}}
+  padding:15px 17px 14px;min-width:0}}
 .fin-chart-wide{{grid-column:1/-1}}
-.fin-chart-h{{font-family:'IBM Plex Mono',monospace;font-size:.76rem;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--mute);margin-bottom:14px}}
-.fin-chart-plot{{position:relative;height:130px;display:flex;gap:10px}}
+.fin-chart-h{{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--mute);margin-bottom:13px}}
+/* สถิติสรุปมุมขวาหัวการ์ด เช่น CAGR — คำนวณจากงวดแรกถึงงวดสุดท้ายที่โชว์เท่านั้น */
+.fin-chart-stat{{font-size:.68rem;letter-spacing:.04em;text-transform:none;
+  color:var(--brass);white-space:nowrap}}
+.fin-chart-plot{{position:relative;height:138px;display:flex;gap:9px}}
 .fin-zero-line{{position:absolute;left:0;right:0;height:1px;background:var(--line2)}}
-.fin-bar-col{{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;
+.fin-bar-col{{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;
   min-width:0}}
-.fin-bar-v{{font-family:'IBM Plex Mono',monospace;font-size:.68rem;font-weight:600;
+.fin-bar-v{{font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
   color:var(--ink);white-space:nowrap}}
-.fin-bar-track{{position:relative;width:100%;height:96px}}
-.fin-bar{{position:absolute;left:10%;right:10%;border-radius:2px;min-height:2px;
+/* แท่งเรียงในราง — 1 ช่องปกติ, 2 ช่องเวลาเทียบกับอีกหุ้น (แกนเดียวกัน สเกลเดียวกัน) */
+.fin-bar-track{{position:relative;width:100%;height:100px;display:flex;gap:3px}}
+.fin-bar-slot{{position:relative;flex:1;min-width:0}}
+.fin-bar{{position:absolute;left:0;right:0;border-radius:2px 2px 0 0;min-height:2px;
   transition:top .25s,height .25s}}
+.fin-bar.dn{{border-radius:0 0 2px 2px}}   /* แท่งติดลบ ปัดมุมด้านล่างแทน */
 .fin-bar.pos{{background:var(--brass)}}
 .fin-bar.neg{{background:var(--down)}}
+.fin-bar.cmp{{background:var(--econ)}}
 .fin-bar-lbl{{font-family:'IBM Plex Mono',monospace;font-size:.64rem;color:var(--dim);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}}
+/* ป้ายงวดใต้กราฟเส้น — วางเป็น HTML ไม่ใช่ <text> ใน SVG เพราะ SVG ยืดเต็มความกว้าง
+   (preserveAspectRatio=none) ตัวอักษรข้างในจะถูกยืดตามจนเบี้ยว */
+.fin-xaxis{{display:flex;justify-content:space-between;gap:6px;margin-top:7px}}
+.fin-xaxis span{{font-family:'IBM Plex Mono',monospace;font-size:.63rem;color:var(--dim);
   white-space:nowrap}}
 /* เส้นแนวโน้มมาร์จิ้น % — สีตายตัวตามลำดับเดิมเสมอ ไม่สลับสีตามการกรอง */
-.fin-legend{{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px}}
+.fin-legend{{display:flex;gap:15px;flex-wrap:wrap;margin-bottom:11px}}
 .fin-legend-item{{display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;
-  font-size:.66rem;color:var(--mute)}}
+  font-size:.65rem;color:var(--mute)}}
 .fin-legend-item i{{width:10px;height:10px;border-radius:2px;flex:none}}
-.fin-line-svg{{width:100%;height:150px;display:block;overflow:visible}}
+.fin-line-svg{{width:100%;height:170px;display:block;overflow:visible}}
 .fin-line-path{{stroke-width:2;stroke-linecap:round;stroke-linejoin:round}}
 .fin-line-dot{{cursor:pointer}}
 .fin-zero-ln{{stroke:var(--line2);stroke-width:1;stroke-dasharray:3 3}}
+.fin-grid-ln{{stroke:var(--line);stroke-width:1}}
+.fin-axis-t{{fill:var(--dim);font-family:'IBM Plex Mono',monospace;font-size:9.5px}}
 
+/* ตารางเป็นแผงสูงจำกัด เลื่อนในตัวเอง หัวตารางเลยค้างได้จริงเวลาไล่บรรทัดยาวๆ */
+.fin-table-wrap{{max-height:min(72vh,720px);overflow:auto;
+  border:1px solid var(--line);border-radius:2px;background:var(--panel)}}
 /* separate ไม่ใช่ collapse — sticky บน <th> พังกับ border-collapse:collapse ในเบราว์เซอร์
    ตระกูล Chromium หลายรุ่น (แถวหัวตารางไม่ยอมค้างเวลาเลื่อน) */
-.fin-table{{border-collapse:separate;border-spacing:0;font-family:'IBM Plex Mono',monospace;
-  font-size:.92rem;font-variant-numeric:tabular-nums}}
-.fin-table th,.fin-table td{{padding:12px 20px;text-align:right;white-space:nowrap;
+.fin-table{{width:100%;border-collapse:separate;border-spacing:0;
+  font-family:'IBM Plex Mono',monospace;font-size:.92rem;font-variant-numeric:tabular-nums}}
+.fin-table th,.fin-table td{{padding:13px 22px;text-align:right;white-space:nowrap;
   border-bottom:1px solid var(--line)}}
 .fin-table thead{{position:sticky;top:0;z-index:2}}
-.fin-table thead th{{position:sticky;top:0;background:var(--panel);z-index:2;
-  color:var(--dim);font-size:.68rem;letter-spacing:.06em;font-weight:600;
+.fin-table thead th{{position:sticky;top:0;background:var(--panel3);z-index:2;
+  color:var(--mute);font-size:.68rem;letter-spacing:.08em;font-weight:600;
   border-bottom:1px solid var(--line2);cursor:pointer;user-select:none}}
 .fin-table thead th:hover{{color:var(--ink)}}
 .fin-table thead th.sorted{{color:var(--brass)}}
-.fin-table .fin-sort-ic{{margin-left:4px;opacity:.7}}
+.fin-table .fin-sort-ic{{margin-left:5px;opacity:.8}}
 .fin-table th:first-child,.fin-table td:first-child{{position:sticky;left:0;
   background:var(--panel);z-index:1;text-align:left;font-family:'Noto Serif Thai',Georgia,serif;
-  font-size:1rem;color:var(--mute);white-space:normal;min-width:190px;cursor:default}}
-.fin-table thead th:first-child{{z-index:3}}
-.fin-table tbody tr:hover td{{background:var(--hover)}}
-.fin-table tbody tr:hover td:first-child{{background:var(--hover)}}
+  font-size:1rem;color:var(--mute);white-space:normal;min-width:210px;cursor:default;
+  border-right:1px solid var(--line)}}
+.fin-table thead th:first-child{{background:var(--panel3);z-index:3}}
+.fin-table tbody tr:hover td,.fin-table tbody tr:hover td:first-child{{background:var(--hover)}}
 .fin-table .fin-val{{color:var(--ink);font-weight:600}}
 .fin-table .fin-na{{color:var(--dim)}}
-.fin-table .fin-delta{{display:block;font-size:.72rem;font-weight:500;margin-top:3px}}
+.fin-table .fin-delta{{display:block;font-size:.71rem;font-weight:500;margin-top:4px}}
 .fin-table .fin-delta.up{{color:var(--up)}}
 .fin-table .fin-delta.down{{color:var(--down)}}
 .fin-table .fin-delta.flat{{color:var(--dim)}}
-.fin-sec{{background:var(--panel2)}}
-.fin-sec td{{padding:9px 20px;font-family:'IBM Plex Mono',monospace;font-size:.68rem;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--brass);font-weight:600;
-  border-bottom:1px solid var(--line2)}}
+.fin-sec td{{padding:10px 22px;background:var(--panel2);
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--brass);font-weight:700;
+  border-bottom:1px solid var(--line2);border-top:1px solid var(--line2)}}
+.fin-sec td:first-child{{background:var(--panel2);font-family:'IBM Plex Mono',monospace}}
 @media(max-width:900px){{
   .cmodal-head{{position:relative;flex-wrap:wrap}}
   .fin-btn{{margin-left:0}}
   .fin-tabs{{width:100%;order:3;margin-left:0}}
-  .fin-kpis{{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}}
-  .fin-panel-grid{{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
+  .fin-toolbar{{padding:12px 0 10px}}
+  .fin-cmp{{margin-left:0;width:100%}}
+  .fin-cmp select{{flex:1;max-width:none}}
+  .fin-kpis{{grid-template-columns:repeat(auto-fit,minmax(148px,1fr))}}
+  .fin-panel-grid{{grid-template-columns:1fr}}
+  .fin-table th,.fin-table td{{padding:11px 15px}}
+  .fin-table th:first-child,.fin-table td:first-child{{min-width:150px;font-size:.9rem}}
 }}
 
 /* ป้ายค่าอินดิเคเตอร์มุมซ้ายบนของแต่ละแพเนล */
@@ -2712,18 +2758,7 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
       {ticker_row("intl", "GLOBAL")}
     </div>
     <div class="cmodal-body">
-      <div class="cmodal-pick">
-        <div class="cfav-bar">
-          <button class="cfav-tab on" type="button" data-mode="fav"
-                  onclick="setAssetMode('fav')">★ FAVORITES</button>
-          <button class="cfav-tab" type="button" data-mode="all"
-                  onclick="setAssetMode('all')">ALL</button>
-        </div>
-        <input class="search csearch" id="csearch" type="search" autocomplete="off"
-               placeholder="Search symbol…" oninput="filterAssets(this.value)">
-        <div class="cmodal-list" id="cmodal-list"></div>
-      </div>
-      <!-- แถบเครื่องมือเทคนิค ยื่นออกมาจากขอบซ้ายของกราฟ -->
+      <!-- แถบเครื่องมือเทคนิค ยื่นออกมาที่ขอบซ้ายสุดของหน้าต่าง (ก่อนรายชื่อหุ้น) -->
       <div class="crail" id="crail">
         <button class="crbtn" type="button" data-pop="ind" onclick="togglePop('ind')"
                 title="Indicators"><b>ƒ</b><span class="crbadge" id="crn" hidden>0</span></button>
@@ -2741,6 +2776,17 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
           <div class="cpop-body" id="ind-list"></div>
           <button class="cpop-clear" type="button" onclick="clearInd()">CLEAR ALL</button>
         </div>
+      </div>
+      <div class="cmodal-pick">
+        <div class="cfav-bar">
+          <button class="cfav-tab on" type="button" data-mode="fav"
+                  onclick="setAssetMode('fav')">★ FAVORITES</button>
+          <button class="cfav-tab" type="button" data-mode="all"
+                  onclick="setAssetMode('all')">ALL</button>
+        </div>
+        <input class="search csearch" id="csearch" type="search" autocomplete="off"
+               placeholder="Search symbol…" oninput="filterAssets(this.value)">
+        <div class="cmodal-list" id="cmodal-list"></div>
       </div>
       <div class="cmodal-chart">
         <div id="cchart"></div>
@@ -3591,39 +3637,55 @@ function currentYearQuarters(rows){{
   return thisYear.length ? thisYear : rows.slice(-4);
 }}
 
+// สีชุดกราฟ — คงที่ตายตัว ไม่ไล่สีใหม่ตามจำนวนเส้นที่เหลือ
+// หุ้นหลัก = brass, หุ้นที่เอามาเทียบ = econ (น้ำเงิน), มาร์จิ้น = teal/purple/amber
+// (ตรวจด้วยสูตร OKLab ΔE + จำลองตาบอดสี protan/deutan แล้ว: คู่แย่สุดของเส้นมาร์จิ้น
+//  ΔE 16.9 และ brass↔econ ΔE 26.6 ผ่านเกณฑ์ทั้งหมด — คู่ purple↔blue ΔE 1.7 ใช้ร่วมกันไม่ได้
+//  จึงไม่เอาเส้นสีน้ำเงินไปไว้ในกราฟมาร์จิ้น)
+const FIN_BAR_CMP = 'var(--econ)';
+const FIN_LINE_COLORS = ['var(--biz)', 'var(--mixed)', 'var(--poli)'];
+
 // กราฟแท่งแบบมีเส้นศูนย์ — แท่งชี้ลงได้ถ้าค่าติดลบ (เช่นปีขาดทุน) ไม่ปัดให้เป็น 0 ที่ทำให้เข้าใจผิด
-// fmt: ฟังก์ชันฟอร์แมตค่าที่โชว์บนแท่ง — ปล่อยว่างใช้ finFmt (หน่วยเงิน) ตัวอัตราส่วน/% ส่งของตัวเองมา
-function divergingBarChart(title, periods, values, fmt){{
-  fmt = fmt || finFmt;
-  const have = values.filter(v => v != null && isFinite(v));
-  if (!have.length) return '';
-  const max = Math.max(0, ...have), min = Math.min(0, ...have);
+// opt: {{fmt, cmp, stat}} — cmp คือค่าหุ้นเทียบที่จับคู่งวดมาแล้ว วางบนแกน/สเกลเดียวกัน
+function divergingBarChart(title, periods, values, opt){{
+  opt = opt || {{}};
+  const fmt = opt.fmt || finFmt;
+  const cmp = opt.cmp || null;
+  if (!values.some(v => v != null && isFinite(v))) return '';
+  const pool = values.concat(cmp || []).filter(v => v != null && isFinite(v));
+  const max = Math.max(0, ...pool), min = Math.min(0, ...pool);
   const range = (max - min) || Math.abs(max) || 1;
   const zeroPct = (max / range) * 100;
-  const cols = periods.map((p, i) => {{
-    const v = values[i];
-    if (v == null) {{
-      return `<div class="fin-bar-col"><div class="fin-bar-v fin-na">—</div>` +
-        `<div class="fin-bar-track"></div><div class="fin-bar-lbl">${{esc(p)}}</div></div>`;
-    }}
+  const slot = (v, cls, who, period) => {{
+    if (v == null || !isFinite(v)) return '<div class="fin-bar-slot"></div>';
     const pct = Math.abs(v) / range * 100, neg = v < 0;
     const top = neg ? zeroPct : zeroPct - pct;
-    return `<div class="fin-bar-col">
-        <div class="fin-bar-v">${{fmt(v)}}</div>
-        <div class="fin-bar-track">
-          <div class="fin-bar ${{neg ? 'neg' : 'pos'}}" style="top:${{top}}%;height:${{pct}}%"></div>
-        </div>
-        <div class="fin-bar-lbl">${{esc(p)}}</div>
-      </div>`;
+    const klass = cls === 'cmp' ? 'cmp' : (neg ? 'neg' : 'pos');
+    return `<div class="fin-bar-slot"><div class="fin-bar ${{klass}}${{neg ? ' dn' : ''}}" ` +
+      `style="top:${{top.toFixed(2)}}%;height:${{pct.toFixed(2)}}%" ` +
+      `title="${{esc(who)}} · ${{esc(period)}}: ${{esc(fmt(v))}}"></div></div>`;
+  }};
+  const cols = periods.map((p, i) => {{
+    const v = values[i];
+    const bars = slot(v, 'main', chCur, p) +
+      (cmp ? slot(cmp[i], 'cmp', finCompareSym, p) : '');
+    const lbl = (v == null || !isFinite(v))
+      ? '<div class="fin-bar-v fin-na">—</div>'
+      : `<div class="fin-bar-v">${{esc(fmt(v))}}</div>`;
+    return `<div class="fin-bar-col">${{lbl}}` +
+      `<div class="fin-bar-track">${{bars}}</div>` +
+      `<div class="fin-bar-lbl">${{esc(p)}}</div></div>`;
   }}).join('');
+  // ไม่ใส่ legend ซ้ำทุกการ์ด — สีคู่นี้ใช้เหมือนกันทั้งแดชบอร์ด มี legend รวมอยู่ใต้แถบเครื่องมือ
+  // (แท่งทุกแท่งมี tooltip บอกชื่อหุ้นกำกับอยู่แล้ว ตัวตนจึงไม่ได้อยู่ที่สีอย่างเดียว)
+  const stat = opt.stat ? `<span class="fin-chart-stat">${{esc(opt.stat)}}</span>` : '';
   return `<div class="fin-chart">
-      <div class="fin-chart-h">${{esc(title)}}</div>
+      <div class="fin-chart-h"><span>${{esc(title)}}</span>${{stat}}</div>
       <div class="fin-chart-plot"><div class="fin-zero-line" style="top:${{zeroPct}}%"></div>${{cols}}</div>
     </div>`;
 }}
 
-// เส้นแนวโน้ม % หลายชุดบนแกนเดียวกัน (มาร์จิ้น) — สีตายตัวตามลำดับ ไม่มีทางสลับ
-const FIN_LINE_COLORS = ['var(--econ)', 'var(--biz)', 'var(--mixed)'];
+// เส้นแนวโน้มมาร์จิ้น % — เส้นตาราง 3 ระดับ + ป้ายงวดเป็น HTML ใต้กราฟ
 function marginLineChart(title, periods, series){{
   const n = periods.length;
   if (n < 2) return '';
@@ -3632,17 +3694,21 @@ function marginLineChart(title, periods, series){{
   if (!allVals.length) return '';
   let max = Math.max(...allVals), min = Math.min(...allVals);
   if (max === min) {{ max += 1; min -= 1; }}
-  const pad = (max - min) * 0.12;
+  const pad = (max - min) * 0.14;
   max += pad; min -= pad;
-  const W = 640, H = 150, padL = 8, padR = 8, padT = 14, padB = 22;
+  const W = 640, H = 170, padL = 6, padR = 6, padT = 10, padB = 10;
   const x = i => padL + (i / (n - 1)) * (W - padL - padR);
   const y = v => padT + (1 - (v - min) / (max - min)) * (H - padT - padB);
-  const zeroY = (min <= 0 && max >= 0) ? y(0) : null;
 
   let svg = `<svg class="fin-line-svg" viewBox="0 0 ${{W}} ${{H}}" preserveAspectRatio="none" ` +
     `role="img" aria-label="${{esc(title)}}">`;
-  if (zeroY != null) {{
-    svg += `<line class="fin-zero-ln" x1="${{padL}}" x2="${{W - padR}}" y1="${{zeroY.toFixed(1)}}" y2="${{zeroY.toFixed(1)}}"/>`;
+  for (const t of [max, (max + min) / 2, min]) {{
+    svg += `<line class="fin-grid-ln" x1="${{padL}}" x2="${{W - padR}}" ` +
+      `y1="${{y(t).toFixed(1)}}" y2="${{y(t).toFixed(1)}}"/>`;
+  }}
+  if (min <= 0 && max >= 0) {{
+    svg += `<line class="fin-zero-ln" x1="${{padL}}" x2="${{W - padR}}" ` +
+      `y1="${{y(0).toFixed(1)}}" y2="${{y(0).toFixed(1)}}"/>`;
   }}
   // สีอิงตำแหน่งเดิมในชุดเสมอ (ไม่ไล่เลขใหม่) ให้ธุรกิจแบงก์ที่ไม่มี Gross/Operating
   // ยังโชว์ Net Margin เป็นสีเดิมทุกครั้ง ไม่ใช่สีของสล็อตแรกที่ว่างไป
@@ -3666,67 +3732,143 @@ function marginLineChart(title, periods, series){{
     legendParts.push(`<span class="fin-legend-item"><i style="background:${{color}}"></i>${{esc(s.name)}}</span>`);
   }});
   svg += '</svg>';
-  const legend = legendParts.join('');
+  const xaxis = `<div class="fin-xaxis">${{periods.map(p => `<span>${{esc(p)}}</span>`).join('')}}</div>`;
+  const range = `<span class="fin-chart-stat">${{min.toFixed(0)}}% – ${{max.toFixed(0)}}%</span>`;
   return `<div class="fin-chart fin-chart-wide">
-      <div class="fin-chart-h">${{esc(title)}}</div>
-      <div class="fin-legend">${{legend}}</div>
-      ${{svg}}
+      <div class="fin-chart-h"><span>${{esc(title)}}</span>${{range}}</div>
+      <div class="fin-legend">${{legendParts.join('')}}</div>
+      ${{svg}}${{xaxis}}
     </div>`;
 }}
 
-// แถบ KPI หัวแดชบอร์ด — ตัวเลขงวดล่าสุด + เทียบงวดก่อน + เทียบกับหุ้นที่เลือก (ถ้ามี)
+// ── ข้อมูลหุ้นที่เอามาเทียบ ─────────────────────────────────
+function finCompareRows(){{
+  if (!finCompareSym || !finCache[finCompareSym]) return null;
+  let cRows = finCache[finCompareSym][finSpan] || [];
+  if (finSpan === 'quarterly') cRows = currentYearQuarters(cRows);
+  return cRows.length ? withRatios(cRows) : null;
+}}
+// จับคู่งวดตามป้ายงวด (FY 2024 ↔ FY 2024) ไม่ใช่ตามลำดับ — บริษัทที่ปิดรอบบัญชีคนละเดือน
+// หรือมีจำนวนงวดไม่เท่ากัน จะได้ไม่ถูกเอาไปเทียบผิดงวดโดยไม่รู้ตัว
+function finAlign(periods, cRows){{
+  if (!cRows) return null;
+  const byLabel = {{}};
+  cRows.forEach(r => {{ byLabel[periodLabel(r.date, finSpan)] = r; }});
+  return periods.map(p => byLabel[p] || null);
+}}
+
+// CAGR คิดได้เฉพาะข้อมูลรายปี และต้องเป็นบวกทั้งงวดต้นและงวดปลาย —
+// ถ้าปีใดขาดทุน (ติดลบ) อัตราการเติบโตทบต้นไม่มีนิยามทางคณิตศาสตร์ จึงไม่โชว์ ดีกว่าโชว์เลขมั่ว
+function cagrText(rows, key){{
+  if (finSpan !== 'annual') return '';
+  const vals = rows.map(r => r[key]);
+  const i = vals.findIndex(v => v != null && isFinite(v));
+  let j = -1;
+  for (let k = vals.length - 1; k >= 0; k--) {{
+    if (vals[k] != null && isFinite(vals[k])) {{ j = k; break; }}
+  }}
+  if (i < 0 || j <= i) return '';
+  const a = vals[i], b = vals[j];
+  if (!(a > 0 && b > 0)) return '';
+  const yrs = j - i;
+  const g = (Math.pow(b / a, 1 / yrs) - 1) * 100;
+  return `${{yrs}}Y CAGR ${{g >= 0 ? '+' : ''}}${{g.toFixed(1)}}%`;
+}}
+
+// ── แถบเครื่องมือแดชบอร์ด (ปุ่มกระโดดหัวข้อ + เลือกหุ้นเทียบ) ──
+const FIN_SECTIONS = [
+  ['kpi',   'KEY METRICS'],
+  ['grow',  'GROWTH'],
+  ['prof',  'PROFITABILITY'],
+  ['bal',   'BALANCE SHEET'],
+  ['lev',   'LEVERAGE & RETURNS'],
+  ['stmt',  'STATEMENTS'],
+];
+function renderFinToolbar(){{
+  const jump = FIN_SECTIONS.map(([id, label]) =>
+    `<button type="button" onclick="finJump('${{id}}')">${{esc(label)}}</button>`).join('');
+  const opts = finNavList().filter(l => l !== chCur).map(l =>
+    `<option value="${{esc(l)}}"${{l === finCompareSym ? ' selected' : ''}}>${{esc(l)}}</option>`
+  ).join('');
+  // legend รวมของทั้งแดชบอร์ด — สีคู่นี้ใช้เหมือนกันทุกกราฟ เลยมีที่เดียวพอ
+  const legend = finCompareSym ? `<div class="fin-cmpbar">` +
+    `<span class="fin-legend-item"><i style="background:var(--brass)"></i>${{esc(chCur)}}</span>` +
+    `<span class="fin-legend-item"><i style="background:${{FIN_BAR_CMP}}"></i>${{esc(finCompareSym)}}</span>` +
+    `<em>same scale on every chart — bars are directly comparable</em></div>` : '';
+  return `<div class="fin-toolbar"><div class="fin-jump">${{jump}}</div>` +
+    `<div class="fin-cmp"><label for="fin-cmp-sel">⇄ COMPARE</label>` +
+    `<select id="fin-cmp-sel" onchange="setFinCompare(this.value)">` +
+    `<option value="">— none —</option>${{opts}}</select></div></div>` + legend;
+}}
+function finJump(id){{
+  const el = document.getElementById('fin-sec-' + id);
+  if (el) el.scrollIntoView({{behavior: 'smooth', block: 'start'}});
+}}
+const finSection = (id, title, note, inner) =>
+  `<div class="fin-section" id="fin-sec-${{id}}">` +
+  `<div class="fin-section-h"><b>${{esc(title)}}</b>` +
+  (note ? `<span>${{esc(note)}}</span>` : '') + `</div>${{inner}}</div>`;
+
+// แถบ KPI — ตัวเลขงวดล่าสุด + เทียบงวดก่อน + เทียบกับหุ้นที่เลือก (ถ้ามี)
 const FIN_KPI_DEFS = [
   ['rev', 'Revenue'], ['ni', 'Net Income'], ['nm', 'Net Margin'],
   ['eps', 'Diluted EPS'], ['assets', 'Total Assets'], ['de', 'Debt / Equity'],
 ];
-function renderFinKpiSection(rows){{
+function renderFinKpiSection(rows, cmpRows){{
   if (!rows.length) return '';
   const last = rows[rows.length - 1], prev = rows.length > 1 ? rows[rows.length - 2] : null;
-  let cmpLast = null;
-  if (finCompareSym && finCache[finCompareSym]) {{
-    let cRows = finCache[finCompareSym][finSpan] || [];
-    if (finSpan === 'quarterly') cRows = currentYearQuarters(cRows);
-    cRows = withRatios(cRows);
-    if (cRows.length) cmpLast = cRows[cRows.length - 1];
-  }}
-  const cmpOptions = finNavList().filter(l => l !== chCur).map(l =>
-    `<option value="${{esc(l)}}" ${{l === finCompareSym ? 'selected' : ''}}>${{esc(l)}}</option>`
-  ).join('');
-  const head = `<div class="fin-kpis-head"><div class="fin-section-h">KEY METRICS</div>` +
-    `<div class="fin-cmp"><label for="fin-cmp-sel">⇄ Compare with</label>` +
-    `<select id="fin-cmp-sel" onchange="setFinCompare(this.value)">` +
-    `<option value="">— none —</option>${{cmpOptions}}</select></div></div>`;
+  const cmpLast = cmpRows && cmpRows.length ? cmpRows[cmpRows.length - 1] : null;
+  const period = periodLabel(last.date, finSpan);
   const tiles = FIN_KPI_DEFS.map(([key, label]) => {{
     const txt = finCellText(key, last[key]) ?? '—';
     const delta = prev ? finDelta(key, last[key], prev[key]) : '';
-    const cmp = cmpLast ? `<div class="fin-kpi-cmp">vs ${{esc(finCompareSym)}}: ${{finCellText(key, cmpLast[key]) ?? '—'}}</div>` : '';
+    const cmp = cmpLast
+      ? `<div class="fin-kpi-cmp"><span>${{esc(finCompareSym)}}</span>` +
+        `<b>${{esc(finCellText(key, cmpLast[key]) ?? '—')}}</b></div>`
+      : '';
     return `<div class="fin-kpi"><div class="fin-kpi-lbl">${{esc(label)}}</div>` +
       `<div class="fin-kpi-val">${{esc(txt)}}</div>${{delta}}${{cmp}}</div>`;
   }}).join('');
-  return head + `<div class="fin-kpis">${{tiles}}</div>`;
+  const note = 'latest reported period · ' + period +
+    (prev ? ' — change shown vs ' + periodLabel(prev.date, finSpan) : '');
+  return finSection('kpi', 'KEY METRICS', note, `<div class="fin-kpis">${{tiles}}</div>`);
 }}
 
-// กลุ่มแผงกราฟแยกหัวข้อวิเคราะห์ — โตขึ้น/แข็งแรงแค่ไหน (Growth), กำไรต่อบาทรายได้ (Profitability),
+// กลุ่มแผงกราฟแยกหัวข้อวิเคราะห์ — โตขึ้นแค่ไหน (Growth), กำไรต่อบาทรายได้ (Profitability),
 // ฐานะการเงิน (Balance Sheet), หนี้กับผลตอบแทนผู้ถือหุ้น (Leverage & Returns)
-function renderFinDashboard(rows){{
+function renderFinDashboard(rows, cmpRows){{
   const periods = rows.map(r => periodLabel(r.date, finSpan));
-  const bar = (key, title, fmt) => divergingBarChart(title, periods, rows.map(r => r[key]), fmt);
-  const sections = [
-    ['GROWTH', [bar('rev', 'Revenue'), bar('ni', 'Net Income')]],
-    ['PROFITABILITY', [marginLineChart('Margins', periods, [
+  const aligned = finAlign(periods, cmpRows);
+  const bar = (key, title, extra) => divergingBarChart(title, periods, rows.map(r => r[key]),
+    Object.assign({{cmp: aligned ? aligned.map(r => r && r[key]) : null}}, extra || {{}}));
+  const pct = {{fmt: v => v.toFixed(1) + '%'}};
+  const out = [];
+
+  const grow = [bar('rev', 'Revenue', {{stat: cagrText(rows, 'rev')}}),
+                bar('ni', 'Net Income', {{stat: cagrText(rows, 'ni')}})].filter(Boolean).join('');
+  if (grow) out.push(finSection('grow', 'GROWTH', 'revenue and bottom line over the periods shown',
+    `<div class="fin-panel-grid">${{grow}}</div>`));
+
+  const prof = [marginLineChart('Margin trend', periods, [
       {{name: 'Gross', vals: rows.map(r => r.gm)}},
       {{name: 'Operating', vals: rows.map(r => r.om)}},
       {{name: 'Net', vals: rows.map(r => r.nm)}},
-    ])]],
-    ['BALANCE SHEET', [bar('assets', 'Total Assets'), bar('liab', 'Total Liabilities'), bar('equity', 'Total Equity')]],
-    ['LEVERAGE & RETURNS', [bar('de', 'Debt / Equity', v => v.toFixed(2) + 'x'), bar('roe', 'Return on Equity', v => v.toFixed(1) + '%')]],
-  ];
-  const html = sections.map(([title, parts]) => {{
-    const inner = parts.filter(Boolean).join('');
-    return inner ? `<div class="fin-section"><div class="fin-section-h">${{esc(title)}}</div>` +
-      `<div class="fin-panel-grid">${{inner}}</div></div>` : '';
-  }}).filter(Boolean).join('');
-  return html ? `<div class="fin-panels">${{html}}</div>` : '';
+    ]), bar('nm', 'Net Margin', pct), bar('roa', 'Return on Assets', pct)].filter(Boolean).join('');
+  if (prof) out.push(finSection('prof', 'PROFITABILITY', 'how much of each unit of revenue is kept',
+    `<div class="fin-panel-grid">${{prof}}</div>`));
+
+  const bal = [bar('assets', 'Total Assets'), bar('liab', 'Total Liabilities'),
+               bar('equity', 'Total Equity'), bar('cash', 'Cash & Equivalents')].filter(Boolean).join('');
+  if (bal) out.push(finSection('bal', 'BALANCE SHEET', 'what the company owns and owes',
+    `<div class="fin-panel-grid">${{bal}}</div>`));
+
+  const lev = [bar('de', 'Debt / Equity', {{fmt: v => v.toFixed(2) + 'x'}}),
+               bar('roe', 'Return on Equity', pct),
+               bar('debt', 'Total Debt')].filter(Boolean).join('');
+  if (lev) out.push(finSection('lev', 'LEVERAGE & RETURNS', 'borrowing level and shareholder return',
+    `<div class="fin-panel-grid">${{lev}}</div>`));
+
+  return out.join('');
 }}
 
 function toggleFinSort(i){{
@@ -3747,11 +3889,13 @@ function renderFinTable(){{
     return;
   }}
   rows = withRatios(rows);
+  const cmpRows = finCompareRows();
   const cols = rows.map(r => periodLabel(r.date, finSpan));
   const sortKey = (finSortCol >= 0 && rows[finSortCol]) ? rows[finSortCol] : null;
 
-  let html = renderFinKpiSection(rows) + renderFinDashboard(rows);
-  html += '<div class="fin-table-wrap"><table class="fin-table"><thead><tr><th>Line item</th>' +
+  let html = '<div class="fin-inner">' + renderFinToolbar() +
+    renderFinKpiSection(rows, cmpRows) + renderFinDashboard(rows, cmpRows);
+  let table = '<div class="fin-table-wrap"><table class="fin-table"><thead><tr><th>Line item</th>' +
     cols.map((c, i) => {{
       const on = i === finSortCol;
       const ic = on ? (finSortDir > 0 ? '▲' : '▼') : '';
@@ -3774,9 +3918,9 @@ function renderFinTable(){{
         return (av - bv) * finSortDir;
       }});
     }}
-    html += `<tr class="fin-sec"><td colspan="${{cols.length + 1}}">${{FIN_SEC[secName]}}</td></tr>`;
+    table += `<tr class="fin-sec"><td colspan="${{cols.length + 1}}">${{FIN_SEC[secName]}}</td></tr>`;
     for (const [key, label] of items) {{
-      html += `<tr><td>${{esc(label)}}</td>` + rows.map((r, i) => {{
+      table += `<tr><td>${{esc(label)}}</td>` + rows.map((r, i) => {{
         const v = r[key];
         const txt = finCellText(key, v);
         if (txt == null) return '<td class="fin-na">—</td>';
@@ -3785,8 +3929,13 @@ function renderFinTable(){{
       }}).join('') + '</tr>';
     }}
   }}
-  html += '</tbody></table></div>';
-  body.innerHTML = html;
+  table += '</tbody></table></div>';
+  html += finSection('stmt', 'STATEMENTS',
+    'click a period column to sort line items within each group', table);
+  // เก็บตำแหน่งเลื่อนไว้ก่อนวาดใหม่ — กดเรียงคอลัมน์หรือเปลี่ยนหุ้นเทียบแล้วไม่ให้เด้งกลับบนสุด
+  const keep = body.scrollTop;
+  body.innerHTML = html + '</div>';
+  body.scrollTop = keep;
 }}
 
 function pickFinSpan(span){{
@@ -3831,14 +3980,17 @@ async function openFinancials(){{
       finCache[chCur] = await fetch('{FIN_DIR}/' + CHARTS[chCur].s + '.json').then(r => r.json());
     }} catch (e) {{ finCache[chCur] = {{annual: [], quarterly: []}}; }}
   }}
-  if (chCur && CHARTS[chCur]?.f) renderFinTable();
+  if (chCur && CHARTS[chCur]?.f) {{
+    renderFinTable();
+    document.getElementById('fin-body').scrollTop = 0;   // เปลี่ยนหุ้น = เริ่มอ่านจากบนสุดใหม่
+  }}
 }}
 function closeFinancials(){{
   document.getElementById('finmodal').hidden = true;
   if (document.getElementById('cmodal').hidden) document.body.style.overflow = '';
 }}
-// เลือกหุ้นเทียบจากดรอปดาวน์ใน KPI header — ดึงงบมาเก็บใน finCache ก้อนเดียวกัน
-// แล้ว re-render ทั้งแดชบอร์ด (ตารางไม่แตะ เทียบแค่ตัวเลขงวดล่าสุดใน KPI tile)
+// เลือกหุ้นเทียบจากดรอปดาวน์บนแถบเครื่องมือ — ดึงงบมาเก็บใน finCache ก้อนเดียวกัน
+// แล้ว re-render ทั้งแดชบอร์ด (แท่งกราฟขึ้นเป็นคู่ + KPI มีบรรทัดเทียบเพิ่ม)
 async function setFinCompare(label){{
   finCompareSym = label || null;
   if (finCompareSym && !finCache[finCompareSym]) {{
