@@ -1694,6 +1694,87 @@ def render(news, markets, charts=None, logos=None, streams=None, fin_at=None):
 
     category_blocks = "".join(cat_tabs_block(sc, lb) for sc, lb in SCOPES)
 
+    # ── หน้าแรกแบบหนังสือพิมพ์ = variant B ของ A/B test ──────────
+    # ตั้งใจให้ใช้ "ข่าวชุดเดียวกันเป๊ะ" กับ variant A ต่างกันแค่วิธีจัดหน้า
+    # ถ้าเนื้อข่าวต่างกันด้วย ผลเทียบจะบอกไม่ได้ว่าคนคลิกเพราะเลย์เอาต์หรือเพราะข่าว
+    fp = {}
+    for sc, _lb in SCOPES:
+        pool = sorted((i for i in news if i["scope"] == sc),
+                      key=lambda x: x["dt"], reverse=True)
+        # ฝั่งต่างประเทศเอาข่าวจากสำนักข่าวต่างประเทศจริงๆ ขึ้นก่อน ไม่ใช่สื่อไทยที่เล่าเรื่องนอก
+        # (ใช้เกณฑ์เดียวกับแถว LATEST ของ variant A — ไม่งั้นคอลัมน์ INTERNATIONAL
+        #  จะขึ้นด้วยข่าวไทยภาษาไทย ซึ่งทำให้การ "แยกไทย/เทศ" ไม่มีความหมาย)
+        if sc == "intl":
+            pool = ([i for i in pool if i["lang"] != "th"]
+                    + [i for i in pool if i["lang"] == "th"])
+        lead = next((i for i in pool if i.get("image")), pool[0] if pool else None)
+        rest = [i for i in pool if i is not lead]
+        subs = [i for i in rest if i.get("image")][:4]
+        seen = {id(x) for x in subs}
+        briefs = [i for i in rest if id(i) not in seen][:10]
+        fp[sc] = {"lead": lead, "subs": subs, "briefs": briefs, "n": len(pool)}
+
+    def fp_lead(it):
+        if not it:
+            return ""
+        img = (f'<img class="fp-lead-img" src="{html.escape(it["image"])}" loading="lazy"'
+               f' alt="" onerror="this.remove()">') if it.get("image") else ""
+        place = f' · {html.escape(it["place"])}' if it["place"] else ""
+        deck = f'<p class="fp-deck">{html.escape(it["summary"])}</p>' if it["summary"] else ""
+        return f"""<article class="fp-item fp-lead">
+      <a class="fp-a" href="{html.escape(it['link'])}" target="_blank" rel="noopener">
+        {img}
+        <span class="fp-kicker">{cat_icon(it['cat'], 'ci-sm')}{CAT_LABELS[it['cat']]}</span>
+        <h3 class="fp-lead-t">{html.escape(it['title'])}</h3>
+        {deck}
+        <span class="fp-meta">{html.escape(it['source'])}{place} · {it['age']}</span>
+      </a>
+      <button class="speak fp-speak" type="button" title="Listen" {speak_attrs(it)}>🔊</button>
+    </article>"""
+
+    def fp_sub(it):
+        img = (f'<img src="{html.escape(it["image"])}" loading="lazy" alt=""'
+               f' onerror="this.remove()">') if it.get("image") else ""
+        return f"""<article class="fp-item fp-sub">
+      <a class="fp-a" href="{html.escape(it['link'])}" target="_blank" rel="noopener">
+        <span class="fp-sub-thumb pf-{it['cat']}">{cat_icon(it['cat'], 'ci-lg')}{img}</span>
+        <span class="fp-sub-body">
+          <span class="fp-kicker">{CAT_LABELS[it['cat']]}</span>
+          <h4 class="fp-sub-t">{html.escape(it['title'])}</h4>
+          <span class="fp-meta">{html.escape(it['source'])} · {it['age']}</span>
+        </span>
+      </a>
+    </article>"""
+
+    def fp_brief(it):
+        return (f'<a class="fp-item fp-brief" href="{html.escape(it["link"])}"'
+                f' target="_blank" rel="noopener">'
+                f'<span class="fp-brief-t">{html.escape(it["title"])}</span>'
+                f'<span class="fp-meta">{html.escape(it["source"])} · {it["age"]}</span></a>')
+
+    def fp_col(sc, label):
+        d = fp[sc]
+        if not d["lead"]:
+            return ""
+        flag = "TH" if sc == "th" else "INTL"
+        briefs = "".join(fp_brief(i) for i in d["briefs"])
+        briefs_block = (f'<div class="fp-briefs"><h4 class="fp-briefs-h">MORE HEADLINES</h4>'
+                        f'{briefs}</div>') if briefs else ""
+        return f"""<section class="scope-group fp-col" data-scope="{sc}">
+  <h2 class="fp-sec-h">{html.escape(label)}<span class="scope-flag">{flag}</span>
+    <span class="fp-sec-n">{d['n']}</span></h2>
+  {fp_lead(d['lead'])}
+  <div class="fp-subs">{''.join(fp_sub(i) for i in d['subs'])}</div>
+  {briefs_block}
+</section>"""
+
+    front_page = f"""<div class="fp-dateline">
+  <span>{NOW.strftime('%A, %d %B %Y')}</span>
+  <span class="fp-dateline-mid">DAILY EDITION</span>
+  <span>{len(news)} stories in 24h · updated {NOW.strftime('%H:%M')}</span>
+</div>
+<div class="fp-cols">{''.join(fp_col(sc, lb) for sc, lb in SCOPES)}</div>"""
+
     next_run = (NOW + timedelta(minutes=REBUILD_MIN)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
     icons_json = json.dumps({c: cat_icon(c, "ci-sm") for c in CAT_NAMES}, ensure_ascii=False)
@@ -2396,6 +2477,94 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cat-panel .row-head{{border-bottom:0;padding-bottom:0}}
 .cat-panel .row-head h2{{display:none}}
 .cat-panel .row-head{{justify-content:flex-end}}
+
+/* ── A/B test เลย์เอาต์หน้าแรก ─────────────────────────────
+   A = ฟีดการ์ดเลื่อนแนวนอน (ของเดิม) · B = หน้าหนึ่งหนังสือพิมพ์
+   สลับด้วยคลาสบน <html> เพราะสคริปต์เลือกฝั่งรันก่อน <body> จะมีเนื้อหา */
+#variant-b{{display:none}}
+html.vb #variant-a{{display:none}}
+html.vb #variant-b{{display:block}}
+.abtog{{display:flex;align-items:center;gap:0;flex:none;border:1px solid var(--line);
+  border-radius:2px;overflow:hidden;background:var(--panel2)}}
+.abtog-lbl{{padding:0 9px;font-family:'IBM Plex Mono',monospace;font-size:.56rem;
+  letter-spacing:.14em;color:var(--dim);border-right:1px solid var(--line)}}
+.abtog-b{{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;cursor:pointer;
+  background:transparent;border:0;font-family:'IBM Plex Mono',monospace;font-size:.58rem;
+  letter-spacing:.1em;color:var(--mute);white-space:nowrap}}
+.abtog-b b{{font-size:.66rem;font-weight:700}}
+.abtog-b:hover{{color:var(--ink)}}
+.abtog-b.on{{color:#0A0E1A;background:var(--brass);font-weight:700}}
+
+/* ── หน้าหนึ่งหนังสือพิมพ์ (variant B) ───────────────────── */
+.fp-dateline{{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  flex-wrap:wrap;padding:9px 0;margin-bottom:22px;
+  border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);
+  font-family:'IBM Plex Mono',monospace;font-size:.63rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--mute)}}
+.fp-dateline-mid{{color:var(--brass);font-weight:700}}
+/* auto-fit ทำให้เหลือคอลัมน์เดียวเต็มความกว้างอัตโนมัติ ตอนกรองเหลือไทย/เทศฝั่งเดียว */
+.fp-cols{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));
+  gap:0}}
+.fp-col{{padding:0 clamp(0px,2vw,32px);min-width:0}}
+.fp-col:first-child{{padding-left:0}}
+.fp-col:last-child{{padding-right:0}}
+.fp-col+.fp-col{{border-left:1px solid var(--line)}}
+/* ซ่อนฝั่งหนึ่งอยู่ (เลือกดูไทย/เทศอย่างเดียว) อีกฝั่งไม่ต้องมีเส้นคั่นลอยๆ */
+.fp-col[hidden]+.fp-col{{border-left:0;padding-left:0}}
+.fp-sec-h{{display:flex;align-items:center;gap:10px;padding-bottom:8px;margin-bottom:18px;
+  border-bottom:2px solid var(--brass);
+  font-family:'Playfair Display',Georgia,serif;font-size:1rem;font-weight:700;
+  letter-spacing:.17em;text-transform:uppercase;color:var(--cream)}}
+.fp-sec-n{{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:.64rem;
+  letter-spacing:.08em;color:var(--dim)}}
+.fp-a{{display:block;color:inherit}}
+.fp-item{{position:relative}}
+.fp-lead{{padding-bottom:19px;margin-bottom:4px;border-bottom:1px solid var(--line)}}
+.fp-lead-img{{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;
+  margin-bottom:14px;border-radius:2px}}
+.fp-kicker{{display:inline-flex;align-items:center;gap:5px;margin-bottom:8px;
+  font-family:'IBM Plex Mono',monospace;font-size:.59rem;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--brass)}}
+.fp-kicker .cicon{{width:13px;height:13px}}
+/* Playfair ไม่มีสระ/วรรณยุกต์ไทย เบราว์เซอร์จะตกมาใช้ Noto Serif Thai ให้เองต่อตัวอักษร */
+.fp-lead-t{{font-family:'Playfair Display',Georgia,'Noto Serif Thai',serif;
+  font-size:clamp(1.35rem,2.2vw,1.95rem);font-weight:700;line-height:1.16;
+  color:var(--cream);margin-bottom:10px}}
+.fp-a:hover .fp-lead-t{{color:var(--brass)}}
+.fp-deck{{font-size:.9rem;line-height:1.62;color:var(--mute);margin-bottom:10px}}
+.fp-meta{{display:block;font-family:'IBM Plex Mono',monospace;font-size:.62rem;
+  letter-spacing:.05em;color:var(--dim)}}
+.fp-speak{{position:absolute;right:9px;top:9px;z-index:2;width:28px;height:28px;padding:0;
+  border-radius:2px;background:rgba(5,7,13,.72);opacity:0;transition:opacity .2s}}
+.fp-lead:hover .fp-speak,.fp-speak:focus{{opacity:1}}
+.fp-sub{{padding:14px 0;border-bottom:1px solid var(--line)}}
+.fp-sub .fp-a{{display:flex;gap:13px;align-items:flex-start}}
+.fp-sub-thumb{{position:relative;flex:none;width:104px;aspect-ratio:4/3;border-radius:2px;
+  overflow:hidden;display:grid;place-items:center}}
+.fp-sub-thumb img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}}
+.fp-sub-thumb .cicon{{opacity:.5}}
+.fp-sub-body{{flex:1;min-width:0}}
+.fp-sub-body .fp-kicker{{margin-bottom:4px}}
+.fp-sub-t{{font-family:'Playfair Display',Georgia,'Noto Serif Thai',serif;font-size:1rem;
+  font-weight:700;line-height:1.3;color:var(--ink);margin-bottom:6px}}
+.fp-a:hover .fp-sub-t{{color:var(--brass)}}
+.fp-briefs{{margin-top:18px;padding-top:15px;border-top:2px solid var(--line2)}}
+.fp-briefs-h{{font-family:'IBM Plex Mono',monospace;font-size:.61rem;letter-spacing:.17em;
+  color:var(--mute);margin-bottom:11px}}
+.fp-brief{{display:block;padding:10px 0;border-bottom:1px dotted var(--line2)}}
+.fp-brief-t{{display:block;font-family:'Noto Serif Thai',Georgia,serif;font-size:.92rem;
+  line-height:1.45;color:var(--ink);margin-bottom:4px}}
+.fp-brief:hover .fp-brief-t{{color:var(--brass)}}
+.fp-col.no-match,.fp-item.hidden{{display:none}}
+@media(max-width:900px){{
+  /* บนจอแคบเหลือแค่ A/B ไม่งั้นแถบบนดันช่องค้นหาล้นออกนอกจอ
+     ตัดตัวหนังสือออกแล้วเพิ่ม padding ชดเชย ปุ่มจะได้ยังกดถูกด้วยนิ้ว */
+  .abtog-lbl,.abtog-b span{{display:none}}
+  .abtog-b{{padding:9px 14px}}
+  .fp-col{{padding:0}}
+  .fp-col+.fp-col{{border-left:0;border-top:1px solid var(--line);
+    margin-top:26px;padding-top:24px}}
+}}
 /* padding + margin ติดลบ เพื่อให้การ์ดที่ขยายตอน hover ไม่โดนตัดขอบ */
 .row-track{{display:flex;gap:12px;overflow-x:auto;scroll-behavior:smooth;
   scroll-snap-type:x proximity;padding:24px 4px 28px;margin:-24px -4px -28px}}
@@ -2664,6 +2833,19 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
 </style>
 </head>
 <body>
+<script>
+// A/B test เลย์เอาต์หน้าแรก — ต้องรันก่อนวาดเนื้อหา ไม่งั้นจะเห็นหน้า A แวบนึงก่อนสลับเป็น B
+// ?v=a / ?v=b บังคับได้ตรงๆ (ไว้ส่งลิงก์ให้คนอื่นดูฝั่งเดียวกัน) นอกนั้นสุ่มครั้งแรกแล้วจำไว้
+(function(){{
+  try{{
+    var p = new URLSearchParams(location.search).get('v');
+    var v = (p === 'a' || p === 'b') ? p : localStorage.getItem('layoutVariant');
+    if (v !== 'a' && v !== 'b') v = Math.random() < 0.5 ? 'a' : 'b';
+    localStorage.setItem('layoutVariant', v);
+    if (v === 'b') document.documentElement.classList.add('vb');
+  }}catch(e){{}}
+}})();
+</script>
 
 <div id="intro" aria-hidden="true"><div class="intro-inner">
   <span class="intro-mark">The Tribune</span><span class="intro-rule"></span>
@@ -2850,6 +3032,13 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
     <span class="burger-txt">MENU</span>
   </button>
   <span class="navbar-now" id="navbar-now">HOME</span>
+  <div class="abtog" role="group" aria-label="Home layout test">
+    <span class="abtog-lbl">LAYOUT</span>
+    <button class="abtog-b" type="button" data-v="a" onclick="setVariant('a')"
+            title="Layout A — card feed"><b>A</b><span>FEED</span></button>
+    <button class="abtog-b" type="button" data-v="b" onclick="setVariant('b')"
+            title="Layout B — newspaper front page"><b>B</b><span>FRONT PAGE</span></button>
+  </div>
   <div class="gsearch">
     <svg class="gsearch-ic" viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -2881,6 +3070,7 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
 
 <div class="gsearch-empty" id="gsearch-empty" hidden>No stories match your search.</div>
 
+<div id="variant-a">
 {heroes}
 
 {live_blocks}
@@ -2888,6 +3078,11 @@ footer{{margin-top:22px;padding-top:14px;border-top:3px double var(--line2);
 {latest_blocks}
 
 {category_blocks}
+</div>
+
+<div id="variant-b">
+{front_page}
+</div>
 
 <div class="grid-side">
   <section class="panel">
@@ -2923,6 +3118,8 @@ function globalSearch(q){{
 function applyGlobalSearch(q){{
   document.body.classList.toggle('searching', !!q);
   document.getElementById('gsearch-x').hidden = !q;
+  // นับ "เจอ/ไม่เจอ" จากเลย์เอาต์ที่กำลังโชว์อยู่เท่านั้น อีกฝั่งซ่อนอยู่แต่ยังอยู่ใน DOM
+  const vb = currentVariant() === 'b';
   let anySite = false;
   document.querySelectorAll('.row').forEach(row => {{
     if (row.closest('#cmodal')) return;      // ไม่ยุ่งกับหน้ากราฟ
@@ -2933,9 +3130,37 @@ function applyGlobalSearch(q){{
       if (hit) any = true;
     }});
     row.classList.toggle('no-match', !!q && !any);
-    if (any) anySite = true;
+    if (any && !vb) anySite = true;
+  }});
+  document.querySelectorAll('.fp-col').forEach(col => {{
+    let any = false;
+    col.querySelectorAll('.fp-item').forEach(it => {{
+      const hit = !q || it.textContent.toLowerCase().includes(q);
+      it.classList.toggle('hidden', !hit);
+      if (hit) any = true;
+    }});
+    col.classList.toggle('no-match', !!q && !any);
+    if (any && vb) anySite = true;
   }});
   document.getElementById('gsearch-empty').hidden = !q || anySite;
+}}
+
+// ── A/B test เลย์เอาต์หน้าแรก ─────────────────────────────
+// ฝั่งที่จะเห็นถูกสุ่มไว้ตั้งแต่สคริปต์บนสุดของ <body> แล้ว ตรงนี้แค่ปุ่มสลับดูเอง
+function currentVariant(){{
+  return document.documentElement.classList.contains('vb') ? 'b' : 'a';
+}}
+function syncVariantToggle(){{
+  const v = currentVariant();
+  document.querySelectorAll('.abtog-b').forEach(b =>
+    b.classList.toggle('on', b.dataset.v === v));
+}}
+function setVariant(v){{
+  document.documentElement.classList.toggle('vb', v === 'b');
+  try {{ localStorage.setItem('layoutVariant', v); }} catch(e) {{}}
+  syncVariantToggle();
+  // สองเลย์เอาต์สูงไม่เท่ากัน สลับกลางหน้าแล้วอาจไปค้างในที่ว่าง เลยดึงกลับขึ้นบน
+  scrollTo({{top: 0, behavior: 'smooth'}});
 }}
 
 // ── สลับแท็บหมวดข่าว (Economy/Politics/Business/Environment) ──
@@ -4719,6 +4944,8 @@ document.querySelectorAll('.scope-group').forEach(g => {{
   if (!document.querySelector(`.tab[data-scope="${{s}}"]`)) s = 'all';
   setScope(s);
 }})();
+
+syncVariantToggle();
 
 // เอา overlay อินโทรออกจาก DOM หลังเล่นจบ
 (() => {{
