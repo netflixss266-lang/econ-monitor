@@ -1,4 +1,4 @@
-const CACHE = "econ-monitor-v2";
+const CACHE = "econ-monitor-v3";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => {
@@ -22,8 +22,11 @@ self.addEventListener("fetch", (e) => {
   const isData = url.origin === location.origin && url.pathname.endsWith(".json");
 
   if (isNavigation || isData) {
+    // ต้อง no-store ไม่ใช่ fetch เปล่าๆ — fetch ธรรมดายังกิน HTTP cache ของเบราว์เซอร์อยู่
+    // (GitHub Pages ส่ง max-age มาด้วย) ทำให้ไฟล์ที่ build ใหม่แล้วยังได้ของเก่าไปหลายนาที
+    // เคยทำให้งบการเงินที่ขยายเป็น 5 ปีแล้วยังโชว์ 4 ปีบนเว็บจริง
     e.respondWith(
-      fetch(e.request)
+      fetch(new Request(e.request.url, { cache: "no-store", credentials: "same-origin" }))
         .then((res) => {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(e.request, copy));
