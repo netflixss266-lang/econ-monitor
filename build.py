@@ -535,6 +535,10 @@ FIN_DIR = "fin"
 # เช็คทุกวัน ไม่ใช่ทุกสัปดาห์ — จะได้ตามงบใหม่ที่เพิ่งประกาศทันภายในไม่เกิน ~24 ชม.
 # (งบเปลี่ยนแค่ตอนมีไตรมาสใหม่ออก แต่ "ตอนไหน" คาดเดาล่วงหน้าไม่ได้ จึงต้องเช็คถี่พอ)
 FIN_FULL_DAYS = 1
+# เพดานจริงของข้อมูลฟรีจาก Yahoo คือ 5 ปี — ทดสอบย้อนไปไกลกว่านั้นแล้วได้ค่าว่างทุกตัว
+# ทั้งหุ้นไทยและหุ้นนอก จึงตั้งไว้ 5 ไม่ใช่ 10 (ตั้งเกินไปก็ไม่มีข้อมูลมาเติมอยู่ดี)
+FIN_YEARS = 5
+FIN_BACKFILL_MAX = 3      # กันลูปไม่รู้จบถ้า Yahoo เปลี่ยนพฤติกรรม
 
 # (คีย์สั้นในไฟล์ JSON, ชื่อฟิลด์ที่ Yahoo ใช้, ชื่อที่แสดงผล, หมวด)
 FIN_FIELDS = [
@@ -604,19 +608,40 @@ def fetch_financials():
         return set(), cached.get("at")
     uni = universe_symbols()
 
+    def _ask(sym, period2):
+        r = sess.get(
+            "https://query2.finance.yahoo.com/ws/fundamentals-timeseries/"
+            f"v1/finance/timeseries/{sym}",
+            params={"symbol": sym, "type": ",".join(_FIN_TYPES),
+                    "period1": "1", "period2": str(period2), "crumb": crumb}, timeout=15)
+        if r.status_code != 200:
+            return None
+        return _parse_fin_periods(r.json().get("timeseries", {}).get("result"))
+
     def one(job):
         sym, label, _ = job
         try:
-            r = sess.get(
-                "https://query2.finance.yahoo.com/ws/fundamentals-timeseries/"
-                f"v1/finance/timeseries/{sym}",
-                params={"symbol": sym, "type": ",".join(_FIN_TYPES),
-                        "period1": "1000000000", "period2": str(int(NOW.timestamp()) + 86400),
-                        "crumb": crumb}, timeout=15)
-            if r.status_code != 200:
+            periods = _ask(sym, int(NOW.timestamp()) + 86400)
+            if not periods:
                 return label, None
-            result = r.json().get("timeseries", {}).get("result")
-            periods = _parse_fin_periods(result)
+            # Yahoo คืนงบรายปีให้ครั้งละ 4 งวดล่าสุดเท่านั้น ไม่ว่าจะตั้ง period1 ย้อนไปไกลแค่ไหน
+            # แต่ถ้าตัด period2 ไว้ก่อนงวดเก่าสุดที่เพิ่งได้มา จะได้บล็อกก่อนหน้าเพิ่มอีก
+            # ยิงซ้ำแบบนี้จนไม่มีงวดใหม่โผล่ — ในทางปฏิบัติได้ครบ 5 ปีแล้วตัน (ข้อมูลมีแค่นั้น)
+            for _ in range(FIN_BACKFILL_MAX):
+                rows = periods.get("annual") or []
+                if not rows or len(rows) >= FIN_YEARS:
+                    break
+                try:
+                    cut = int(datetime.strptime(rows[0]["date"], "%Y-%m-%d").timestamp()) - 86400
+                except Exception:
+                    break
+                older = _ask(sym, cut)
+                extra = [r for r in ((older or {}).get("annual") or [])
+                         if r["date"] < rows[0]["date"]]
+                if not extra:
+                    break
+                periods["annual"] = sorted(extra + rows, key=lambda r: r["date"])
+            periods["annual"] = (periods.get("annual") or [])[-FIN_YEARS:]
             if not periods.get("annual") and not periods.get("quarterly"):
                 return label, None
             return label, periods
@@ -1905,7 +1930,12 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 /* ปุ่มช่วงเวลา + ชนิดกราฟ อยู่มุมขวาล่างของกราฟ */
 .cbottom{{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
   flex-wrap:wrap;margin-top:4px}}
-.cctrl{{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}}
+.cctrl{{display:flex;gap:16px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}}
+/* ติดป้ายกำกับให้ปุ่มทั้งสองชุด — ไม่งั้นสลับเป็นกราฟเส้นได้แต่ไม่มีใครหาเจอ */
+.cctrl-g{{display:flex;flex-direction:column;gap:5px}}
+.cctrl-lbl{{font-family:'IBM Plex Mono',monospace;font-size:.56rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dim)}}
+.cctrl-g .tfbar{{flex:none}}
 .map-modal-body{{flex:1;display:flex;flex-direction:column;min-height:0}}
 .map-modal-body .map-wrap{{flex:1;height:auto;min-height:0}}
 .map-modal-body #hotspot-detail{{max-height:210px}}
@@ -2022,13 +2052,14 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   background:var(--panel2);border:1px solid var(--line);border-left:2px solid var(--econ)}}
 .fin-cmpbar em{{font-style:normal;font-size:.72rem;color:var(--dim);margin-left:auto}}
 
-/* ── หัวข้อวิเคราะห์แต่ละกลุ่ม ──────────────────────────────── */
-.fin-section{{margin-bottom:34px;scroll-margin-top:74px}}
-.fin-section-h{{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
-  padding-bottom:9px;border-bottom:1px solid var(--line2);margin-bottom:16px}}
-.fin-section-h b{{font-family:'IBM Plex Mono',monospace;font-size:.8rem;letter-spacing:.15em;
-  text-transform:uppercase;color:var(--brass);font-weight:700}}
-.fin-section-h span{{font-size:.78rem;color:var(--dim);letter-spacing:0}}
+/* ── หัวข้อวิเคราะห์แต่ละกลุ่ม — ตัวใหญ่ อ่านแล้วรู้ทันทีว่ากำลังดูอะไร ── */
+.fin-section{{margin-bottom:40px;scroll-margin-top:74px}}
+.fin-section-h{{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  padding-bottom:11px;border-bottom:2px solid var(--brass);margin-bottom:20px}}
+.fin-section-h b{{font-family:'Playfair Display',Georgia,'Noto Serif Thai',serif;
+  font-size:1.45rem;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--cream);font-weight:700}}
+.fin-section-h span{{font-size:.86rem;color:var(--mute);letter-spacing:0}}
 
 /* ── การ์ด KPI ตัวเลขงวดล่าสุด ─────────────────────────────── */
 .fin-kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}}
@@ -2054,12 +2085,19 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .fin-chart{{background:var(--panel2);border:1px solid var(--line);border-radius:2px;
   padding:15px 17px 14px;min-width:0}}
 .fin-chart-wide{{grid-column:1/-1}}
-.fin-chart-h{{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
-  font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.09em;
-  text-transform:uppercase;color:var(--mute);margin-bottom:13px}}
+/* หัวการ์ดกราฟ — ชื่อเรื่องเด่นชัด + บอกหน่วยไว้ใต้ชื่อ จะได้ไม่ต้องเดาว่าตัวเลขคืออะไร */
+.fin-chart-h{{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+  padding-bottom:10px;margin-bottom:14px;border-bottom:1px solid var(--line2)}}
+.fin-chart-h .fin-chart-t{{display:block;font-family:'Playfair Display',Georgia,'Noto Serif Thai',serif;
+  font-size:1.08rem;font-weight:700;line-height:1.25;color:var(--ink);
+  letter-spacing:.01em}}
+.fin-chart-h .fin-chart-u{{display:block;margin-top:3px;font-family:'IBM Plex Mono',monospace;
+  font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}}
 /* สถิติสรุปมุมขวาหัวการ์ด เช่น CAGR — คำนวณจากงวดแรกถึงงวดสุดท้ายที่โชว์เท่านั้น */
-.fin-chart-stat{{font-size:.68rem;letter-spacing:.04em;text-transform:none;
-  color:var(--brass);white-space:nowrap}}
+.fin-chart-stat{{flex:none;padding:3px 9px;border-radius:2px;
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.04em;
+  font-weight:600;color:var(--brass);background:var(--sel);
+  border:1px solid var(--line2);white-space:nowrap}}
 .fin-chart-plot{{position:relative;height:138px;display:flex;gap:9px}}
 .fin-zero-line{{position:absolute;left:0;right:0;height:1px;background:var(--line2)}}
 .fin-bar-col{{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;
@@ -2753,10 +2791,18 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
         <div class="cbottom">
           <div id="creadout" class="creadout"></div>
           <div class="cctrl">
-            <div class="tfbar" id="cmodal-tf"></div>
-            <div class="tfbar ctype">
-              <button class="tfbtn on" type="button" data-ct="candle" onclick="pickType('candle')">CANDLES</button>
-              <button class="tfbtn" type="button" data-ct="line" onclick="pickType('line')">LINE</button>
+            <div class="cctrl-g">
+              <span class="cctrl-lbl">RANGE</span>
+              <div class="tfbar" id="cmodal-tf"></div>
+            </div>
+            <div class="cctrl-g">
+              <span class="cctrl-lbl">CHART TYPE</span>
+              <div class="tfbar ctype">
+                <button class="tfbtn on" type="button" data-ct="candle"
+                        onclick="pickType('candle')">CANDLES</button>
+                <button class="tfbtn" type="button" data-ct="line"
+                        onclick="pickType('line')">LINE</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2796,9 +2842,11 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
     </div>
     <div class="fin-body" id="fin-body"><div class="cempty">Loading…</div></div>
     <p class="fin-note">Figures are company-reported financial statements sourced from Yahoo
-      Finance, up to the last 4 fiscal years / most recent reported quarters — banks and
-      insurers often show "—" for cost of revenue / gross profit, which doesn't apply to
-      their business model. Indicators only, not investment advice.
+      Finance, up to the last {FIN_YEARS} fiscal years / most recent reported quarters.
+      Five years is all this source carries — anything older simply isn't published in the
+      feed, so it is left out rather than estimated. Banks and insurers often show "—" for
+      cost of revenue / gross profit, which doesn't apply to their business model.
+      Indicators only, not investment advice.
       <span id="fin-checked"></span></p>
   </div>
 </div>
@@ -3614,8 +3662,10 @@ function divergingBarChart(title, periods, values, opt){{
   // ไม่ใส่ legend ซ้ำทุกการ์ด — สีคู่นี้ใช้เหมือนกันทั้งแดชบอร์ด มี legend รวมอยู่ใต้แถบเครื่องมือ
   // (แท่งทุกแท่งมี tooltip บอกชื่อหุ้นกำกับอยู่แล้ว ตัวตนจึงไม่ได้อยู่ที่สีอย่างเดียว)
   const stat = opt.stat ? `<span class="fin-chart-stat">${{esc(opt.stat)}}</span>` : '';
+  const unit = opt.unit || 'reported currency';
   return `<div class="fin-chart">
-      <div class="fin-chart-h"><span>${{esc(title)}}</span>${{stat}}</div>
+      <div class="fin-chart-h"><span><span class="fin-chart-t">${{esc(title)}}</span>` +
+        `<span class="fin-chart-u">${{esc(unit)}} · per ${{finSpan === 'annual' ? 'fiscal year' : 'quarter'}}</span></span>${{stat}}</div>
       <div class="fin-chart-plot"><div class="fin-zero-line" style="top:${{zeroPct}}%"></div>${{cols}}</div>
     </div>`;
 }}
@@ -3670,7 +3720,8 @@ function marginLineChart(title, periods, series){{
   const xaxis = `<div class="fin-xaxis">${{periods.map(p => `<span>${{esc(p)}}</span>`).join('')}}</div>`;
   const range = `<span class="fin-chart-stat">${{min.toFixed(0)}}% – ${{max.toFixed(0)}}%</span>`;
   return `<div class="fin-chart fin-chart-wide">
-      <div class="fin-chart-h"><span>${{esc(title)}}</span>${{range}}</div>
+      <div class="fin-chart-h"><span><span class="fin-chart-t">${{esc(title)}}</span>` +
+        `<span class="fin-chart-u">percent of revenue · per ${{finSpan === 'annual' ? 'fiscal year' : 'quarter'}}</span></span>${{range}}</div>
       <div class="fin-legend">${{legendParts.join('')}}</div>
       ${{svg}}${{xaxis}}
     </div>`;
@@ -3776,7 +3827,8 @@ function renderFinDashboard(rows, cmpRows){{
   const aligned = finAlign(periods, cmpRows);
   const bar = (key, title, extra) => divergingBarChart(title, periods, rows.map(r => r[key]),
     Object.assign({{cmp: aligned ? aligned.map(r => r && r[key]) : null}}, extra || {{}}));
-  const pct = {{fmt: v => v.toFixed(1) + '%'}};
+  const pct = {{fmt: v => v.toFixed(1) + '%', unit: 'percent of revenue'}};
+  const ret = {{fmt: v => v.toFixed(1) + '%', unit: 'percent return'}};
   const out = [];
 
   const grow = [bar('rev', 'Revenue', {{stat: cagrText(rows, 'rev')}}),
@@ -3788,7 +3840,7 @@ function renderFinDashboard(rows, cmpRows){{
       {{name: 'Gross', vals: rows.map(r => r.gm)}},
       {{name: 'Operating', vals: rows.map(r => r.om)}},
       {{name: 'Net', vals: rows.map(r => r.nm)}},
-    ]), bar('nm', 'Net Margin', pct), bar('roa', 'Return on Assets', pct)].filter(Boolean).join('');
+    ]), bar('nm', 'Net Margin', pct), bar('roa', 'Return on Assets', ret)].filter(Boolean).join('');
   if (prof) out.push(finSection('prof', 'PROFITABILITY', 'how much of each unit of revenue is kept',
     `<div class="fin-panel-grid">${{prof}}</div>`));
 
@@ -3797,8 +3849,8 @@ function renderFinDashboard(rows, cmpRows){{
   if (bal) out.push(finSection('bal', 'BALANCE SHEET', 'what the company owns and owes',
     `<div class="fin-panel-grid">${{bal}}</div>`));
 
-  const lev = [bar('de', 'Debt / Equity', {{fmt: v => v.toFixed(2) + 'x'}}),
-               bar('roe', 'Return on Equity', pct),
+  const lev = [bar('de', 'Debt / Equity', {{fmt: v => v.toFixed(2) + 'x', unit: 'times equity'}}),
+               bar('roe', 'Return on Equity', ret),
                bar('debt', 'Total Debt')].filter(Boolean).join('');
   if (lev) out.push(finSection('lev', 'LEVERAGE & RETURNS', 'borrowing level and shareholder return',
     `<div class="fin-panel-grid">${{lev}}</div>`));
