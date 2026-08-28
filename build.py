@@ -1760,9 +1760,12 @@ try{{
 }}
 *{{box-sizing:border-box;margin:0;padding:0}}
 button,input{{font-family:inherit}}
+/* ขนาดตัวอักษรทั้งเว็บอิงจากตรงนี้ที่เดียว — ขนาดที่เป็น rem จะขยายตามกันหมด
+   ส่วนระยะห่าง/ความกว้างเป็น px จึงไม่เพี้ยนตาม (17/16 = ใหญ่ขึ้น ~6%) */
+html{{font-size:17px}}
 body{{background:var(--bg);color:var(--ink);
   font-family:'Noto Serif Thai',Georgia,'Times New Roman',serif;
-  font-size:15px;line-height:1.55;padding:20px;max-width:1560px;margin:0 auto;
+  font-size:1rem;line-height:1.6;padding:20px;max-width:1560px;margin:0 auto;
   animation:pageIn .85s 1.9s backwards}}
 a{{color:inherit;text-decoration:none}}
 
@@ -2065,8 +2068,34 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   color:var(--cream);font-weight:700}}
 .fin-section-h span{{font-size:.86rem;color:var(--mute);letter-spacing:0}}
 
-/* ── การ์ด KPI ตัวเลขงวดล่าสุด ─────────────────────────────── */
+/* ── การ์ด KPI ตัวเลขงวดล่าสุด + กล่องบันทึกอ่านงบข้างๆ ───────── */
+.fin-kpi-wrap{{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;
+  align-items:start}}
+@media(max-width:1150px){{.fin-kpi-wrap{{grid-template-columns:1fr}}}}
 .fin-kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}}
+/* กล่องความเห็น — ทำให้ดูเป็น "บันทึกของกอง บก." ไม่ใช่ตัวเลขอีกก้อน
+   เส้นทองด้านซ้าย + ตัวเอียงเซริฟ ให้อ่านออกทันทีว่าเป็นคำอธิบาย ไม่ใช่ข้อมูลดิบ */
+.fin-read{{background:var(--panel2);border:1px solid var(--line);
+  border-left:3px solid var(--brass);border-radius:2px;padding:15px 17px 16px}}
+.fin-read-h{{display:flex;align-items:center;gap:8px;padding-bottom:9px;margin-bottom:11px;
+  border-bottom:1px solid var(--line2);
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--brass);font-weight:700}}
+.fin-read-h::before{{content:'§';font-size:.9rem;line-height:1}}
+.fin-read p{{font-size:.95rem;line-height:1.62;color:var(--ink);margin-bottom:10px}}
+.fin-read p:last-of-type{{margin-bottom:0}}
+.fin-read b{{color:var(--cream);font-weight:700}}
+.fin-read .up{{color:var(--up);font-weight:600}}
+.fin-read .down{{color:var(--down);font-weight:600}}
+.fin-read-watch{{margin-top:13px;padding-top:11px;border-top:1px solid var(--line2)}}
+.fin-read-watch span{{display:block;margin-bottom:6px;
+  font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--mute)}}
+.fin-read-watch li{{list-style:none;position:relative;padding-left:15px;margin-bottom:6px;
+  font-size:.88rem;line-height:1.55;color:var(--mute)}}
+.fin-read-watch li::before{{content:'›';position:absolute;left:2px;color:var(--brass)}}
+.fin-read-foot{{margin-top:13px;padding-top:10px;border-top:1px solid var(--line2);
+  font-size:.76rem;line-height:1.55;color:var(--dim)}}
 .fin-kpi{{position:relative;background:var(--panel2);border:1px solid var(--line);
   border-radius:2px;padding:15px 17px 16px;overflow:hidden}}
 .fin-kpi::before{{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;
@@ -2086,8 +2115,10 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 /* ── แผงกราฟ ────────────────────────────────────────────── */
 .fin-panel-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
   gap:16px}}
+/* container-type ทำให้ตัวเลขในแท่งย่อตามความกว้าง "ของการ์ด" ได้ ไม่ใช่ตามขนาดจอ —
+   ปัญหาจริงคือการ์ดในกริด 4 คอลัมน์กว้าง 322px ช่องต่องวดเหลือ 50px ไม่ใช่จอเล็ก */
 .fin-chart{{background:var(--panel2);border:1px solid var(--line);border-radius:2px;
-  padding:15px 17px 14px;min-width:0}}
+  padding:15px 17px 14px;min-width:0;container-type:inline-size}}
 .fin-chart-wide{{grid-column:1/-1}}
 /* หัวการ์ดกราฟ — ชื่อเรื่องเด่นชัด + บอกหน่วยไว้ใต้ชื่อ จะได้ไม่ต้องเดาว่าตัวเลขคืออะไร */
 .fin-chart-h{{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
@@ -2102,23 +2133,35 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.04em;
   font-weight:600;color:var(--brass);background:var(--sel);
   border:1px solid var(--line2);white-space:nowrap}}
-.fin-chart-plot{{position:relative;height:138px;display:flex;gap:9px}}
+.fin-chart-plot{{position:relative;height:172px;display:flex;gap:9px}}
 .fin-zero-line{{position:absolute;left:0;right:0;height:1px;background:var(--line2)}}
 .fin-bar-col{{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;
   min-width:0}}
-.fin-bar-v{{font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
-  color:var(--ink);white-space:nowrap}}
+/* ตัวเลขอยู่ "ในแท่ง" ไม่ใช่ลอยอยู่ข้างบน — อ่านง่ายกว่าเพราะเลขติดกับแท่งที่มันอธิบาย
+   แท่งเตี้ยเกินจะใส่ตัวเลขข้างในไม่ได้ ตกไปวางเหนือแท่งแทน (คลาส .out) */
+.fin-bar-num{{position:absolute;left:0;right:0;text-align:center;
+  font-family:'IBM Plex Mono',monospace;font-weight:700;
+  letter-spacing:-.01em;white-space:nowrap;pointer-events:none;
+  font-size:.72rem;                        /* เผื่อเบราว์เซอร์ที่ยังไม่รู้จัก cqw */
+  font-size:clamp(.6rem,3.5cqw,.86rem)}}
+/* หมึกเข้มบนแท่งทุกสี — วัดแล้วชนะทุกกรณี (ทอง 8.5:1, น้ำเงินเทียบ 6.0:1, แดง 4.9:1)
+   ส่วนตัวอักษรสว่างบนน้ำเงินได้แค่ 3.0:1 ซึ่งตกเกณฑ์ จึงไม่ใช้ */
+.fin-bar-num.in{{top:4px;color:#0A0E1A}}
+.fin-bar-num.out{{bottom:calc(100% + 3px);color:var(--ink)}}
+.fin-bar-num.out.dn{{bottom:auto;top:calc(100% + 3px)}}
 /* แท่งเรียงในราง — 1 ช่องปกติ, 2 ช่องเวลาเทียบกับอีกหุ้น (แกนเดียวกัน สเกลเดียวกัน) */
-.fin-bar-track{{position:relative;width:100%;height:100px;display:flex;gap:3px}}
+.fin-bar-track{{position:relative;width:100%;height:150px;display:flex;gap:3px}}
 .fin-bar-slot{{position:relative;flex:1;min-width:0}}
+.fin-bar-na{{position:absolute;inset:0;display:grid;place-items:center;
+  font-family:'IBM Plex Mono',monospace;font-size:.8rem;color:var(--dim)}}
 .fin-bar{{position:absolute;left:0;right:0;border-radius:2px 2px 0 0;min-height:2px;
   transition:top .25s,height .25s}}
 .fin-bar.dn{{border-radius:0 0 2px 2px}}   /* แท่งติดลบ ปัดมุมด้านล่างแทน */
 .fin-bar.pos{{background:var(--brass)}}
 .fin-bar.neg{{background:var(--down)}}
 .fin-bar.cmp{{background:var(--econ)}}
-.fin-bar-lbl{{font-family:'IBM Plex Mono',monospace;font-size:.64rem;color:var(--dim);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}}
+.fin-bar-lbl{{font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+  color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}}
 /* ป้ายงวดใต้กราฟเส้น — วางเป็น HTML ไม่ใช่ <text> ใน SVG เพราะ SVG ยืดเต็มความกว้าง
    (preserveAspectRatio=none) ตัวอักษรข้างในจะถูกยืดตามจนเบี้ยว */
 .fin-xaxis{{display:flex;justify-content:space-between;gap:6px;margin-top:7px}}
@@ -3643,24 +3686,31 @@ function divergingBarChart(title, periods, values, opt){{
   const max = Math.max(0, ...pool), min = Math.min(0, ...pool);
   const range = (max - min) || Math.abs(max) || 1;
   const zeroPct = (max / range) * 100;
-  const slot = (v, cls, who, period) => {{
+  // ตัวเลขวางในแท่งเมื่อแท่งสูงพอ (ไม่งั้นตัวหนังสือจะล้นออกนอกแท่ง) — ~15% ของราง 150px
+  // คือราว 22px พอดีกับตัวอักษร .86rem หนึ่งบรรทัด แท่งเตี้ยกว่านั้นเอาเลขไปไว้เหนือแท่ง
+  const INSIDE_MIN = 15;
+  const slot = (v, cls, who, period, label) => {{
     if (v == null || !isFinite(v)) return '<div class="fin-bar-slot"></div>';
     const pct = Math.abs(v) / range * 100, neg = v < 0;
     const top = neg ? zeroPct : zeroPct - pct;
     const klass = cls === 'cmp' ? 'cmp' : (neg ? 'neg' : 'pos');
+    const num = label
+      ? `<span class="fin-bar-num ${{pct >= INSIDE_MIN ? 'in' : 'out'}}${{neg ? ' dn' : ''}}">` +
+        `${{esc(fmt(v))}}</span>`
+      : '';
     return `<div class="fin-bar-slot"><div class="fin-bar ${{klass}}${{neg ? ' dn' : ''}}" ` +
       `style="top:${{top.toFixed(2)}}%;height:${{pct.toFixed(2)}}%" ` +
-      `title="${{esc(who)}} · ${{esc(period)}}: ${{esc(fmt(v))}}"></div></div>`;
+      `title="${{esc(who)}} · ${{esc(period)}}: ${{esc(fmt(v))}}">${{num}}</div></div>`;
   }};
   const cols = periods.map((p, i) => {{
     const v = values[i];
-    const bars = slot(v, 'main', chCur, p) +
-      (cmp ? slot(cmp[i], 'cmp', finCompareSym, p) : '');
-    const lbl = (v == null || !isFinite(v))
-      ? '<div class="fin-bar-v fin-na">—</div>'
-      : `<div class="fin-bar-v">${{esc(fmt(v))}}</div>`;
-    return `<div class="fin-bar-col">${{lbl}}` +
-      `<div class="fin-bar-track">${{bars}}</div>` +
+    // เทียบอยู่ = ช่องแคบลงครึ่งหนึ่ง ตัวเลขจะล้นออกนอกแท่ง — โหมดนั้นปิดเลขไปเลย
+    // ดูค่าจริงได้จาก tooltip และจากตารางข้างล่างซึ่งมีครบทุกงวดอยู่แล้ว
+    const bars = slot(v, 'main', chCur, p, !cmp) +
+      (cmp ? slot(cmp[i], 'cmp', finCompareSym, p, false) : '');
+    const na = (v == null || !isFinite(v)) ? '<div class="fin-bar-na">—</div>' : '';
+    return `<div class="fin-bar-col">` +
+      `<div class="fin-bar-track">${{bars}}${{na}}</div>` +
       `<div class="fin-bar-lbl">${{esc(p)}}</div></div>`;
   }}).join('');
   // ไม่ใส่ legend ซ้ำทุกการ์ด — สีคู่นี้ใช้เหมือนกันทั้งแดชบอร์ด มี legend รวมอยู่ใต้แถบเครื่องมือ
@@ -3799,6 +3849,102 @@ const finSection = (id, title, note, inner) =>
   `<div class="fin-section-h"><b>${{esc(title)}}</b>` +
   (note ? `<span>${{esc(note)}}</span>` : '') + `</div>${{inner}}</div>`;
 
+// ── บันทึกอ่านงบ ─────────────────────────────────────────
+// อ่านจากตัวเลขที่อยู่ในหน้านี้ล้วนๆ แล้วสรุปเป็นภาษาคน — เป็นการ "ตีความ" ไม่ใช่ "ทำนาย"
+// ไม่มีการเดาราคาในอนาคต ไม่มีคำว่าซื้อ/ขาย/ถือ และไม่แต่งตัวเลขที่ไม่มีในข้อมูลขึ้นมา
+// ส่วน "จับตาดู" คือเงื่อนไขที่ถ้าเปลี่ยน ภาพที่อ่านได้ตรงนี้จะเปลี่ยนตาม ไม่ใช่การพยากรณ์
+function finReadNote(rows){{
+  if (!rows || rows.length < 2) return '';
+  const first = rows[0], last = rows[rows.length - 1], prev = rows[rows.length - 2];
+  const gr = (a, b) => (a != null && b != null && a > 0) ? (b / a - 1) * 100 : null;
+  const sign = v => v >= 0 ? 'up' : 'down';
+  const n1 = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+  const say = [], watch = [];
+
+  // 1. รายได้ — ทิศทางตลอดช่วง เทียบกับงวดล่าสุด
+  const revSpan = gr(first.rev, last.rev), revYoY = gr(prev.rev, last.rev);
+  const spanTxt = `${{rows.length}} reported ${{finSpan === 'annual' ? 'years' : 'quarters'}}`;
+  if (revSpan != null && revYoY != null) {{
+    const dirWord = revSpan > 0 ? 'grown' : 'shrunk';
+    let tail;
+    if (revSpan > 0 && revYoY > 0)
+      tail = revYoY * (rows.length - 1) > revSpan
+        ? 'and the latest period ran ahead of that pace.'
+        : 'though the latest period grew slower than the run of years behind it.';
+    else if (revSpan > 0 && revYoY <= 0)
+      tail = 'but the most recent period broke the trend and fell.';
+    else if (revSpan <= 0 && revYoY > 0)
+      tail = 'with the latest period the first to turn back up.';
+    else tail = 'and the latest period kept falling.';
+    say.push(`Revenue has <b>${{dirWord}} ${{n1(revSpan)}}%</b> across ${{spanTxt}} ` +
+      `<span class="${{sign(revYoY)}}">(${{n1(revYoY)}}% latest)</span> — ${{tail}}`);
+    if (revSpan > 0 && revYoY > 0 && revYoY * (rows.length - 1) < revSpan)
+      watch.push('Whether the slower latest period is a blip or the new pace.');
+    if (revYoY <= 0 && revSpan > 0)
+      watch.push('Whether the topline turns back up, or the latest drop becomes a trend.');
+  }}
+
+  // 2. รายได้โตแล้วกำไรตามไหม — จุดที่บอกคุณภาพของการเติบโตได้ตรงที่สุด
+  if (last.nm != null && first.nm != null) {{
+    const dNm = last.nm - first.nm;
+    const q = (revSpan > 0 && dNm > 0.5) ? 'it keeps more of every unit it sells than it used to, so the growth is being earned rather than bought'
+      : (revSpan > 0 && dNm < -0.5) ? 'it keeps less of every unit sold than it used to, so the growth is costing margin to get'
+      : (revSpan <= 0 && dNm > 0.5) ? 'it runs leaner than it did, so the shrinking topline has not eaten profitability'
+      : (dNm < -0.5) ? 'profitability has thinned alongside the topline'
+      : 'margins are essentially flat across the window';
+    say.push(`Net margin sits at <b>${{last.nm.toFixed(1)}}%</b> ` +
+      `<span class="${{sign(dNm)}}">(${{n1(dNm)}}pp vs ${{periodLabel(first.date, finSpan)}})</span> — ${{q}}.`);
+    if (dNm < -0.5) watch.push('Whether margin compression stops, or keeps eating the topline gains.');
+  }}
+
+  // 3. หนี้กับผลตอบแทน — ดูว่ากำไรที่ได้มาต้องกู้มาเท่าไหร่
+  if (last.de != null) {{
+    const dDe = (first.de != null) ? last.de - first.de : null;
+    const lvl = last.de > 2 ? 'carries heavy leverage'
+      : last.de > 1 ? 'is meaningfully levered'
+      : last.de > 0.4 ? 'carries moderate debt' : 'is lightly levered';
+    let s = `The balance sheet ${{lvl}} at <b>${{last.de.toFixed(2)}}x</b> debt to equity`;
+    if (dDe != null && Math.abs(dDe) > 0.1) {{
+      s += ` <span class="${{sign(-dDe)}}">(${{n1(dDe)}}x since ${{periodLabel(first.date, finSpan)}})</span>`;
+      if (dDe > 0.1) watch.push('Refinancing cost, since the debt load has been rising.');
+    }}
+    if (last.roe != null) s += `, and it returned <b>${{last.roe.toFixed(1)}}%</b> on equity last period`;
+    say.push(s + '.');
+    // ROE สูงลิ่วพร้อมหนี้สูง มักมาจากฐานทุนที่หดเพราะซื้อหุ้นคืน ไม่ใช่กำไรที่ดีขึ้นล้วนๆ
+    if (last.roe != null && last.roe > 50 && last.de > 1)
+      watch.push('How much of that return on equity comes from a shrinking equity base rather than rising profit.');
+  }}
+
+  // 4. ราคาเทียบเส้นค่าเฉลี่ย 200 วัน — ข้อเท็จจริงจากชุดแท่งเทียนเดียวกับที่วาดในกราฟ
+  const daily = (chData && chData.tf && chData.tf['1Y']) || null;
+  if (daily && daily.length >= 200) {{
+    const closes = daily.map(b => b[4]);
+    const ma = closes.slice(-200).reduce((a, b) => a + b, 0) / 200;
+    const px = closes[closes.length - 1];
+    const gap = (px / ma - 1) * 100;
+    const yr = (px / closes[0] - 1) * 100;
+    say.push(`The market has it <b>${{Math.abs(gap).toFixed(1)}}% ${{gap >= 0 ? 'above' : 'below'}}</b> ` +
+      `its 200-day average and <span class="${{sign(yr)}}">${{n1(yr)}}%</span> over the past year — ` +
+      `which says how the price has behaved, not where it goes next.`);
+  }}
+
+  if (!say.length) return '';
+  watch.push('The next results release, which replaces the newest column here.');
+  if (last.rev != null && last.gp == null)
+    watch.push('Banks and insurers report no gross margin, so that part of the read is blank by nature.');
+
+  return `<aside class="fin-read">
+    <div class="fin-read-h">The desk's read · ${{esc(chCur)}}</div>
+    ${{say.map(s => `<p>${{s}}</p>`).join('')}}
+    <div class="fin-read-watch"><span>What would change it</span>
+      <ul>${{watch.slice(0, 3).map(w => `<li>${{esc(w)}}</li>`).join('')}}</ul></div>
+    <p class="fin-read-foot">This is my own reading of the figures on this page — an
+      interpretation, not a forecast and not investment advice. It is generated from the
+      reported numbers alone, so it knows nothing of management, competition or the
+      wider economy. Decide for yourself.</p>
+  </aside>`;
+}}
+
 // แถบ KPI — ตัวเลขงวดล่าสุด + เทียบงวดก่อน + เทียบกับหุ้นที่เลือก (ถ้ามี)
 const FIN_KPI_DEFS = [
   ['rev', 'Revenue'], ['ni', 'Net Income'], ['nm', 'Net Margin'],
@@ -3821,7 +3967,9 @@ function renderFinKpiSection(rows, cmpRows){{
   }}).join('');
   const note = 'latest reported period · ' + period +
     (prev ? ' — change shown vs ' + periodLabel(prev.date, finSpan) : '');
-  return finSection('kpi', 'KEY METRICS', note, `<div class="fin-kpis">${{tiles}}</div>`);
+  const body = `<div class="fin-kpi-wrap"><div class="fin-kpis">${{tiles}}</div>` +
+    finReadNote(rows) + `</div>`;
+  return finSection('kpi', 'KEY METRICS', note, body);
 }}
 
 // กลุ่มแผงกราฟแยกหัวข้อวิเคราะห์ — โตขึ้นแค่ไหน (Growth), กำไรต่อบาทรายได้ (Profitability),
