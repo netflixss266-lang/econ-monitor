@@ -539,6 +539,8 @@ FIN_FULL_DAYS = 1
 # ทั้งหุ้นไทยและหุ้นนอก จึงตั้งไว้ 5 ไม่ใช่ 10 (ตั้งเกินไปก็ไม่มีข้อมูลมาเติมอยู่ดี)
 FIN_YEARS = 5
 FIN_BACKFILL_MAX = 3      # กันลูปไม่รู้จบถ้า Yahoo เปลี่ยนพฤติกรรม
+# ขยับเลขนี้ทุกครั้งที่เปลี่ยนรูปแบบ/ความลึกของข้อมูลงบ เพื่อทิ้ง cache รุ่นเก่าทั้งหมด
+FIN_SCHEMA = 2
 
 # (คีย์สั้นในไฟล์ JSON, ชื่อฟิลด์ที่ Yahoo ใช้, ชื่อที่แสดงผล, หมวด)
 FIN_FIELDS = [
@@ -594,7 +596,9 @@ def fetch_financials():
     """
     idx_path = f"{FIN_DIR}/index.json"
     cached = load_json(idx_path)
-    if cached.get("labels") and cached.get("at"):
+    # ต้องเช็ครุ่นของข้อมูลด้วย ไม่ใช่แค่ "เก่าหรือยัง" — ตอนขยายจาก 4 ปีเป็น 5 ปี
+    # ตัว cache บน GitHub Actions ยังเป็นชุด 4 ปีแต่เวลายังสด เลยถูกใช้ซ้ำจนของใหม่ไม่ขึ้นเว็บ
+    if cached.get("labels") and cached.get("at") and cached.get("v") == FIN_SCHEMA:
         try:
             age_days = (NOW - datetime.fromisoformat(cached["at"])).total_seconds() / 86400
             if 0 <= age_days < FIN_FULL_DAYS:
@@ -659,7 +663,7 @@ def fetch_financials():
             got.add(label)
     print(f"  ✓ งบการเงิน {len(got)}/{len(uni)} สินทรัพย์")
     at = NOW.isoformat()
-    save_json(idx_path, {"at": at, "labels": sorted(got)})
+    save_json(idx_path, {"v": FIN_SCHEMA, "at": at, "labels": sorted(got)})
     return got, at
 
 
