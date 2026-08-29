@@ -32,6 +32,9 @@ MAX_AGE_HOURS = 24
 LIVE_WINDOW_MIN = 90   # ข่าวที่ถือว่า "สด ณ ตอนนี้" ต้องมีเวลาเผยแพร่จริงและใหม่กว่านี้
 REBUILD_MIN = 30       # ต้องตรงกับ cron ใน .github/workflows/update.yml
 CHART_FULL_HOURS = 6   # ดึงแท่งเทียนชุดเต็มทุกกี่ชั่วโมง (รอบอื่นอัปเดตแค่กราฟรายวัน)
+# ขยับเลขนี้ทุกครั้งที่เพิ่ม/เปลี่ยนช่วงเวลาใน CHART_RANGES เพื่อทิ้ง cache รุ่นเก่า —
+# ความสดอย่างเดียวจับไม่ได้ว่า cache "ครบชุดไหม" (ตอนเพิ่ม 10Y เจอปัญหานี้กับงบการเงินมาแล้ว)
+CHART_SCHEMA = 2
 PER_CATEGORY = 18
 PER_ROW = 14          # จำนวนการ์ดต่อแถว (แยกไทย/ต่างประเทศแล้วจึงลดลงจาก PER_CATEGORY)
 CACHE_FILE = "cache.json"
@@ -370,6 +373,9 @@ CHART_RANGES = [          # (ชื่อปุ่ม, range, interval)
     ("1D", "1d", "5m"), ("1M", "1mo", "1d"), ("3M", "3mo", "1d"),
     ("6M", "6mo", "1d"), ("1Y", "1y", "1d"), ("3Y", "3y", "1wk"),
     ("5Y", "5y", "1wk"),
+    # 10 ปีใช้แท่งรายเดือน (≈121 แท่ง) ไม่ใช่รายสัปดาห์ (≈523) — ดูภาพรวมทศวรรษพอ
+    # และไฟล์ไม่บวมขึ้นสี่เท่าใน 258 สินทรัพย์ หุ้นที่เพิ่งเข้าตลาดจะได้สั้นกว่านี้ตามจริง
+    ("10Y", "10y", "1mo"),
 ]
 
 
@@ -475,7 +481,7 @@ def build_charts(markets=None):
     os.makedirs(CHART_DIR, exist_ok=True)
     idx_path = f"{CHART_DIR}/index.json"
     cached = load_json(idx_path)
-    if cached.get("index") and cached.get("at"):
+    if cached.get("index") and cached.get("at") and cached.get("v") == CHART_SCHEMA:
         try:
             age = (NOW - datetime.fromisoformat(cached["at"])).total_seconds() / 3600
             if 0 <= age < CHART_FULL_HOURS:
@@ -523,7 +529,7 @@ def build_charts(markets=None):
     total = sum(len(c) for tfs in frames.values() for c in tfs.values())
     print(f"  ✓ กราฟ {len(index)}/{len(uni)} สินทรัพย์ · {total:,} แท่งเทียน")
     if index:
-        save_json(idx_path, {"at": NOW.isoformat(), "index": index})
+        save_json(idx_path, {"v": CHART_SCHEMA, "at": NOW.isoformat(), "index": index})
     return index
 
 
@@ -2017,6 +2023,27 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .fin-btn svg{{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
   stroke-linecap:round;stroke-linejoin:round}}
 .fin-nav{{flex:none;font-size:1.2rem}}
+/* ── ขยายกราฟเต็มหน้าต่าง — พับรายชื่อหุ้นกับคอลัมน์ข่าวเก็บไว้ ─────
+   ใช้ hidden ผ่าน CSS ไม่ใช่ลบ DOM ทิ้ง กราฟจะได้ไม่ต้องวาดใหม่ตอนกดกลับ */
+.expand-btn{{margin-left:0}}
+.cmodal-box.chart-full .cmodal-pick,
+.cmodal-box.chart-full .cmodal-side,
+.cmodal-box.chart-full .cmodal-tape{{display:none}}
+.cmodal-box.chart-full .cmodal-chart{{padding:12px 18px 10px}}
+.expand-btn.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass)}}
+/* แถบสรุปช่วง 10 ปี โผล่เฉพาะตอนขยายเต็ม */
+.cfull-bar{{display:none;flex-wrap:wrap;gap:22px;padding:10px 18px;
+  border-bottom:1px solid var(--line);background:var(--panel2)}}
+.cmodal-box.chart-full .cfull-bar{{display:flex}}
+.cfull-stat{{display:flex;flex-direction:column;gap:2px}}
+.cfull-stat b{{font-family:'IBM Plex Mono',monospace;font-size:1.02rem;font-weight:700;
+  color:var(--ink);line-height:1.15}}
+.cfull-stat span{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--dim)}}
+.cfull-stat b.up{{color:var(--up)}}
+.cfull-stat b.down{{color:var(--down)}}
+.cfull-note{{margin-left:auto;align-self:center;font-size:.76rem;color:var(--dim);
+  max-width:420px;line-height:1.5}}
 .fin-tabs{{display:flex;gap:4px;flex:none;margin-left:12px}}
 .fin-tab{{padding:9px 16px;border-radius:2px;cursor:pointer;
   font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.08em;
@@ -2082,6 +2109,13 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.15em;
   text-transform:uppercase;color:var(--brass);font-weight:700}}
 .fin-read-h::before{{content:'§';font-size:.9rem;line-height:1}}
+.fin-lang-sw{{display:flex;gap:0;margin-left:auto;border:1px solid var(--line);
+  border-radius:2px;overflow:hidden}}
+.fin-lang{{padding:3px 9px;cursor:pointer;background:transparent;border:0;
+  font-family:'IBM Plex Mono',monospace;font-size:.58rem;letter-spacing:.08em;
+  color:var(--mute)}}
+.fin-lang:hover{{color:var(--ink)}}
+.fin-lang.on{{color:#0A0E1A;background:var(--brass);font-weight:700}}
 .fin-read p{{font-size:.95rem;line-height:1.62;color:var(--ink);margin-bottom:10px}}
 .fin-read p:last-of-type{{margin-bottom:0}}
 .fin-read b{{color:var(--cream);font-weight:700}}
@@ -2796,12 +2830,18 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
       <button class="fin-btn" type="button" id="fin-btn" onclick="openFinancials()" hidden>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M7 19V9M12 19V5M17 19v-7"/></svg>
         FINANCIALS</button>
+      <button class="fin-btn expand-btn" type="button" id="cexpand" onclick="toggleChartFull()"
+              aria-pressed="false" title="Expand the chart to the full window (Esc to exit)">
+        <svg viewBox="0 0 24 24" aria-hidden="true" id="cexpand-ic">
+          <path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5"/></svg>
+        <span id="cexpand-t">FULL VIEW</span></button>
     </div>
 
     <div class="tickers cmodal-tape">
       {ticker_row("th", "THAI")}
       {ticker_row("intl", "GLOBAL")}
     </div>
+    <div class="cfull-bar" id="cfull-bar"></div>
     <div class="cmodal-body">
       <!-- แถบเครื่องมือเทคนิค ยื่นออกมาที่ขอบซ้ายสุดของหน้าต่าง (ก่อนรายชื่อหุ้น) -->
       <div class="crail" id="crail">
@@ -3037,7 +3077,7 @@ addEventListener('keydown', ev => {{
 
 // ── กราฟแท่งเทียน ────────────────────────────────────────
 const CHARTS = window.__CHARTS__ || {{}};
-const CH_TF = ['1D','1M','3M','6M','1Y','3Y','5Y'];
+const CH_TF = ['1D','1M','3M','6M','1Y','3Y','5Y','10Y'];
 const LOGOS = window.__LOGOS__ || {{}};
 
 // อักษรย่ออยู่ข้างหลังเสมอ ถ้าโลโก้โหลดไม่ขึ้นก็ยังเห็นตัวย่อ
@@ -3376,6 +3416,69 @@ function pickType(t){{
   renderChart();
 }}
 
+// ── ขยายกราฟเต็มหน้าต่าง (กดอีกทีหรือ Esc เพื่อย่อกลับ) ──────────
+// ตอนขยายจะเด้งไปช่วง 10 ปีให้เลย เพราะจุดประสงค์คือ "ดูฉบับเต็ม"
+// แต่ถ้าผู้ใช้เลือกช่วงอื่นเองอยู่แล้วก็เคารพของเดิม ไม่ไปเปลี่ยนให้
+let chFullPrevTf = null;
+function chartFullOpen(){{
+  return document.querySelector('#cmodal .cmodal-box').classList.contains('chart-full');
+}}
+function toggleChartFull(force){{
+  const box = document.querySelector('#cmodal .cmodal-box');
+  const want = (force === undefined) ? !box.classList.contains('chart-full') : !!force;
+  box.classList.toggle('chart-full', want);
+  const btn = document.getElementById('cexpand');
+  btn.classList.toggle('on', want);
+  btn.setAttribute('aria-pressed', want ? 'true' : 'false');
+  document.getElementById('cexpand-t').textContent = want ? 'EXIT FULL VIEW' : 'FULL VIEW';
+  document.getElementById('cexpand-ic').innerHTML = want
+    ? '<path d="M9 4v5H4M15 20v-5h5M20 9h-5V4M4 15h5v5"/>'
+    : '<path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5"/>';
+  if (want) {{
+    chFullPrevTf = chTf;
+    if (chData && chData.tf && chData.tf['10Y'] && chData.tf['10Y'].length) pickTf('10Y');
+  }} else if (chFullPrevTf) {{
+    pickTf(chFullPrevTf);
+    chFullPrevTf = null;
+  }}
+  renderFullBar();
+  renderChart();
+}}
+
+// แถบสรุปช่วงยาว — คำนวณจากแท่งที่มีจริงในชุด 10 ปี ถ้าหุ้นเพิ่งเข้าตลาดก็บอกตามจริงว่าสั้นกว่า
+function renderFullBar(){{
+  const bar = document.getElementById('cfull-bar');
+  if (!bar) return;
+  const rows = (chData && chData.tf && chData.tf['10Y']) || null;
+  if (!rows || rows.length < 2) {{ bar.innerHTML = ''; return; }}
+  const closes = rows.map(r => r[4]).filter(v => v != null && isFinite(v));
+  if (closes.length < 2) {{ bar.innerHTML = ''; return; }}
+  const first = closes[0], last = closes[closes.length - 1];
+  const hi = Math.max(...rows.map(r => r[2]).filter(isFinite));
+  const lo = Math.min(...rows.map(r => r[3]).filter(isFinite));
+  const spanYrs = (rows[rows.length - 1][0] - rows[0][0]) / 31557600;
+  const chg = (last / first - 1) * 100;
+  const cagr = spanYrs >= 1 && first > 0 && last > 0
+    ? (Math.pow(last / first, 1 / spanYrs) - 1) * 100 : null;
+  const fmtP = v => v >= 1000 ? v.toFixed(0) : v.toFixed(2);
+  const cls = v => v >= 0 ? 'up' : 'down';
+  const sgn = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  // สองรูป: "10-year change" (ขยายคำนาม) กับ "10 years of monthly bars" (เป็นคำนามเอง)
+  const yrTxt = spanYrs >= 9.5 ? '10-year' : spanYrs.toFixed(1) + '-year';
+  const yrNoun = spanYrs >= 9.5 ? '10 years' : spanYrs.toFixed(1) + ' years';
+  bar.innerHTML =
+    `<div class="cfull-stat"><span>${{esc(yrTxt)}} change</span>` +
+      `<b class="${{cls(chg)}}">${{sgn(chg)}}</b></div>` +
+    (cagr != null ? `<div class="cfull-stat"><span>annualised</span>` +
+      `<b class="${{cls(cagr)}}">${{sgn(cagr)}}</b></div>` : '') +
+    `<div class="cfull-stat"><span>period high</span><b>${{fmtP(hi)}}</b></div>` +
+    `<div class="cfull-stat"><span>period low</span><b>${{fmtP(lo)}}</b></div>` +
+    `<div class="cfull-stat"><span>monthly bars</span><b>${{rows.length}}</b></div>` +
+    `<div class="cfull-note">Longest price history this source carries for ` +
+      `${{esc(chCur || '')}} — ${{esc(yrNoun)}} of monthly bars. Financial statements ` +
+      `only go back 5 years, so the two spans differ.</div>`;
+}}
+
 // ความชันเฉลี่ยของชุดตัวเลข (least squares) ใช้บอกทิศทางเทรนด์
 function linSlope(ys){{
   const n = ys.length;
@@ -3540,6 +3643,7 @@ function openCharts(){{
 }}
 
 function closeCharts(){{
+  if (chartFullOpen()) toggleChartFull(false);   // เปิดครั้งหน้าจะได้ไม่ค้างสภาพขยาย
   document.getElementById('cmodal').hidden = true;
   document.getElementById('finmodal').hidden = true;
   document.body.style.overflow = '';
@@ -3578,6 +3682,7 @@ async function pickChart(label){{
   note.textContent = chData.note || '';
   note.hidden = !chData.note;
   document.getElementById('fin-btn').hidden = !CHARTS[label].f;
+  renderFullBar();               // เปลี่ยนหุ้นแล้วสถิติ 10 ปีต้องเปลี่ยนตาม
   renderChart();
 }}
 
@@ -3853,95 +3958,173 @@ const finSection = (id, title, note, inner) =>
 // อ่านจากตัวเลขที่อยู่ในหน้านี้ล้วนๆ แล้วสรุปเป็นภาษาคน — เป็นการ "ตีความ" ไม่ใช่ "ทำนาย"
 // ไม่มีการเดาราคาในอนาคต ไม่มีคำว่าซื้อ/ขาย/ถือ และไม่แต่งตัวเลขที่ไม่มีในข้อมูลขึ้นมา
 // ส่วน "จับตาดู" คือเงื่อนไขที่ถ้าเปลี่ยน ภาพที่อ่านได้ตรงนี้จะเปลี่ยนตาม ไม่ใช่การพยากรณ์
-function finReadNote(rows){{
-  if (!rows || rows.length < 2) return '';
+// ── บันทึกอ่านงบ (ไทย/อังกฤษ) ────────────────────────────
+// แยกเป็นสองขั้น: หาข้อเท็จจริงจากตัวเลขก่อน แล้วค่อยเรียบเรียงเป็นประโยคตามภาษาที่เลือก
+// ทำแบบนี้ตรรกะมีชุดเดียว สองภาษาจึงพูดตรงกันเสมอ ไม่มีทางหลุดไปคนละเรื่อง
+// อ่านจากตัวเลขในหน้านี้ล้วนๆ เป็นการ "ตีความ" ไม่ใช่ "ทำนายราคา" และไม่มีคำแนะนำซื้อขาย
+let finReadLang = 'th';
+try {{ finReadLang = localStorage.getItem('finReadLang') || 'th'; }} catch(e) {{}}
+
+function setFinReadLang(l){{
+  finReadLang = l;
+  try {{ localStorage.setItem('finReadLang', l); }} catch(e) {{}}
+  renderFinTable();
+}}
+
+function finReadFacts(rows){{
+  if (!rows || rows.length < 2) return null;
   const first = rows[0], last = rows[rows.length - 1], prev = rows[rows.length - 2];
   const gr = (a, b) => (a != null && b != null && a > 0) ? (b / a - 1) * 100 : null;
-  const sign = v => v >= 0 ? 'up' : 'down';
-  const n1 = v => (v >= 0 ? '+' : '') + v.toFixed(1);
-  const say = [], watch = [];
-
-  // 1. รายได้ — ทิศทางตลอดช่วง เทียบกับงวดล่าสุด
-  const revSpan = gr(first.rev, last.rev), revYoY = gr(prev.rev, last.rev);
-  const spanTxt = `${{rows.length}} reported ${{finSpan === 'annual' ? 'years' : 'quarters'}}`;
-  if (revSpan != null && revYoY != null) {{
-    const dirWord = revSpan > 0 ? 'grown' : 'shrunk';
-    let tail;
-    if (revSpan > 0 && revYoY > 0)
-      tail = revYoY * (rows.length - 1) > revSpan
-        ? 'and the latest period ran ahead of that pace.'
-        : 'though the latest period grew slower than the run of years behind it.';
-    else if (revSpan > 0 && revYoY <= 0)
-      tail = 'but the most recent period broke the trend and fell.';
-    else if (revSpan <= 0 && revYoY > 0)
-      tail = 'with the latest period the first to turn back up.';
-    else tail = 'and the latest period kept falling.';
-    say.push(`Revenue has <b>${{dirWord}} ${{n1(revSpan)}}%</b> across ${{spanTxt}} ` +
-      `<span class="${{sign(revYoY)}}">(${{n1(revYoY)}}% latest)</span> — ${{tail}}`);
-    if (revSpan > 0 && revYoY > 0 && revYoY * (rows.length - 1) < revSpan)
-      watch.push('Whether the slower latest period is a blip or the new pace.');
-    if (revYoY <= 0 && revSpan > 0)
-      watch.push('Whether the topline turns back up, or the latest drop becomes a trend.');
-  }}
-
-  // 2. รายได้โตแล้วกำไรตามไหม — จุดที่บอกคุณภาพของการเติบโตได้ตรงที่สุด
-  if (last.nm != null && first.nm != null) {{
-    const dNm = last.nm - first.nm;
-    const q = (revSpan > 0 && dNm > 0.5) ? 'it keeps more of every unit it sells than it used to, so the growth is being earned rather than bought'
-      : (revSpan > 0 && dNm < -0.5) ? 'it keeps less of every unit sold than it used to, so the growth is costing margin to get'
-      : (revSpan <= 0 && dNm > 0.5) ? 'it runs leaner than it did, so the shrinking topline has not eaten profitability'
-      : (dNm < -0.5) ? 'profitability has thinned alongside the topline'
-      : 'margins are essentially flat across the window';
-    say.push(`Net margin sits at <b>${{last.nm.toFixed(1)}}%</b> ` +
-      `<span class="${{sign(dNm)}}">(${{n1(dNm)}}pp vs ${{periodLabel(first.date, finSpan)}})</span> — ${{q}}.`);
-    if (dNm < -0.5) watch.push('Whether margin compression stops, or keeps eating the topline gains.');
-  }}
-
-  // 3. หนี้กับผลตอบแทน — ดูว่ากำไรที่ได้มาต้องกู้มาเท่าไหร่
-  if (last.de != null) {{
-    const dDe = (first.de != null) ? last.de - first.de : null;
-    const lvl = last.de > 2 ? 'carries heavy leverage'
-      : last.de > 1 ? 'is meaningfully levered'
-      : last.de > 0.4 ? 'carries moderate debt' : 'is lightly levered';
-    let s = `The balance sheet ${{lvl}} at <b>${{last.de.toFixed(2)}}x</b> debt to equity`;
-    if (dDe != null && Math.abs(dDe) > 0.1) {{
-      s += ` <span class="${{sign(-dDe)}}">(${{n1(dDe)}}x since ${{periodLabel(first.date, finSpan)}})</span>`;
-      if (dDe > 0.1) watch.push('Refinancing cost, since the debt load has been rising.');
-    }}
-    if (last.roe != null) s += `, and it returned <b>${{last.roe.toFixed(1)}}%</b> on equity last period`;
-    say.push(s + '.');
-    // ROE สูงลิ่วพร้อมหนี้สูง มักมาจากฐานทุนที่หดเพราะซื้อหุ้นคืน ไม่ใช่กำไรที่ดีขึ้นล้วนๆ
-    if (last.roe != null && last.roe > 50 && last.de > 1)
-      watch.push('How much of that return on equity comes from a shrinking equity base rather than rising profit.');
-  }}
-
-  // 4. ราคาเทียบเส้นค่าเฉลี่ย 200 วัน — ข้อเท็จจริงจากชุดแท่งเทียนเดียวกับที่วาดในกราฟ
+  const f = {{
+    n: rows.length, span: finSpan,
+    firstLbl: periodLabel(first.date, finSpan), lastLbl: periodLabel(last.date, finSpan),
+    revSpan: gr(first.rev, last.rev), revYoY: gr(prev.rev, last.rev),
+    nm: last.nm, dNm: (last.nm != null && first.nm != null) ? last.nm - first.nm : null,
+    de: last.de, dDe: (last.de != null && first.de != null) ? last.de - first.de : null,
+    roe: last.roe, noGross: (last.rev != null && last.gp == null),
+  }};
+  f.decel = (f.revSpan > 0 && f.revYoY > 0 && f.revYoY * (f.n - 1) < f.revSpan);
+  f.accel = (f.revSpan > 0 && f.revYoY > 0 && !f.decel);
   const daily = (chData && chData.tf && chData.tf['1Y']) || null;
   if (daily && daily.length >= 200) {{
-    const closes = daily.map(b => b[4]);
-    const ma = closes.slice(-200).reduce((a, b) => a + b, 0) / 200;
-    const px = closes[closes.length - 1];
-    const gap = (px / ma - 1) * 100;
-    const yr = (px / closes[0] - 1) * 100;
-    say.push(`The market has it <b>${{Math.abs(gap).toFixed(1)}}% ${{gap >= 0 ? 'above' : 'below'}}</b> ` +
-      `its 200-day average and <span class="${{sign(yr)}}">${{n1(yr)}}%</span> over the past year — ` +
-      `which says how the price has behaved, not where it goes next.`);
+    const c = daily.map(b => b[4]);
+    const ma = c.slice(-200).reduce((a, b) => a + b, 0) / 200;
+    f.px = c[c.length - 1];
+    f.maGap = (f.px / ma - 1) * 100;
+    f.yr = (f.px / c[0] - 1) * 100;
   }}
+  return f;
+}}
 
+const FIN_READ_T = {{
+  th: {{
+    head: 'บทวิเคราะห์', watch: 'สิ่งที่จะทำให้ภาพเปลี่ยน',
+    yrs: n => `${{n}} ${{finSpan === 'annual' ? 'ปี' : 'ไตรมาส'}}ล่าสุด`,
+    rev: f => {{
+      const w = f.revSpan > 0 ? 'โต' : 'หด';
+      const tail = f.accel ? 'และงวดล่าสุดยังไปได้เร็วกว่าค่าเฉลี่ยที่ผ่านมา'
+        : f.decel ? 'แต่งวดล่าสุดโตช้าลงกว่าจังหวะเดิม'
+        : (f.revSpan > 0) ? 'แต่งวดล่าสุดกลับพลิกมาติดลบ'
+        : (f.revYoY > 0) ? 'โดยงวดล่าสุดเริ่มกลับมาเป็นบวกเป็นครั้งแรก'
+        : 'และงวดล่าสุดก็ยังลดลงต่อ';
+      return `รายได้<b>${{w}} ${{f.n1(f.revSpan)}}%</b> ตลอด ${{f.yrs}} ` +
+        `<span class="${{f.sg(f.revYoY)}}">(งวดล่าสุด ${{f.n1(f.revYoY)}}%)</span> — ${{tail}}`;
+    }},
+    mg: f => {{
+      const q = (f.revSpan > 0 && f.dNm > 0.5) ? 'เก็บกำไรได้มากขึ้นต่อยอดขายหนึ่งหน่วย แปลว่าโตแล้วกำไรตามจริง ไม่ได้ใช้ส่วนต่างกำไรแลกยอด'
+        : (f.revSpan > 0 && f.dNm < -0.5) ? 'แต่เก็บกำไรได้น้อยลงต่อยอดขายหนึ่งหน่วย แปลว่ายอดที่โตมาต้องแลกด้วยส่วนต่างกำไร'
+        : (f.revSpan <= 0 && f.dNm > 0.5) ? 'แต่คุมต้นทุนได้ดีขึ้น ยอดที่หดจึงยังไม่กินความสามารถทำกำไร'
+        : (f.dNm < -0.5) ? 'และความสามารถทำกำไรก็บางลงไปพร้อมกับยอดขาย'
+        : 'โดยส่วนต่างกำไรแทบไม่ขยับตลอดช่วงนี้';
+      return `อัตรากำไรสุทธิอยู่ที่ <b>${{f.nm.toFixed(1)}}%</b> ` +
+        `<span class="${{f.sg(f.dNm)}}">(${{f.n1(f.dNm)}}pp เทียบ ${{f.firstLbl}})</span> — ${{q}}`;
+    }},
+    bs: f => {{
+      const lvl = f.de > 2 ? 'ใช้หนี้หนัก' : f.de > 1 ? 'มีหนี้ค่อนข้างมาก'
+        : f.de > 0.4 ? 'มีหนี้ระดับกลางๆ' : 'แทบไม่ใช้หนี้';
+      let s = `ฐานะการเงิน${{lvl}} หนี้สินต่อทุน <b>${{f.de.toFixed(2)}} เท่า</b>`;
+      if (f.dDe != null && Math.abs(f.dDe) > 0.1)
+        s += ` <span class="${{f.sg(-f.dDe)}}">(${{f.n1(f.dDe)}} เท่า จาก ${{f.firstLbl}})</span>`;
+      if (f.roe != null) s += ` และให้ผลตอบแทนต่อส่วนของผู้ถือหุ้น <b>${{f.roe.toFixed(1)}}%</b> ในงวดล่าสุด`;
+      return s;
+    }},
+    px: f => `ราคาในตลาดอยู่<b>${{f.maGap >= 0 ? 'เหนือ' : 'ใต้'}}เส้นค่าเฉลี่ย 200 วัน ` +
+      `${{Math.abs(f.maGap).toFixed(1)}}%</b> และรอบปีที่ผ่านมา ` +
+      `<span class="${{f.sg(f.yr)}}">${{f.n1(f.yr)}}%</span> — ` +
+      `อันนี้บอกว่าราคาที่ผ่านมาเป็นยังไง ไม่ได้บอกว่าต่อไปจะไปทางไหน`,
+    wDecel: 'งวดที่ช้าลงเป็นแค่สะดุดชั่วคราว หรือกลายเป็นจังหวะใหม่',
+    wFall: 'รายได้จะกลับมาโตได้ไหม หรืองวดที่ตกกลายเป็นแนวโน้ม',
+    wMargin: 'ส่วนต่างกำไรจะหยุดหดได้ไหม หรือบางลงไปอีก',
+    wDebt: 'ต้นทุนการกู้ยืมรอบใหม่ เพราะหนี้เพิ่มขึ้นต่อเนื่อง',
+    wRoe: 'ผลตอบแทนต่อทุนที่สูงนั้น มาจากกำไรที่ดีขึ้นจริง หรือมาจากฐานทุนที่เล็กลง',
+    wNext: 'งบงวดถัดไป ซึ่งจะเข้ามาแทนคอลัมน์ใหม่สุดในตารางนี้',
+    wBank: 'ธนาคารและประกันไม่ได้รายงานกำไรขั้นต้น ส่วนนั้นจึงว่างตามธรรมชาติของธุรกิจ',
+    foot: 'นี่คือการอ่านตัวเลขในหน้านี้ของผมเอง เป็นการตีความ ไม่ใช่การพยากรณ์ และไม่ใช่คำแนะนำการลงทุน ' +
+      'คำนวณจากตัวเลขที่รายงานล้วนๆ จึงไม่รู้เรื่องผู้บริหาร คู่แข่ง หรือภาวะเศรษฐกิจโดยรวม โปรดตัดสินใจด้วยตัวเอง',
+  }},
+  en: {{
+    head: "The desk's read", watch: 'What would change it',
+    yrs: n => `${{n}} reported ${{finSpan === 'annual' ? 'years' : 'quarters'}}`,
+    rev: f => {{
+      const w = f.revSpan > 0 ? 'grown' : 'shrunk';
+      const tail = f.accel ? 'and the latest period ran ahead of that pace.'
+        : f.decel ? 'though the latest period grew slower than the run behind it.'
+        : (f.revSpan > 0) ? 'but the most recent period broke the trend and fell.'
+        : (f.revYoY > 0) ? 'with the latest period the first to turn back up.'
+        : 'and the latest period kept falling.';
+      return `Revenue has <b>${{w}} ${{f.n1(f.revSpan)}}%</b> across ${{f.yrs}} ` +
+        `<span class="${{f.sg(f.revYoY)}}">(${{f.n1(f.revYoY)}}% latest)</span> — ${{tail}}`;
+    }},
+    mg: f => {{
+      const q = (f.revSpan > 0 && f.dNm > 0.5) ? 'it keeps more of every unit it sells than it used to, so the growth is being earned rather than bought'
+        : (f.revSpan > 0 && f.dNm < -0.5) ? 'it keeps less of every unit sold than it used to, so the growth is costing margin to get'
+        : (f.revSpan <= 0 && f.dNm > 0.5) ? 'it runs leaner than it did, so the shrinking topline has not eaten profitability'
+        : (f.dNm < -0.5) ? 'profitability has thinned alongside the topline'
+        : 'margins are essentially flat across the window';
+      return `Net margin sits at <b>${{f.nm.toFixed(1)}}%</b> ` +
+        `<span class="${{f.sg(f.dNm)}}">(${{f.n1(f.dNm)}}pp vs ${{f.firstLbl}})</span> — ${{q}}.`;
+    }},
+    bs: f => {{
+      const lvl = f.de > 2 ? 'carries heavy leverage' : f.de > 1 ? 'is meaningfully levered'
+        : f.de > 0.4 ? 'carries moderate debt' : 'is lightly levered';
+      let s = `The balance sheet ${{lvl}} at <b>${{f.de.toFixed(2)}}x</b> debt to equity`;
+      if (f.dDe != null && Math.abs(f.dDe) > 0.1)
+        s += ` <span class="${{f.sg(-f.dDe)}}">(${{f.n1(f.dDe)}}x since ${{f.firstLbl}})</span>`;
+      if (f.roe != null) s += `, and it returned <b>${{f.roe.toFixed(1)}}%</b> on equity last period`;
+      return s + '.';
+    }},
+    px: f => `The market has it <b>${{Math.abs(f.maGap).toFixed(1)}}% ` +
+      `${{f.maGap >= 0 ? 'above' : 'below'}}</b> its 200-day average and ` +
+      `<span class="${{f.sg(f.yr)}}">${{f.n1(f.yr)}}%</span> over the past year — ` +
+      `which says how the price has behaved, not where it goes next.`,
+    wDecel: 'Whether the slower latest period is a blip or the new pace.',
+    wFall: 'Whether the topline turns back up, or the latest drop becomes a trend.',
+    wMargin: 'Whether margin compression stops, or thins further.',
+    wDebt: 'Refinancing cost, since the debt load has been rising.',
+    wRoe: 'How much of that return on equity comes from a shrinking equity base rather than rising profit.',
+    wNext: 'The next results release, which replaces the newest column here.',
+    wBank: 'Banks and insurers report no gross margin, so that part of the read is blank by nature.',
+    foot: 'This is my own reading of the figures on this page — an interpretation, not a forecast ' +
+      'and not investment advice. It is generated from the reported numbers alone, so it knows ' +
+      'nothing of management, competition or the wider economy. Decide for yourself.',
+  }},
+}};
+
+function finReadNote(rows){{
+  const f = finReadFacts(rows);
+  if (!f) return '';
+  const L = FIN_READ_T[finReadLang] || FIN_READ_T.en;
+  f.n1 = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+  f.sg = v => v >= 0 ? 'up' : 'down';
+  f.yrs = L.yrs(f.n);
+  const say = [], watch = [];
+  if (f.revSpan != null && f.revYoY != null) {{
+    say.push(L.rev(f));
+    if (f.decel) watch.push(L.wDecel);
+    if (f.revYoY <= 0 && f.revSpan > 0) watch.push(L.wFall);
+  }}
+  if (f.nm != null && f.dNm != null) {{
+    say.push(L.mg(f));
+    if (f.dNm < -0.5) watch.push(L.wMargin);
+  }}
+  if (f.de != null) {{
+    say.push(L.bs(f));
+    if (f.dDe != null && f.dDe > 0.1) watch.push(L.wDebt);
+    if (f.roe != null && f.roe > 50 && f.de > 1) watch.push(L.wRoe);
+  }}
+  if (f.maGap != null) say.push(L.px(f));
   if (!say.length) return '';
-  watch.push('The next results release, which replaces the newest column here.');
-  if (last.rev != null && last.gp == null)
-    watch.push('Banks and insurers report no gross margin, so that part of the read is blank by nature.');
-
+  watch.push(L.wNext);
+  if (f.noGross) watch.push(L.wBank);
+  const btn = (l, t) => `<button type="button" class="fin-lang${{finReadLang === l ? ' on' : ''}}" ` +
+    `onclick="setFinReadLang('${{l}}')">${{t}}</button>`;
   return `<aside class="fin-read">
-    <div class="fin-read-h">The desk's read · ${{esc(chCur)}}</div>
+    <div class="fin-read-h">${{esc(L.head)}} · ${{esc(chCur)}}
+      <span class="fin-lang-sw">${{btn('th', 'ไทย')}}${{btn('en', 'EN')}}</span></div>
     ${{say.map(s => `<p>${{s}}</p>`).join('')}}
-    <div class="fin-read-watch"><span>What would change it</span>
+    <div class="fin-read-watch"><span>${{esc(L.watch)}}</span>
       <ul>${{watch.slice(0, 3).map(w => `<li>${{esc(w)}}</li>`).join('')}}</ul></div>
-    <p class="fin-read-foot">This is my own reading of the figures on this page — an
-      interpretation, not a forecast and not investment advice. It is generated from the
-      reported numbers alone, so it knows nothing of management, competition or the
-      wider economy. Decide for yourself.</p>
+    <p class="fin-read-foot">${{esc(L.foot)}}</p>
   </aside>`;
 }}
 
@@ -4349,7 +4532,7 @@ function renderChart(){{
     return chTf === '1D'
       ? dt.toLocaleTimeString('th-TH', {{hour: '2-digit', minute: '2-digit'}})
       : dt.toLocaleDateString('th-TH', {{day: '2-digit', month: 'short',
-          year: ['3Y', '5Y', '1Y'].includes(chTf) ? '2-digit' : undefined}});
+          year: ['1Y', '3Y', '5Y', '10Y'].includes(chTf) ? '2-digit' : undefined}});
   }};
   const fmtP = n => d3.format(Math.abs(n) >= 1000 ? ',.0f' : ',.2f')(n);
   const fmtV = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B'
@@ -4723,6 +4906,10 @@ addEventListener('keydown', ev => {{
   if (finOpen && ev.key === 'ArrowRight') {{ finNav(1); return; }}
   if (ev.key !== 'Escape') return;
   if (finOpen) {{ closeFinancials(); return; }}   // ปิดชั้นงบการเงินก่อน ไม่ปิดกราฟข้างใต้ไปด้วย
+  // ย่อกราฟกลับก่อน ยังไม่ปิดหน้าต่าง — กด Esc ครั้งเดียวไม่ควรหลุดออกไปเลยสองชั้น
+  if (!document.getElementById('cmodal').hidden && chartFullOpen()) {{
+    toggleChartFull(false); return;
+  }}
   const lm = document.getElementById('lmodal');
   if (!document.getElementById('cmodal').hidden) closeCharts();
   if (lm && !lm.hidden) closeLive();
