@@ -2154,6 +2154,59 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .fin-chart{{background:var(--panel2);border:1px solid var(--line);border-radius:2px;
   padding:15px 17px 14px;min-width:0;container-type:inline-size}}
 .fin-chart-wide{{grid-column:1/-1}}
+/* การ์ดที่กดเปิดฉบับเต็มได้ — ยกขึ้นตอนชี้ อย่างการ์ดหนังที่กดแล้วขยาย */
+.fin-chart.tap{{cursor:pointer;position:relative;
+  transition:transform .18s,border-color .18s,box-shadow .18s}}
+.fin-chart.tap:hover,.fin-chart.tap:focus-visible{{transform:translateY(-2px);
+  border-color:var(--brass);box-shadow:0 12px 30px rgba(0,0,0,.45);outline:none}}
+.fin-chart-more{{position:absolute;right:12px;bottom:10px;display:flex;align-items:center;
+  gap:5px;opacity:0;transition:opacity .18s;
+  font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--brass);pointer-events:none}}
+.fin-chart.tap:hover .fin-chart-more,
+.fin-chart.tap:focus-visible .fin-chart-more{{opacity:1}}
+
+/* ── ฉบับเต็มรายหมวด ─────────────────────────────────────── */
+.met-body{{flex:1;min-height:0;overflow-y:auto;padding:0 clamp(16px,4vw,48px) 34px}}
+.met-inner{{max-width:1460px;margin:0 auto}}
+.met-stats{{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;
+  padding:20px 0 24px}}
+.met-stat{{background:var(--panel2);border:1px solid var(--line);border-left:2px solid var(--brass);
+  border-radius:2px;padding:13px 15px}}
+.met-stat span{{display:block;margin-bottom:7px;font-family:'IBM Plex Mono',monospace;
+  font-size:.62rem;letter-spacing:.11em;text-transform:uppercase;color:var(--mute)}}
+.met-stat b{{font-family:'IBM Plex Mono',monospace;font-size:1.32rem;font-weight:700;
+  color:var(--ink);line-height:1.15}}
+.met-stat b.up{{color:var(--up)}}
+.met-stat b.down{{color:var(--down)}}
+.met-stat i{{display:block;margin-top:4px;font-style:normal;font-size:.7rem;color:var(--dim)}}
+/* กราฟในฉบับเต็มสูงกว่าปกติ ให้เห็นความต่างของแต่ละงวดชัดขึ้น */
+.met-body .fin-chart-plot{{height:280px}}
+.met-body .fin-bar-track{{height:250px}}
+.met-body .fin-chart{{margin-bottom:22px}}
+.met-empty{{padding:22px 0;color:var(--dim);font-size:.9rem}}
+.met-tbl{{width:100%;border-collapse:separate;border-spacing:0;margin-bottom:26px;
+  font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;
+  border:1px solid var(--line);border-radius:2px;overflow:hidden}}
+.met-tbl th{{padding:11px 16px;text-align:right;background:var(--panel3);color:var(--mute);
+  font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;
+  border-bottom:1px solid var(--line2)}}
+.met-tbl th:first-child,.met-tbl td:first-child{{text-align:left}}
+.met-tbl td{{padding:11px 16px;text-align:right;border-bottom:1px solid var(--line);
+  font-size:.95rem;color:var(--ink)}}
+.met-tbl tbody tr:last-child td{{border-bottom:0}}
+.met-tbl tbody tr:hover td{{background:var(--hover)}}
+.met-tbl .met-na{{color:var(--dim)}}
+.met-tbl .up{{color:var(--up)}}
+.met-tbl .down{{color:var(--down)}}
+.met-sub-h{{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  padding-bottom:9px;border-bottom:2px solid var(--brass);margin:6px 0 18px}}
+.met-sub-h b{{font-family:'Playfair Display',Georgia,'Noto Serif Thai',serif;
+  font-size:1.28rem;letter-spacing:.04em;text-transform:uppercase;color:var(--cream)}}
+.met-sub-h span{{font-size:.84rem;color:var(--mute)}}
+.met-note{{padding:14px 16px;margin-bottom:8px;border-radius:2px;background:var(--panel2);
+  border:1px solid var(--line);border-left:2px solid var(--econ);
+  font-size:.86rem;line-height:1.6;color:var(--mute)}}
 /* หัวการ์ดกราฟ — ชื่อเรื่องเด่นชัด + บอกหน่วยไว้ใต้ชื่อ จะได้ไม่ต้องเดาว่าตัวเลขคืออะไร */
 .fin-chart-h{{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
   padding-bottom:10px;margin-bottom:14px;border-bottom:1px solid var(--line2)}}
@@ -2938,6 +2991,26 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
   </div>
 </div>
 
+<!-- ฉบับเต็มของแต่ละหมวดงบ — กดที่การ์ดในหน้างบการเงินเพื่อเปิด -->
+<div id="metmodal" class="tmodal" hidden>
+  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="Full metric detail">
+    <div class="cmodal-head">
+      <button type="button" class="backbtn" onclick="closeMetric()" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <button class="row-nav fin-nav" type="button" onclick="metNav(-1)"
+              aria-label="Previous metric">‹</button>
+      <div class="cmodal-title">
+        <h3 id="met-name">—</h3>
+        <div class="cmodal-price"><span id="met-sub"></span></div>
+      </div>
+      <button class="row-nav fin-nav" type="button" onclick="metNav(1)"
+              aria-label="Next metric">›</button>
+    </div>
+    <div class="met-body" id="met-body"></div>
+  </div>
+</div>
+
 <div class="navbar">
   <button class="burger" type="button" onclick="toggleNav()" aria-expanded="false"
           aria-controls="navpanel" aria-label="Menu">
@@ -3686,6 +3759,143 @@ async function pickChart(label){{
   renderChart();
 }}
 
+// ── ฉบับเต็มรายหมวดงบ (กดที่การ์ดกราฟในหน้างบการเงิน) ──────
+// ชื่อ/หน่วย/รูปแบบตัวเลขของแต่ละหมวด ใช้ร่วมกันทั้งการ์ดเล็กและหน้าฉบับเต็ม
+const FIN_METRIC_META = {{
+  rev:    {{t: 'Revenue',            th: 'รายได้',                u: 'reported currency'}},
+  ni:     {{t: 'Net Income',         th: 'กำไรสุทธิ',              u: 'reported currency'}},
+  nm:     {{t: 'Net Margin',         th: 'อัตรากำไรสุทธิ',          u: 'percent of revenue', f: v => v.toFixed(1) + '%'}},
+  roa:    {{t: 'Return on Assets',   th: 'ผลตอบแทนต่อสินทรัพย์',    u: 'percent return',     f: v => v.toFixed(1) + '%'}},
+  assets: {{t: 'Total Assets',       th: 'สินทรัพย์รวม',            u: 'reported currency'}},
+  liab:   {{t: 'Total Liabilities',  th: 'หนี้สินรวม',              u: 'reported currency'}},
+  equity: {{t: 'Total Equity',       th: 'ส่วนของผู้ถือหุ้น',        u: 'reported currency'}},
+  cash:   {{t: 'Cash & Equivalents', th: 'เงินสดและรายการเทียบเท่า', u: 'reported currency'}},
+  de:     {{t: 'Debt / Equity',      th: 'หนี้สินต่อทุน',           u: 'times equity',       f: v => v.toFixed(2) + 'x'}},
+  roe:    {{t: 'Return on Equity',   th: 'ผลตอบแทนต่อส่วนผู้ถือหุ้น', u: 'percent return',    f: v => v.toFixed(1) + '%'}},
+  debt:   {{t: 'Total Debt',         th: 'หนี้สินรวมที่มีดอกเบี้ย',   u: 'reported currency'}},
+  gp:     {{t: 'Gross Profit',       th: 'กำไรขั้นต้น',             u: 'reported currency'}},
+  opinc:  {{t: 'Operating Income',   th: 'กำไรจากการดำเนินงาน',      u: 'reported currency'}},
+  eps:    {{t: 'Diluted EPS',        th: 'กำไรต่อหุ้นปรับลด',        u: 'per share',          f: v => (v < 0 ? '-' : '') + '$' + Math.abs(v).toFixed(2)}},
+}};
+// ลำดับของลูกศร ‹ › ในหน้าฉบับเต็ม — ไล่ตามที่การ์ดเรียงอยู่บนแดชบอร์ด
+const FIN_METRIC_ORDER = ['rev', 'ni', 'nm', 'roa', 'assets', 'liab',
+                          'equity', 'cash', 'de', 'roe', 'debt'];
+const MET_T = {{
+  th: {{annual: 'รายปี', quarterly: 'รายไตรมาส', latest: 'งวดล่าสุด', cagr: 'อัตราโตทบต้น',
+        high: 'สูงสุด', low: 'ต่ำสุด', avg: 'ค่าเฉลี่ย', period: 'งวด', value: 'ค่า',
+        chg: 'เปลี่ยนแปลง', noQ: 'ยังไม่มีงบรายไตรมาสของหมวดนี้',
+        allA: n => `ครบทุกงวดที่มี · ${{n}} ปี`, allQ: n => `ครบทุกงวดที่มี · ${{n}} ไตรมาส`,
+        note: 'หน้านี้รวมทุกงวดที่แหล่งข้อมูลมีให้ ไม่ได้ตัดให้เหลือเฉพาะปีปัจจุบันเหมือนหน้าสรุป — ' +
+              'งบการเงินย้อนได้ 5 ปี ส่วนราคาย้อนได้ 10 ปี (ดูได้ที่ปุ่ม FULL VIEW ในหน้ากราฟ)'}},
+  en: {{annual: 'Annual', quarterly: 'Quarterly', latest: 'Latest', cagr: 'CAGR',
+        high: 'High', low: 'Low', avg: 'Average', period: 'Period', value: 'Value',
+        chg: 'Change', noQ: 'No quarterly figures reported for this line.',
+        allA: n => `every period on record · ${{n}} years`, allQ: n => `every period on record · ${{n}} quarters`,
+        note: 'This page carries every period the source holds, rather than the current year only ' +
+              'as the summary does — statements reach back 5 years, prices 10 (see FULL VIEW on the chart).'}},
+}};
+
+let metKey = null;
+function metMeta(k){{ return FIN_METRIC_META[k] || {{t: k, th: k, u: ''}}; }}
+
+function openMetric(key){{
+  if (!FIN_METRIC_META[key] || !finCache[chCur]) return;
+  metKey = key;
+  document.getElementById('metmodal').hidden = false;
+  document.body.style.overflow = 'hidden';
+  renderMetric();
+}}
+function closeMetric(){{
+  document.getElementById('metmodal').hidden = true;
+  if (document.getElementById('finmodal').hidden &&
+      document.getElementById('cmodal').hidden) document.body.style.overflow = '';
+}}
+function metNav(step){{
+  const avail = FIN_METRIC_ORDER.filter(k => {{
+    const rows = withRatios(finCache[chCur]?.annual || []);
+    return rows.some(r => r[k] != null && isFinite(r[k]));
+  }});
+  if (avail.length < 2) return;
+  const i = avail.indexOf(metKey);
+  metKey = avail[((i < 0 ? 0 : i) + step + avail.length) % avail.length];
+  renderMetric();
+  document.getElementById('met-body').scrollTop = 0;
+}}
+
+function renderMetric(){{
+  const data = finCache[chCur];
+  const body = document.getElementById('met-body');
+  if (!data || !metKey) {{ body.innerHTML = ''; return; }}
+  const L = MET_T[finReadLang] || MET_T.en;
+  const m = metMeta(metKey);
+  const fmt = m.f || finFmt;
+  const title = finReadLang === 'th' ? m.th : m.t;
+  document.getElementById('met-name').textContent = title;
+  document.getElementById('met-sub').textContent = `${{chCur}} · ${{m.u}}`;
+
+  const annual = withRatios(data.annual || []);
+  const quarterly = withRatios(data.quarterly || []);
+  const vals = annual.map(r => r[metKey]).filter(v => v != null && isFinite(v));
+  const cmpRows = finCompareRows();
+
+  // สรุปสถิติจากงวดรายปีทั้งหมดที่มี
+  let stats = '';
+  if (vals.length) {{
+    const last = vals[vals.length - 1], firstV = vals[0];
+    const hi = Math.max(...vals), lo = Math.min(...vals);
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const yrs = vals.length - 1;
+    // CAGR ใช้ได้เฉพาะค่าบวกทั้งหัวและท้าย ไม่งั้นไม่มีนิยาม
+    const cagr = (yrs > 0 && firstV > 0 && last > 0)
+      ? (Math.pow(last / firstV, 1 / yrs) - 1) * 100 : null;
+    const cell = (lbl, val, cls, sub) =>
+      `<div class="met-stat"><span>${{esc(lbl)}}</span>` +
+      `<b${{cls ? ` class="${{cls}}"` : ''}}>${{esc(val)}}</b>` +
+      (sub ? `<i>${{esc(sub)}}</i>` : '') + `</div>`;
+    stats = `<div class="met-stats">` +
+      cell(L.latest, fmt(last), '', periodLabel(annual[annual.length - 1].date, 'annual')) +
+      (cagr != null ? cell(L.cagr, (cagr >= 0 ? '+' : '') + cagr.toFixed(1) + '%',
+        cagr >= 0 ? 'up' : 'down', `${{yrs}}Y`) : '') +
+      cell(L.high, fmt(hi)) + cell(L.low, fmt(lo)) + cell(L.avg, fmt(avg)) +
+      `</div>`;
+  }}
+
+  // กราฟ + ตาราง ของทั้งรายปีและรายไตรมาส (ไตรมาสเอาครบทุกงวดที่มี ไม่ตัดเหลือปีปัจจุบัน)
+  const block = (rows, span, heading) => {{
+    const have = rows.filter(r => r[metKey] != null && isFinite(r[metKey]));
+    const head = `<div class="met-sub-h"><b>${{esc(heading)}}</b>` +
+      `<span>${{esc(span === 'annual' ? L.allA(rows.length) : L.allQ(rows.length))}}</span></div>`;
+    if (!have.length) return head + `<p class="met-empty">${{esc(L.noQ)}}</p>`;
+    const periods = rows.map(r => periodLabel(r.date, span));
+    const prevSpan = finSpan;
+    finSpan = span;                       // ป้ายงวด/หน่วยในกราฟอิงค่านี้
+    const aligned = cmpRows ? finAlign(periods, cmpRows) : null;
+    const chart = divergingBarChart(title, periods, rows.map(r => r[metKey]),
+      {{fmt: fmt, unit: m.u, cmp: aligned ? aligned.map(r => r && r[metKey]) : null}});
+    finSpan = prevSpan;
+    const tbl = `<table class="met-tbl"><thead><tr><th>${{esc(L.period)}}</th>` +
+      `<th>${{esc(L.value)}}</th><th>${{esc(L.chg)}}</th></tr></thead><tbody>` +
+      rows.map((r, i) => {{
+        const v = r[metKey];
+        const txt = (v == null || !isFinite(v)) ? null : fmt(v);
+        const d = i > 0 ? finDelta(metKey, v, rows[i - 1][metKey]) : '';
+        return `<tr><td>${{esc(periods[i])}}</td>` +
+          `<td>${{txt == null ? '<span class="met-na">—</span>' : esc(txt)}}</td>` +
+          `<td>${{d || '<span class="met-na">—</span>'}}</td></tr>`;
+      }}).join('') + `</tbody></table>`;
+    return head + chart + tbl;
+  }};
+
+  body.innerHTML = `<div class="met-inner">${{stats}}` +
+    `<p class="met-note">${{esc(L.note)}}</p>` +
+    block(annual, 'annual', L.annual) +
+    block(quarterly, 'quarterly', L.quarterly) +
+    `</div>`;
+}}
+document.getElementById('metmodal').addEventListener('click', ev => {{
+  if (ev.target.id === 'metmodal') closeMetric();
+}});
+
 // ── งบการเงิน (เปิดจากปุ่ม FINANCIALS ในหน้ากราฟ) ─────────
 // รายการฟิลด์ต้องตรงกับ FIN_FIELDS ฝั่ง build.py — คีย์สั้นในไฟล์ JSON เหมือนกัน
 const FIN_FIELDS = [
@@ -3822,10 +4032,18 @@ function divergingBarChart(title, periods, values, opt){{
   // (แท่งทุกแท่งมี tooltip บอกชื่อหุ้นกำกับอยู่แล้ว ตัวตนจึงไม่ได้อยู่ที่สีอย่างเดียว)
   const stat = opt.stat ? `<span class="fin-chart-stat">${{esc(opt.stat)}}</span>` : '';
   const unit = opt.unit || 'reported currency';
-  return `<div class="fin-chart">
+  // opt.metric = เปิดฉบับเต็มของหมวดนี้ได้ (ไม่ส่งมา = การ์ดในหน้าฉบับเต็มเอง กดซ้อนไม่ได้)
+  const tap = opt.metric ? ` tap" role="button" tabindex="0" data-metric="${{esc(opt.metric)}}"` +
+    ` onclick="openMetric('${{esc(opt.metric)}}')"` +
+    ` onkeydown="if(event.key==='Enter'||event.key===' '){{event.preventDefault();openMetric('${{esc(opt.metric)}}')}}"`
+    : '"';
+  const more = opt.metric
+    ? `<span class="fin-chart-more">${{finReadLang === 'th' ? 'ดูฉบับเต็ม' : 'Full detail'}} ›</span>` : '';
+  return `<div class="fin-chart${{tap}}>
       <div class="fin-chart-h"><span><span class="fin-chart-t">${{esc(title)}}</span>` +
         `<span class="fin-chart-u">${{esc(unit)}} · per ${{finSpan === 'annual' ? 'fiscal year' : 'quarter'}}</span></span>${{stat}}</div>
       <div class="fin-chart-plot"><div class="fin-zero-line" style="top:${{zeroPct}}%"></div>${{cols}}</div>
+      ${{more}}
     </div>`;
 }}
 
@@ -4161,7 +4379,8 @@ function renderFinDashboard(rows, cmpRows){{
   const periods = rows.map(r => periodLabel(r.date, finSpan));
   const aligned = finAlign(periods, cmpRows);
   const bar = (key, title, extra) => divergingBarChart(title, periods, rows.map(r => r[key]),
-    Object.assign({{cmp: aligned ? aligned.map(r => r && r[key]) : null}}, extra || {{}}));
+    Object.assign({{metric: key, cmp: aligned ? aligned.map(r => r && r[key]) : null}},
+                  extra || {{}}));
   const pct = {{fmt: v => v.toFixed(1) + '%', unit: 'percent of revenue'}};
   const ret = {{fmt: v => v.toFixed(1) + '%', unit: 'percent return'}};
   const out = [];
@@ -4287,6 +4506,7 @@ async function finNav(step){{
 
 async function openFinancials(){{
   if (!chCur || !CHARTS[chCur]?.f) return;
+  document.getElementById('metmodal').hidden = true;
   finSortCol = -1; finSortDir = -1; finCompareSym = null;
   document.getElementById('fin-name').textContent = chCur;
   document.getElementById('fin-currency').textContent =
@@ -4308,6 +4528,7 @@ async function openFinancials(){{
   }}
 }}
 function closeFinancials(){{
+  document.getElementById('metmodal').hidden = true;   // ปิดชั้นฉบับเต็มที่ซ้อนอยู่ไปด้วย
   document.getElementById('finmodal').hidden = true;
   if (document.getElementById('cmodal').hidden) document.body.style.overflow = '';
 }}
@@ -4900,11 +5121,17 @@ document.getElementById('cmodal').addEventListener('click', ev => {{
   if (ev.target.id === 'cmodal') closeCharts();
 }});
 addEventListener('keydown', ev => {{
+  const mm = document.getElementById('metmodal');
+  const metOpen = mm && !mm.hidden;
   const fm = document.getElementById('finmodal');
   const finOpen = fm && !fm.hidden;
+  // ชั้นฉบับเต็มอยู่บนสุด ลูกศรจึงต้องเลื่อนหมวด ไม่ใช่เปลี่ยนหุ้นข้างใต้
+  if (metOpen && ev.key === 'ArrowLeft')  {{ metNav(-1); return; }}
+  if (metOpen && ev.key === 'ArrowRight') {{ metNav(1); return; }}
   if (finOpen && ev.key === 'ArrowLeft')  {{ finNav(-1); return; }}
   if (finOpen && ev.key === 'ArrowRight') {{ finNav(1); return; }}
   if (ev.key !== 'Escape') return;
+  if (metOpen) {{ closeMetric(); return; }}
   if (finOpen) {{ closeFinancials(); return; }}   // ปิดชั้นงบการเงินก่อน ไม่ปิดกราฟข้างใต้ไปด้วย
   // ย่อกราฟกลับก่อน ยังไม่ปิดหน้าต่าง — กด Esc ครั้งเดียวไม่ควรหลุดออกไปเลยสองชั้น
   if (!document.getElementById('cmodal').hidden && chartFullOpen()) {{
