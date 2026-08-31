@@ -34,7 +34,7 @@ REBUILD_MIN = 30       # ต้องตรงกับ cron ใน .github/work
 CHART_FULL_HOURS = 6   # ดึงแท่งเทียนชุดเต็มทุกกี่ชั่วโมง (รอบอื่นอัปเดตแค่กราฟรายวัน)
 # ขยับเลขนี้ทุกครั้งที่เพิ่ม/เปลี่ยนช่วงเวลาใน CHART_RANGES เพื่อทิ้ง cache รุ่นเก่า —
 # ความสดอย่างเดียวจับไม่ได้ว่า cache "ครบชุดไหม" (ตอนเพิ่ม 10Y เจอปัญหานี้กับงบการเงินมาแล้ว)
-CHART_SCHEMA = 2
+CHART_SCHEMA = 4      # 2 = เพิ่มช่วง 10Y · 3 = เก็บชื่อเต็ม · 4 = ล้าง prefix ชื่อหุ้นไทย
 PER_CATEGORY = 18
 PER_ROW = 14          # จำนวนการ์ดต่อแถว (แยกไทย/ต่างประเทศแล้วจึงลดลงจาก PER_CATEGORY)
 CACHE_FILE = "cache.json"
@@ -379,18 +379,43 @@ CHART_RANGES = [          # (ชื่อปุ่ม, range, interval)
 ]
 
 
+def clean_company_name(name, label):
+    """ล้างชื่อบริษัทที่ Yahoo ส่งมา แล้วคืน None ถ้าไม่ควรโชว์
+
+    หุ้นไทยที่ไม่มี longName จะตกมาใช้ shortName ซึ่งมีรูปแบบ 'PTT_PTT' /
+    'SET_SET Index' คือเอาตัวย่อมาแปะหน้าซ้ำ ตัดส่วนนั้นออกก่อน
+    """
+    if not name:
+        return None
+    name = name.strip()
+    head, sep, tail = name.partition("_")
+    if sep and head.upper() == label.upper().replace(".BK", ""):
+        name = tail.strip()
+    return name if name and name.lower() != label.lower() else None
+
+
 def chart_slug(label):
     """ชื่อไฟล์ที่ปลอดภัย เช่น 'S&P 500' → 'sp500', 'BRK.B' → 'brkb'"""
     return re.sub(r"[^a-z0-9]+", "", label.lower()) or "x"
 
 
-def fetch_candles(sym, rng, interval):
+def fetch_candles(sym, rng, interval, meta_out=None):
+    """meta_out: dict ที่จะเติมชื่อเต็มบริษัทลงไปให้ — Yahoo แนบมากับกราฟอยู่แล้ว
+    จึงไม่ต้องยิงขอชื่ออีกรอบต่างหาก (250+ สินทรัพย์ = ประหยัดไปทั้งชุด)"""
     r = requests.get(
         f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
         params={"range": rng, "interval": interval},
         headers={"User-Agent": "Mozilla/5.0"}, timeout=15,
     )
     res = r.json()["chart"]["result"][0]
+    if meta_out is not None:
+        meta = res.get("meta") or {}
+        nm = meta.get("longName") or meta.get("shortName")
+        if nm:
+            meta_out["n"] = nm.strip()
+        cur = meta.get("currency")
+        if cur:
+            meta_out["c"] = cur
     ts = res.get("timestamp") or []
     q = res["indicators"]["quote"][0]
     vol = q.get("volume") or []
@@ -496,16 +521,19 @@ def build_charts(markets=None):
 
     def run(job):
         sym, label, tf, rng, iv = job
+        meta = {}
         try:
-            return label, tf, fetch_candles(sym, rng, iv)
+            return label, tf, fetch_candles(sym, rng, iv, meta), meta
         except Exception:
-            return label, tf, None
+            return label, tf, None, meta
 
-    frames = {}
+    frames, meta_by_label = {}, {}
     with ThreadPoolExecutor(max_workers=10) as pool:
-        for label, tf, candles in pool.map(run, jobs):
+        for label, tf, candles, meta in pool.map(run, jobs):
             if candles:
                 frames.setdefault(label, {})[tf] = candles
+            if meta.get("n") and label not in meta_by_label:
+                meta_by_label[label] = meta
 
     # ทองไทยไม่มีให้ดึงย้อนหลัง ต้องประกอบจากทองโลก × ค่าเงิน
     spot = next((m.get("raw_price") for m in (markets or [])
@@ -526,6 +554,13 @@ def build_charts(markets=None):
         save_json(f"{CHART_DIR}/{slug}.json",
                   {"label": label, "tf": tfs, "note": notes.get(label, "")})
         index[label] = {"s": slug, "g": group}
+        meta = meta_by_label.get(label) or {}
+        nm = clean_company_name(meta.get("n"), label)
+        # ชื่อเต็มซ้ำกับตัวย่อ (เช่นดัชนี/ค่าเงิน) ไม่ต้องเก็บ ประหยัดขนาดไฟล์หน้าแรก
+        if nm:
+            index[label]["n"] = nm
+        if meta.get("c"):
+            index[label]["cur"] = meta["c"]
     total = sum(len(c) for tfs in frames.values() for c in tfs.values())
     print(f"  ✓ กราฟ {len(index)}/{len(uni)} สินทรัพย์ · {total:,} แท่งเทียน")
     if index:
@@ -1662,10 +1697,17 @@ def render(news, markets, charts=None, logos=None, streams=None, fin_at=None):
     </article>"""
 
     def fp_brief(it):
+        # ข่าวย่อยส่วนหนึ่งไม่มีรูปมากับฟีด (Google News ส่วนใหญ่ไม่ส่งมา) —
+        # ตกไปใช้ไอคอนหมวดบนพื้นไล่สีแทน ทุกบรรทัดจะได้มีภาพเท่ากันหมด ไม่แหว่งเป็นบางอัน
+        img = (f'<img src="{html.escape(it["image"])}" loading="lazy" alt=""'
+               f' onerror="this.remove()">') if it.get("image") else ""
         return (f'<a class="fp-item fp-brief" href="{html.escape(it["link"])}"'
                 f' target="_blank" rel="noopener">'
+                f'<span class="fp-brief-thumb pf-{it["cat"]}">'
+                f'{cat_icon(it["cat"], "ci-sm")}{img}</span>'
+                f'<span class="fp-brief-body">'
                 f'<span class="fp-brief-t">{html.escape(it["title"])}</span>'
-                f'<span class="fp-meta">{html.escape(it["source"])} · {it["age"]}</span></a>')
+                f'<span class="fp-meta">{html.escape(it["source"])} · {it["age"]}</span></span></a>')
 
     def fp_col(sc, label):
         d = fp[sc]
@@ -1897,6 +1939,9 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cmodal-head{{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
   padding:13px 16px;border-bottom:1px solid var(--line);background:var(--panel2)}}
 .cmodal-title{{min-width:150px}}
+/* ชื่อเต็มบริษัทใต้ตัวย่อ — ตัวย่ออย่างเดียวจำไม่ได้ว่าเป็นบริษัทอะไร */
+.sym-full{{margin:1px 0 3px;font-family:'Noto Serif Thai',Georgia,serif;font-size:.86rem;
+  line-height:1.35;color:var(--mute);max-width:460px}}
 .cmodal-title h3{{font-size:1.05rem;font-weight:700}}
 .cmodal-price{{display:flex;gap:9px;font-family:'IBM Plex Mono',monospace;font-size:.78rem}}
 .tfbar{{display:flex;gap:4px;flex:1;flex-wrap:wrap}}
@@ -2556,7 +2601,14 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .fp-briefs{{margin-top:18px;padding-top:15px;border-top:2px solid var(--line2)}}
 .fp-briefs-h{{font-family:'IBM Plex Mono',monospace;font-size:.61rem;letter-spacing:.17em;
   color:var(--mute);margin-bottom:11px}}
-.fp-brief{{display:block;padding:10px 0;border-bottom:1px dotted var(--line2)}}
+.fp-brief{{display:flex;gap:11px;align-items:flex-start;padding:10px 0;
+  border-bottom:1px dotted var(--line2)}}
+/* ภาพย่อของข่าวย่อย — เล็กกว่าการ์ดข้างบนแต่ใช้ทรงเดียวกัน ให้คอลัมน์ยังดูเป็นชุด */
+.fp-brief-thumb{{position:relative;flex:none;width:62px;aspect-ratio:4/3;border-radius:2px;
+  overflow:hidden;display:grid;place-items:center}}
+.fp-brief-thumb img{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}}
+.fp-brief-thumb .cicon{{opacity:.5}}
+.fp-brief-body{{flex:1;min-width:0}}
 .fp-brief-t{{display:block;font-family:'Noto Serif Thai',Georgia,serif;font-size:.92rem;
   line-height:1.45;color:var(--ink);margin-bottom:4px}}
 .fp-brief:hover .fp-brief-t{{color:var(--brass)}}
@@ -2877,6 +2929,7 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
       </button>
       <div class="cmodal-title">
         <h3 id="cmodal-name">—</h3>
+        <div class="sym-full" id="cmodal-full" hidden></div>
         <div class="cmodal-price"><span id="cmodal-p"></span><span id="cmodal-c"></span></div>
         <div class="cmodal-note" id="cnote" hidden></div>
       </div>
@@ -2969,6 +3022,7 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
               aria-label="Previous symbol">‹</button>
       <div class="cmodal-title">
         <h3 id="fin-name">—</h3>
+        <div class="sym-full" id="fin-full" hidden></div>
         <div class="cmodal-price"><span id="fin-currency"></span></div>
       </div>
       <button class="row-nav fin-nav" type="button" onclick="finNav(1)"
@@ -3489,6 +3543,20 @@ function pickType(t){{
   renderChart();
 }}
 
+// ชื่อเต็มบริษัทมาจาก meta ของกราฟที่ Yahoo แนบมาให้อยู่แล้ว — ดัชนี/ค่าเงิน/ทอง
+// ไม่มีชื่อเต็มที่ต่างจากตัวย่อ ก็ไม่ต้องโชว์บรรทัดเปล่า
+function symFull(label){{
+  const n = (CHARTS[label] || {{}}).n;
+  return (n && n.toLowerCase() !== String(label).toLowerCase()) ? n : '';
+}}
+function setSymFull(id, label){{
+  const el = document.getElementById(id);
+  if (!el) return;
+  const n = symFull(label);
+  el.textContent = n;
+  el.hidden = !n;
+}}
+
 // ── ขยายกราฟเต็มหน้าต่าง (กดอีกทีหรือ Esc เพื่อย่อกลับ) ──────────
 // ตอนขยายจะเด้งไปช่วง 10 ปีให้เลย เพราะจุดประสงค์คือ "ดูฉบับเต็ม"
 // แต่ถ้าผู้ใช้เลือกช่วงอื่นเองอยู่แล้วก็เคารพของเดิม ไม่ไปเปลี่ยนให้
@@ -3731,6 +3799,7 @@ async function pickChart(label){{
     b.classList.toggle('on', b.dataset.label === label));
   const d = TNEWS[label];
   document.getElementById('cmodal-name').textContent = label;
+  setSymFull('cmodal-full', label);
   // สินทรัพย์นอกแถบราคาไม่มีราคาสด ต้องล้างของตัวก่อนหน้าออก
   const c = document.getElementById('cmodal-c');
   document.getElementById('cmodal-p').textContent = d ? d.price : '';
@@ -3831,7 +3900,8 @@ function renderMetric(){{
   const fmt = m.f || finFmt;
   const title = finReadLang === 'th' ? m.th : m.t;
   document.getElementById('met-name').textContent = title;
-  document.getElementById('met-sub').textContent = `${{chCur}} · ${{m.u}}`;
+  document.getElementById('met-sub').textContent =
+    `${{symFull(chCur) ? chCur + ' · ' + symFull(chCur) : chCur}} · ${{m.u}}`;
 
   const annual = withRatios(data.annual || []);
   const quarterly = withRatios(data.quarterly || []);
@@ -4509,6 +4579,7 @@ async function openFinancials(){{
   document.getElementById('metmodal').hidden = true;
   finSortCol = -1; finSortDir = -1; finCompareSym = null;
   document.getElementById('fin-name').textContent = chCur;
+  setSymFull('fin-full', chCur);
   document.getElementById('fin-currency').textContent =
     TNEWS[chCur]?.group === 'th' ? 'THB' : '';
   document.getElementById('fin-checked').textContent =
