@@ -41,6 +41,7 @@ jobs:
             cache.json
             market_history.json
             logos.json
+            inflation.json
             chart
             fin
           key: state-${{ github.run_id }}

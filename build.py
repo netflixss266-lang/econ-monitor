@@ -1187,6 +1187,166 @@ def cat_icon(cat, extra=""):
             f'{CAT_ICONS.get(cat, "")}</svg>')
 
 
+INFL_FILE = "inflation.json"
+INFL_HOURS = 12       # เช็ควันละสองครั้ง — ตัวเลขจริงออกเดือนละครั้ง แต่ไม่รู้ว่าวันไหน
+
+
+def fetch_inflation():
+    """อัตราเงินเฟ้อสหรัฐฯ (รายเดือน) และไทย (รายปี) จากแหล่งที่เปิดให้ใช้ฟรีไม่ต้องมีคีย์
+
+    สหรัฐฯ: BLS ให้ "ดัชนี" CPI มา ไม่ใช่อัตราเงินเฟ้อ จึงคำนวณ YoY เองจาก
+    ดัชนีเดือนล่าสุดเทียบเดือนเดียวกันปีก่อน (สูตรมาตรฐาน)
+
+    ไทย: ไม่มีแหล่งรายเดือนที่เปิดฟรีและเสถียรพอ (FRED ต้องมีคีย์/ต่อไม่ติดจากที่นี่)
+    จึงใช้ World Bank ซึ่งเป็นรายปีและช้ากว่า — เก็บ "งวด" ติดไปด้วยเสมอ
+    จะได้เห็นชัดว่าเลขสองฝั่งไม่ได้สดเท่ากัน ไม่ใช่เอาไปเทียบกันตรงๆ
+    """
+    cached = load_json(INFL_FILE)
+    if cached.get("at"):
+        try:
+            age = (NOW - datetime.fromisoformat(cached["at"])).total_seconds() / 3600
+            if 0 <= age < INFL_HOURS:
+                print(f"  ↻ ใช้เงินเฟ้อเดิมที่ดึงมา {age:.1f} ชม.ที่แล้ว")
+                return cached.get("data") or {}
+        except Exception:
+            pass
+
+    out = {}
+    # ── สหรัฐฯ: ดัชนี CPI รายเดือนจาก BLS แล้วคิด YoY เอง ──
+    try:
+        yr = NOW.year
+        r = requests.post(
+            "https://api.bls.gov/publicAPI/v1/timeseries/data/",
+            json={"seriesid": ["CUUR0000SA0"],
+                  "startyear": str(yr - 1), "endyear": str(yr)},
+            headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+            timeout=25)
+        rows = r.json()["Results"]["series"][0]["data"]
+        by = {}
+        for x in rows:
+            if not x.get("period", "").startswith("M"):
+                continue
+            try:
+                by[(int(x["year"]), int(x["period"][1:]))] = float(x["value"])
+            except (ValueError, TypeError):
+                continue          # BLS ส่ง "-" มาสำหรับเดือนที่ยังไม่ประกาศ
+        if by:
+            last = max(by)
+            prior = (last[0] - 1, last[1])
+            if by.get(prior):
+                rate = (by[last] / by[prior] - 1) * 100
+                out["intl"] = {
+                    "rate": round(rate, 2),
+                    "period": f"{MONTH_ABBR[last[1] - 1]} {last[0]}",
+                    "label": "US CPI", "freq": "year over year",
+                    "src": "US Bureau of Labor Statistics",
+                }
+    except Exception as ex:
+        print(f"  ! เงินเฟ้อสหรัฐฯ ดึงไม่ได้: {ex}")
+
+    # ── ไทย: World Bank รายปี (ค่าล่าสุดที่มี) ──
+    try:
+        r = requests.get(
+            "https://api.worldbank.org/v2/country/TH/indicator/FP.CPI.TOTL.ZG",
+            params={"format": "json", "mrnev": "1"},
+            headers={"User-Agent": "Mozilla/5.0"}, timeout=25)
+        rows = (r.json() or [None, None])[1] or []
+        for row in rows:
+            if row.get("value") is not None:
+                out["th"] = {
+                    "rate": round(float(row["value"]), 2),
+                    "period": str(row.get("date") or ""),
+                    "label": "Thailand CPI", "freq": "annual average",
+                    "src": "World Bank",
+                }
+                break
+    except Exception as ex:
+        print(f"  ! เงินเฟ้อไทย ดึงไม่ได้: {ex}")
+
+    if out:
+        save_json(INFL_FILE, {"at": NOW.isoformat(), "data": out})
+        bits = " · ".join(f"{v['label']} {v['rate']}% ({v['period']})" for v in out.values())
+        print(f"  ✓ เงินเฟ้อ {bits}")
+    else:
+        print("  ! ไม่ได้ตัวเลขเงินเฟ้อเลย ใช้ของเดิมถ้ามี")
+        return (cached.get("data") or {})
+    return out
+
+
+MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+# คำที่ชี้ความขัดแย้งด้วยตัวเองได้เลย — เจอคำเดียวก็นับ
+CONFLICT_STRONG = [
+    "war", "warfare", "invasion", "invade", "airstrike", "air strike", "missile",
+    "ceasefire", "cease-fire", "nuclear weapon", "warhead", "offensive", "shelling",
+    "insurgent", "militant", "genocide", "coup", "martial law", "mobilisation",
+    "mobilization", "warship", "drone strike", "occupation", "annex",
+    "สงคราม", "ขีปนาวุธ", "นิวเคลียร์", "รัฐประหาร", "สู้รบ", "กองทัพ", "ปะทะเดือด",
+    "กฎอัยการศึก", "โดรนโจมตี", "ยิงถล่ม", "ฐานทัพ", "กองกำลัง", "โจมตีทางทหาร",
+    "ยิงจรวด", "หยุดยิง", "ผู้ก่อการร้าย",
+]
+# คำที่ต้องมีคู่กันอย่างน้อยสองคำถึงจะนับ — คำเดียวมักเป็นข่าวอาชญากรรมหรือข่าวทั่วไป
+CONFLICT_WEAK = [
+    "military", "troops", "army", "navy", "border", "clash", "attack", "strike",
+    "sanction", "nato", "defence", "defense", "soldier", "rebel", "hostage",
+    "ทหาร", "ชายแดน", "ปะทะ", "โจมตี", "คว่ำบาตร", "อาวุธ", "ตึงเครียด", "กบฏ",
+    "ตอบโต้", "ขัดแย้ง", "จรวด", "ระเบิด", "สังหาร",
+]
+
+
+def _conflict_matcher(words):
+    """คำอังกฤษต้องจับแบบทั้งคำ ไม่ใช่ substring — ไม่งั้น 'war' จะไปโดน Awards/warming/Warsh
+    และ 'nato' จะไปโดน senator ทำให้ข่าวรางวัล ข่าวน้ำท่วม ข่าวเฟด ถูกนับเป็นข่าวสงครามหมด
+    ส่วนภาษาไทยไม่มีการเว้นวรรคระหว่างคำ จึงต้องใช้ substring ตามเดิม
+    """
+    ascii_w = [w for w in words if w.isascii()]
+    thai_w = [w for w in words if not w.isascii()]
+    pat = None
+    if ascii_w:
+        alt = "|".join(re.escape(w) for w in sorted(ascii_w, key=len, reverse=True))
+        pat = re.compile(rf"(?<![a-z]){alt}(?![a-z])")
+    return pat, thai_w
+
+
+_STRONG_RE, _STRONG_TH = _conflict_matcher(CONFLICT_STRONG)
+_WEAK_RE, _WEAK_TH = _conflict_matcher(CONFLICT_WEAK)
+
+
+def _count_conflict(pat, thai_words, blob):
+    n = len(set(pat.findall(blob))) if pat else 0
+    return n + sum(1 for w in thai_words if w in blob)
+
+
+def conflict_pulse(news):
+    """สัดส่วนข่าวความขัดแย้งในชุดข่าว 24 ชม.ล่าสุด
+
+    ตัวเลขที่คืนคือ "ข่าวความขัดแย้งคิดเป็นกี่ % ของข่าวทั้งหมดตอนนี้" ซึ่งนับได้จริง
+    และตรวจย้อนได้ ไม่ใช่ดัชนีชี้วัดโอกาสเกิดสงคราม — อย่างหลังไม่มีวิธีคำนวณที่ซื่อสัตย์
+    จากข่าว จึงไม่ทำ (ดูหมายเหตุที่แสดงบนหน้าเว็บประกอบ)
+    """
+    hits = []
+    for it in news:
+        blob = f"{it.get('title', '')} {it.get('summary', '')}".lower()
+        if not blob.strip():
+            continue
+        strong = _count_conflict(_STRONG_RE, _STRONG_TH, blob)
+        weak = _count_conflict(_WEAK_RE, _WEAK_TH, blob)
+        if strong >= 1 or weak >= 2:
+            hits.append((strong * 2 + weak, it))
+    total = len(news) or 1
+    hits.sort(key=lambda x: (-x[0], -x[1]["dt"].timestamp()))
+    places = sorted({h[1]["place"] for h in hits if h[1].get("place")})
+    return {
+        "pct": round(len(hits) / total * 100),
+        "n": len(hits), "total": total, "places": places[:12],
+        "stories": [{
+            "title": i["title"], "link": i["link"], "source": i["source"],
+            "age": i["age"], "place": i["place"], "image": i["image"],
+        } for _, i in hits[:14]],
+    }
+
+
 def build_markers(news):
     """รวมข่าวตามสถานที่ → จุดบนแผนที่"""
     by_place = {}
@@ -1401,6 +1561,17 @@ const zoom = d3.zoom()
     rescale(ev.transform.k);
   });
 
+function tipHtml(d){
+  // เอาข่าวเด่นสุดของจุดนั้นที่มีรูปมาโชว์ ถ้าไม่มีรูปเลยก็โชว์แต่ตัวหนังสือ
+  const s = (d.stories || []).find(x => x.image) || (d.stories || [])[0];
+  const img = (s && s.image)
+    ? `<img class="tip-img" src="${s.image}" alt="" onerror="this.remove()">` : '';
+  const head = s ? `<span class="tip-head">${s.title}</span>` : '';
+  const meta = s ? `<span>${s.source} · ${s.age}</span>` : '';
+  return img + `<strong>${d.place}</strong>` + head + meta +
+    `<span>${d.total} stories · Econ ${d.econ} · Politics ${d.poli} · Business ${d.biz} · Env ${d.env}</span>`;
+}
+
 function plot(proj){
   const r = d3.scaleSqrt().domain([1, MAX_N]).range([5, 17]);
   const g = gMap.append("g");
@@ -1429,7 +1600,7 @@ function plot(proj){
       tip.style("opacity", 1)
          .style("left", (mx + 14) + "px")
          .style("top", (my - 8) + "px")
-         .html(`<strong>${d.place}</strong><span>${d.total} stories · Econ ${d.econ} · Politics ${d.poli} · Business ${d.biz} · Env ${d.env}</span>`);
+         .html(tipHtml(d));
     })
     .on("mouseleave", () => tip.style("opacity", 0))
     .on("click", (ev, d) => { show(d); ev.stopPropagation(); });
@@ -1492,7 +1663,8 @@ if (window.ResizeObserver) new ResizeObserver(() => redraw(120)).observe(svg.nod
 """
 
 
-def render(news, markets, charts=None, logos=None, streams=None, fin_at=None):
+def render(news, markets, charts=None, logos=None, streams=None, fin_at=None,
+           infl=None):
     def pick(items, n):
         """หน้าตาเน้นรูป → เลือกข่าวที่มีรูปก่อน แล้วค่อยเรียงตามเวลาเหมือนเดิม
         (ทุกข่าวอยู่ในกรอบ 24 ชม.อยู่แล้ว ลำดับจึงไม่เพี้ยนมาก)"""
@@ -1734,6 +1906,9 @@ def render(news, markets, charts=None, logos=None, streams=None, fin_at=None):
 
     next_run = (NOW + timedelta(minutes=REBUILD_MIN)).strftime("%H:%M")
     markers_json = json.dumps(markers, ensure_ascii=False)
+    infl_json = json.dumps(infl or {}, ensure_ascii=False)
+    pulse = conflict_pulse(news)
+    pulse_json = json.dumps(pulse, ensure_ascii=False)
     icons_json = json.dumps({c: cat_icon(c, "ci-sm") for c in CAT_NAMES}, ensure_ascii=False)
     tnews_json = json.dumps(
         {m["label"]: {"price": m["price"], "pct": m["pct_str"], "pctv": round(m["pct"], 4),
@@ -2471,6 +2646,46 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   background:rgba(10,14,26,.95);border:1px solid var(--line);border-radius:2px;
   padding:7px 10px;font-size:.74rem;display:flex;flex-direction:column;gap:2px;z-index:5}}
 #tip span{{color:var(--mute);font-family:'IBM Plex Mono',monospace;font-size:.66rem}}
+/* ภาพข่าวในกล่องชี้ — ให้เห็นว่าจุดนั้นกำลังเกิดอะไร ไม่ใช่แค่ตัวเลข */
+#tip{{max-width:260px}}
+.tip-img{{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:2px;
+  margin-bottom:6px;display:block;background:var(--panel2)}}
+.tip-head{{font-family:'Noto Serif Thai',Georgia,serif;font-size:.8rem;line-height:1.4;
+  color:var(--ink);margin-bottom:3px}}
+
+/* ── ลูกโลกวัดสัดส่วนข่าวความขัดแย้ง ────────────────────────── */
+.tension{{display:flex;align-items:center;gap:9px;margin-left:auto;flex:none;cursor:pointer;
+  padding:7px 13px;border-radius:2px;background:var(--panel);
+  border:1px solid var(--line);transition:border-color .18s}}
+.tension:hover,.tension[aria-expanded="true"]{{border-color:var(--brass)}}
+.tension-globe{{width:26px;height:26px;flex:none;fill:none;stroke:currentColor;
+  stroke-width:1.5;color:var(--mute)}}
+.tension[aria-expanded="true"] .tension-globe{{color:var(--brass)}}
+.tension-n{{font-family:'IBM Plex Mono',monospace;font-size:1.32rem;font-weight:700;
+  line-height:1;color:var(--ink)}}
+.tension-n.hot{{color:var(--down)}}
+.tension-n.warm{{color:var(--poli)}}
+.tension-lbl{{font-family:'IBM Plex Mono',monospace;font-size:.52rem;letter-spacing:.12em;
+  line-height:1.25;color:var(--dim);text-align:left}}
+.tension-panel{{flex:none;max-height:46%;overflow-y:auto;padding:14px clamp(14px,3vw,22px) 16px;
+  border-bottom:1px solid var(--line);background:var(--panel2)}}
+.tension-panel[hidden]{{display:none}}
+.tension-note{{padding:11px 13px;margin-bottom:14px;border-radius:2px;
+  background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--poli);
+  font-size:.84rem;line-height:1.6;color:var(--mute)}}
+.tension-note b{{color:var(--ink)}}
+.tension-list{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}}
+.tension-row{{display:flex;gap:10px;align-items:flex-start;padding:9px;border-radius:2px;
+  background:var(--panel);border:1px solid var(--line)}}
+.tension-row:hover{{border-color:var(--brass)}}
+.tension-row img{{width:64px;aspect-ratio:4/3;object-fit:cover;border-radius:2px;flex:none;
+  background:var(--panel2)}}
+.tension-row-t{{font-size:.86rem;line-height:1.4;color:var(--ink);margin-bottom:3px}}
+.tension-row-m{{font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--dim)}}
+@media(max-width:700px){{
+  .tension-lbl{{display:none}}
+  .tension-panel{{max-height:56%}}
+}}
 .legend{{position:absolute;left:14px;bottom:12px;display:flex;flex-wrap:wrap;gap:6px 14px;
   font-size:.68rem;color:var(--mute);background:rgba(10,14,26,.8);
   border:1px solid var(--line);border-radius:2px;padding:6px 11px}}
@@ -2902,7 +3117,18 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
       <div class="cmodal-title"><h3>NEWS MAP</h3>
         <div class="cmodal-price">{len(markers)} places · click a dot · zoomable</div>
       </div>
+      <!-- ลูกโลกมุมขวาบน อย่างหน้าจอเกมยุทธศาสตร์ — กดแล้วเห็นข่าวที่ทำให้ตัวเลขขึ้น -->
+      <button class="tension" type="button" id="tension-btn" onclick="toggleTension()"
+              aria-expanded="false" aria-controls="tension-panel">
+        <svg class="tension-globe" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M3 12h18M12 3c2.6 2.8 2.6 15.2 0 18M12 3c-2.6 2.8-2.6 15.2 0 18"/>
+        </svg>
+        <span class="tension-n" id="tension-n">—</span>
+        <span class="tension-lbl">CONFLICT<br>COVERAGE</span>
+      </button>
     </div>
+    <div class="tension-panel" id="tension-panel" hidden></div>
     <div class="map-modal-body">
       <div class="map-wrap">
         <svg id="map"></svg>
@@ -3126,7 +3352,8 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 <script>window.__MARKERS__ = {markers_json}; window.__ICONS__ = {icons_json};
 window.__TNEWS__ = {tnews_json}; window.__CHARTS__ = {charts_json};
-window.__LOGOS__ = {logos_json}; window.__FIN_AT__ = {fin_at_json};</script>
+window.__LOGOS__ = {logos_json}; window.__FIN_AT__ = {fin_at_json};
+window.__INFL__ = {infl_json}; window.__PULSE__ = {pulse_json};</script>
 <script>{MAP_JS}</script>
 <script>
 // ── ค้นหาข่าวทั้งเว็บ (แถบบนสุด) ───────────────────────────
@@ -3630,6 +3857,20 @@ function linSlope(ys){{
   return den ? (n * sxy - sx * sy) / den : 0;
 }}
 
+// เงินเฟ้อของประเทศที่หุ้นตัวนั้นจดทะเบียนอยู่ — เป็นตัวเลขมหภาค ไม่ใช่ของบริษัท
+// จึงเขียนงวดกับแหล่งกำกับไว้ด้วย ฝั่งสหรัฐฯ เป็นรายเดือน ฝั่งไทยเป็นรายปี ไม่ได้สดเท่ากัน
+const INFL = window.__INFL__ || {{}};
+function inflRow(){{
+  const grp = (TNEWS[chCur] || {{}}).group || (CHARTS[chCur] || {{}}).g || 'intl';
+  const d = INFL[grp] || INFL.intl;
+  if (!d) return '';
+  const cls = d.rate > 3 ? 'down' : d.rate < 0 ? 'up' : '';
+  return `<div class="calc-row"><span class="calc-k">INFLATION` +
+    `<small>${{esc(d.label)}} · ${{esc(d.freq)}} · ${{esc(d.src)}}</small></span>` +
+    `<span class="calc-v ${{cls}}">${{(d.rate >= 0 ? '+' : '') + d.rate.toFixed(2)}}%` +
+    `<small>${{esc(d.period)}}</small></span></div>`;
+}}
+
 function renderCalc(){{
   const box = document.getElementById('ccalc');
   const rows = (chData?.tf || {{}})[chTf] || [];
@@ -3675,6 +3916,7 @@ function renderCalc(){{
         (total >= 0 ? '+' : '') + total.toFixed(1) + '%', 'trend') +
     row('BASE PRICE', 'mean of lowest 20% of lows over ' + chTf, fmt(base), '',
         ((last / base - 1) * 100).toFixed(1) + '% above base', 'base') +
+    inflRow() +
     '<p class="calc-note">Click a highlighted row to plot it on the chart · ' +
     'computed from price history and available fundamentals · ' +
     'indicators only, not investment advice</p>';
@@ -5260,9 +5502,55 @@ document.getElementById('lmodal')?.addEventListener('click', ev => {{
   if (ev.target.id === 'lmodal') closeLive();
 }});
 
+// ── สัดส่วนข่าวความขัดแย้ง (ลูกโลกมุมขวาบนของแผนที่) ─────────
+// ตัวเลขนี้คือ "ข่าวความขัดแย้งคิดเป็นกี่ % ของข่าวทั้งหมดใน 24 ชม." ซึ่งนับได้จริง
+// ไม่ใช่ดัชนีโอกาสเกิดสงครามโลก — เขียนกำกับไว้ในแผงให้ชัด ไม่ให้เข้าใจผิด
+const PULSE = window.__PULSE__ || {{pct: 0, n: 0, total: 0, stories: [], places: []}};
+function paintTension(){{
+  const el = document.getElementById('tension-n');
+  if (!el) return;
+  el.textContent = PULSE.pct + '%';
+  el.classList.toggle('hot', PULSE.pct >= 25);
+  el.classList.toggle('warm', PULSE.pct >= 12 && PULSE.pct < 25);
+  document.getElementById('tension-btn').title =
+    `${{PULSE.n}} of ${{PULSE.total}} stories in the last 24h mention armed conflict ` +
+    `or military tension — a share of coverage, not a forecast`;
+}}
+function toggleTension(){{
+  const p = document.getElementById('tension-panel');
+  const b = document.getElementById('tension-btn');
+  const open = p.hidden;
+  if (open && !p.dataset.built) {{
+    const rows = (PULSE.stories || []).map(s => {{
+      const img = s.image
+        ? `<img src="${{esc(s.image)}}" loading="lazy" alt="" onerror="this.remove()">` : '';
+      const where = s.place ? esc(s.place) + ' · ' : '';
+      return `<a class="tension-row" href="${{esc(s.link)}}" target="_blank" rel="noopener">` +
+        `${{img}}<span><span class="tension-row-t">${{esc(s.title)}}</span>` +
+        `<span class="tension-row-m">${{where}}${{esc(s.source)}} · ${{esc(s.age)}}</span></span></a>`;
+    }}).join('');
+    const places = (PULSE.places || []).length
+      ? ` Places named most often: <b>${{PULSE.places.map(esc).join(', ')}}</b>.` : '';
+    p.innerHTML =
+      `<p class="tension-note"><b>${{PULSE.n}} of ${{PULSE.total}}</b> stories in the last 24 hours ` +
+      `mention armed conflict or military tension — <b>${{PULSE.pct}}%</b> of current coverage.` +
+      places +
+      ` This counts how much of the news is about conflict right now. It is not a probability ` +
+      `of war and not a forecast: 100% would mean every story in the feed was about conflict, ` +
+      `not that a world war had begun. Matching is by keyword, so it will miss some stories ` +
+      `and over-count others.</p>` +
+      (rows ? `<div class="tension-list">${{rows}}</div>`
+            : `<p class="tension-note">No conflict stories matched in this window.</p>`);
+    p.dataset.built = '1';
+  }}
+  p.hidden = !open;
+  b.setAttribute('aria-expanded', open ? 'true' : 'false');
+}}
+
 function openMap(){{
   document.getElementById('mmodal').hidden = false;
   document.body.style.overflow = 'hidden';
+  paintTension();
   draw();                       // แผนที่เพิ่งมีขนาดตอนนี้ ต้องวาดใหม่
 }}
 function closeMap(){{
@@ -5396,7 +5684,7 @@ if __name__ == "__main__":
         print(f"จับคู่ข่าวกับสินทรัพย์ได้ {linked} รายการ")
     save_cache(news, markets)
 
-    charts, logos, fin_at = {}, {}, None
+    charts, logos, fin_at, infl = {}, {}, None, {}
     if markets:
         print("ดึงข้อมูลพื้นฐาน...")
         fetch_fundamentals(markets)
@@ -5408,8 +5696,10 @@ if __name__ == "__main__":
         for label in fin_labels:
             if label in charts:
                 charts[label]["f"] = True
+        print("ดึงอัตราเงินเฟ้อ...")
+        infl = fetch_inflation()
     print()
 
     with open("index.html", "w", encoding="utf-8") as f:
-        f.write(render(news, markets, charts, logos, streams, fin_at))
+        f.write(render(news, markets, charts, logos, streams, fin_at, infl))
     print(f"เสร็จ · index.html · {NOW.strftime('%H:%M')} น.")

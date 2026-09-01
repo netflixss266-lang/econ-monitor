@@ -5,3 +5,4 @@ chart/
 fin/
 __pycache__/
 .claude/
+inflation.json
