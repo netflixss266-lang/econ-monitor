@@ -34,7 +34,7 @@ REBUILD_MIN = 30       # ต้องตรงกับ cron ใน .github/work
 CHART_FULL_HOURS = 6   # ดึงแท่งเทียนชุดเต็มทุกกี่ชั่วโมง (รอบอื่นอัปเดตแค่กราฟรายวัน)
 # ขยับเลขนี้ทุกครั้งที่เพิ่ม/เปลี่ยนช่วงเวลาใน CHART_RANGES เพื่อทิ้ง cache รุ่นเก่า —
 # ความสดอย่างเดียวจับไม่ได้ว่า cache "ครบชุดไหม" (ตอนเพิ่ม 10Y เจอปัญหานี้กับงบการเงินมาแล้ว)
-CHART_SCHEMA = 4      # 2 = เพิ่มช่วง 10Y · 3 = เก็บชื่อเต็ม · 4 = ล้าง prefix ชื่อหุ้นไทย
+CHART_SCHEMA = 5      # 2=10Y · 3=ชื่อเต็ม · 4=ล้าง prefix ชื่อหุ้นไทย · 5=เก็บประวัติปันผล
 PER_CATEGORY = 18
 PER_ROW = 14          # จำนวนการ์ดต่อแถว (แยกไทย/ต่างประเทศแล้วจึงลดลงจาก PER_CATEGORY)
 CACHE_FILE = "cache.json"
@@ -399,13 +399,18 @@ def chart_slug(label):
     return re.sub(r"[^a-z0-9]+", "", label.lower()) or "x"
 
 
-def fetch_candles(sym, rng, interval, meta_out=None):
+def fetch_candles(sym, rng, interval, meta_out=None, want_events=False):
     """meta_out: dict ที่จะเติมชื่อเต็มบริษัทลงไปให้ — Yahoo แนบมากับกราฟอยู่แล้ว
-    จึงไม่ต้องยิงขอชื่ออีกรอบต่างหาก (250+ สินทรัพย์ = ประหยัดไปทั้งชุด)"""
+    จึงไม่ต้องยิงขอชื่ออีกรอบต่างหาก (250+ สินทรัพย์ = ประหยัดไปทั้งชุด)
+
+    want_events=True: ขอประวัติเงินปันผลมาพร้อมกันในคำขอเดียวกัน (ใช้กับ job ช่วง 10Y
+    เท่านั้น — ยิงยาวสุดครั้งเดียวพอ ไม่ต้องขอซ้ำทุกช่วงเวลา)"""
+    params = {"range": rng, "interval": interval}
+    if want_events:
+        params["events"] = "div,splits"
     r = requests.get(
         f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
-        params={"range": rng, "interval": interval},
-        headers={"User-Agent": "Mozilla/5.0"}, timeout=15,
+        params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=15,
     )
     res = r.json()["chart"]["result"][0]
     if meta_out is not None:
@@ -416,6 +421,14 @@ def fetch_candles(sym, rng, interval, meta_out=None):
         cur = meta.get("currency")
         if cur:
             meta_out["c"] = cur
+        if want_events:
+            divs = (res.get("events") or {}).get("dividends") or {}
+            # เก็บเฉพาะ (วันที่, จำนวนเงินต่อหุ้น) เรียงเก่าไปใหม่ — พอสำหรับคำนวณ
+            # ผลตอบแทนย้อนหลังฝั่งเว็บ ไม่ต้องพกฟิลด์อื่นที่ Yahoo ส่งมาเกินจำเป็น
+            meta_out["divs"] = sorted(
+                ({"date": d["date"], "amount": round(float(d["amount"]), 6)}
+                 for d in divs.values() if d.get("amount") is not None),
+                key=lambda d: d["date"])
     ts = res.get("timestamp") or []
     q = res["indicators"]["quote"][0]
     vol = q.get("volume") or []
@@ -523,17 +536,19 @@ def build_charts(markets=None):
         sym, label, tf, rng, iv = job
         meta = {}
         try:
-            return label, tf, fetch_candles(sym, rng, iv, meta), meta
+            return label, tf, fetch_candles(sym, rng, iv, meta, want_events=(tf == "10Y")), meta
         except Exception:
             return label, tf, None, meta
 
-    frames, meta_by_label = {}, {}
+    frames, meta_by_label, div_by_label = {}, {}, {}
     with ThreadPoolExecutor(max_workers=10) as pool:
         for label, tf, candles, meta in pool.map(run, jobs):
             if candles:
                 frames.setdefault(label, {})[tf] = candles
             if meta.get("n") and label not in meta_by_label:
                 meta_by_label[label] = meta
+            if "divs" in meta:
+                div_by_label[label] = meta["divs"]
 
     # ทองไทยไม่มีให้ดึงย้อนหลัง ต้องประกอบจากทองโลก × ค่าเงิน
     spot = next((m.get("raw_price") for m in (markets or [])
@@ -551,8 +566,12 @@ def build_charts(markets=None):
         if not tfs:
             continue
         slug = chart_slug(label)
+        # divs เป็น [] ได้จริง (เช็คแล้วว่าไม่จ่ายปันผลในช่วง 10 ปีที่มีข้อมูล) ต่างจาก
+        # None (ไม่ได้เช็ค เช่น job ของ tf=10Y พังไปเฉยๆ) — เก็บเป็น [] เริ่มต้นไว้เผื่อกรณีหลัง
+        # ฝั่งเว็บจะได้ไม่ต้องเดาว่า "ไม่มีข้อมูล" กับ "เช็คแล้วว่าไม่จ่าย" อันไหน
         save_json(f"{CHART_DIR}/{slug}.json",
-                  {"label": label, "tf": tfs, "note": notes.get(label, "")})
+                  {"label": label, "tf": tfs, "note": notes.get(label, ""),
+                   "div": div_by_label.get(label, [])})
         index[label] = {"s": slug, "g": group}
         meta = meta_by_label.get(label) or {}
         nm = clean_company_name(meta.get("n"), label)
@@ -2133,11 +2152,21 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .csearch{{margin:8px 10px;width:auto;flex:none}}
 .cmodal-list{{flex:1;overflow-y:auto;padding:2px 0}}
 .cmodal-list .cnone{{padding:16px 14px;color:var(--dim);font-size:.76rem}}
-.cgroup{{padding:9px 14px 5px;font-family:'IBM Plex Mono',monospace;font-size:.62rem;
+/* หัวกลุ่ม THAILAND/GLOBAL พับเก็บได้ — ลูกศรหมุนตามสถานะ */
+.cgroup{{display:flex;align-items:center;gap:6px;padding:9px 14px 5px;cursor:pointer;
+  user-select:none;font-family:'IBM Plex Mono',monospace;font-size:.62rem;
   letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}}
+.cgroup:hover{{color:var(--mute)}}
+.cgroup .fold-caret{{width:11px;height:11px;flex:none;fill:none;stroke:currentColor;
+  stroke-width:2.6;transition:transform .18s}}
+.cgroup.folded .fold-caret{{transform:rotate(-90deg)}}
+.cgroup.folded + .cfav-group{{display:none}}
 .citem{{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px 7px 14px;
   cursor:pointer;background:none;border:0;color:var(--mute);font-family:inherit;
   font-size:.79rem;text-align:left}}
+/* ลากจัดลำดับได้เฉพาะโหมด FAVORITES — โหมด ALL เรียงตามราคาสด ลากไปก็คืนที่เดิมทันที */
+.citem[draggable="true"]{{cursor:grab}}
+.citem.dragging{{opacity:.4;cursor:grabbing}}
 .citem .cname{{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 /* แถบเลือกว่าจะโชว์เฉพาะตัวโปรด หรือทั้งตลาด */
 .cfav-bar{{display:flex;gap:4px;padding:9px 10px 0}}
@@ -2430,6 +2459,34 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .met-note{{padding:14px 16px;margin-bottom:8px;border-radius:2px;background:var(--panel2);
   border:1px solid var(--line);border-left:2px solid var(--econ);
   font-size:.86rem;line-height:1.6;color:var(--mute)}}
+
+/* ── เครื่องคำนวณผลตอบแทนปันผล ─────────────────────────────── */
+.div-calc{{background:var(--panel2);border:1px solid var(--line);border-radius:2px;
+  padding:16px 18px;margin:18px 0 24px;max-width:1000px}}
+.div-calc-h{{font-family:'Playfair Display',Georgia,'Noto Serif Thai',serif;
+  font-size:1.08rem;font-weight:700;color:var(--ink);margin-bottom:6px}}
+.div-calc-note{{font-size:.8rem;line-height:1.55;color:var(--dim);margin-bottom:14px;max-width:60ch}}
+.div-calc-row{{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}}
+.div-calc-row label{{display:flex;flex-direction:column;gap:6px;flex:1;min-width:140px;
+  font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--mute)}}
+.div-calc-row input{{padding:9px 11px;border-radius:2px;background:var(--panel);
+  border:1px solid var(--line);color:var(--ink);font-family:'IBM Plex Mono',monospace;
+  font-size:.92rem;font-variant-numeric:tabular-nums;width:100%}}
+.div-calc-row input:focus{{outline:none;border-color:var(--brass)}}
+.div-calc-reset{{flex:none;padding:9px 16px;border-radius:2px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line);color:var(--mute);
+  font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.08em}}
+.div-calc-reset:hover{{color:var(--ink);border-color:var(--brass)}}
+.div-calc-out{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line2)}}
+.dcalc-cell{{display:flex;flex-direction:column;gap:5px}}
+.dcalc-cell span{{font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--mute)}}
+.dcalc-cell b{{font-family:'IBM Plex Mono',monospace;font-size:1.15rem;font-weight:700;
+  color:var(--brass)}}
+.div-pmt-n{{display:inline-block;margin-left:7px;font-size:.68rem;color:var(--dim)}}
+.div-hist{{margin-top:8px}}
 /* หัวการ์ดกราฟ — ชื่อเรื่องเด่นชัด + บอกหน่วยไว้ใต้ชื่อ จะได้ไม่ต้องเดาว่าตัวเลขคืออะไร */
 .fin-chart-h{{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
   padding-bottom:10px;margin-bottom:14px;border-bottom:1px solid var(--line2)}}
@@ -2599,6 +2656,11 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   .cmodal-pick{{width:auto;border-right:0;border-bottom:1px solid var(--line)}}
   .cmodal-list{{display:flex;overflow-x:auto;padding:6px;max-height:none}}
   .cgroup{{display:none}}
+  /* กลุ่ม th/intl ต้องหายไปจากเลย์เอาต์ ไม่ใช่แค่ซ่อนหัวข้อ ไม่งั้นการ์ดจะเรียงเป็น
+     สองแถวตั้งแทนที่จะเลื่อนแนวนอนแถวเดียวต่อกัน (contents = ลูกข้างในนับเป็นลูกของ
+     .cmodal-list โดยตรง ตัว .cfav-group เองไม่มีผลกับเลย์เอาต์อีกต่อไป) */
+  .cfav-group{{display:contents}}
+  .cgroup.folded + .cfav-group{{display:contents}}
   .citem{{width:auto;white-space:nowrap}}
   .cmodal-chart{{min-height:340px}}
   .cmodal-side{{width:auto;border-left:0;border-top:1px solid var(--line)}}
@@ -3991,6 +4053,24 @@ const saveFavs = () => {{
   try {{ localStorage.setItem('chFavs', JSON.stringify([...chFavs])); }} catch(e) {{}}
 }};
 
+// ลำดับที่ลากจัดเองในแท็บ FAVORITES — ตัวที่ยังไม่เคยลากจะเรียงตามค่าเริ่มต้น
+// (ราคาสดก่อน แล้วค่อย % เปลี่ยนแปลง) ต่อท้ายตัวที่ลากจัดไว้แล้วเสมอ
+let favOrder = [];
+try {{ favOrder = JSON.parse(localStorage.getItem('favOrder') || '[]'); }} catch(e) {{}}
+function saveFavOrder(){{
+  favOrder = [...document.querySelectorAll('#cmodal-list .citem')].map(el => el.dataset.label);
+  try {{ localStorage.setItem('favOrder', JSON.stringify(favOrder)); }} catch(e) {{}}
+}}
+
+// กลุ่ม THAILAND/GLOBAL พับเก็บได้ทีละกลุ่ม จำไว้ข้ามเซสชัน
+let favFolded = new Set();
+try {{ favFolded = new Set(JSON.parse(localStorage.getItem('favFold') || '[]')); }} catch(e) {{}}
+function toggleFavFold(g){{
+  favFolded.has(g) ? favFolded.delete(g) : favFolded.add(g);
+  try {{ localStorage.setItem('favFold', JSON.stringify([...favFolded])); }} catch(e) {{}}
+  document.querySelector(`.cgroup[data-g="${{g}}"]`)?.classList.toggle('folded', favFolded.has(g));
+}}
+
 function toggleFav(ev, label){{
   ev.stopPropagation();
   chFavs.has(label) ? chFavs.delete(label) : chFavs.add(label);
@@ -4017,6 +4097,15 @@ function renderAssetList(q){{
         && (chMode === 'all' || chFavs.has(l))
         && (!term || l.toLowerCase().includes(term)))
       .sort((a, b) => {{
+        // โหมด FAVORITES: เคารพลำดับที่ลากจัดเองก่อน ตัวที่ยังไม่เคยลากตกไปท้ายกลุ่ม
+        if (chMode === 'fav' && favOrder.length) {{
+          const ia = favOrder.indexOf(a[0]), ib = favOrder.indexOf(b[0]);
+          if (ia !== -1 || ib !== -1) {{
+            if (ia === -1) return 1;
+            if (ib === -1) return -1;
+            return ia - ib;
+          }}
+        }}
         const A = TNEWS[a[0]], B = TNEWS[b[0]];
         if (!!A !== !!B) return A ? -1 : 1;             // ตัวที่มีราคาสดขึ้นก่อน
         if (A && B) return (B.pctv ?? 0) - (A.pctv ?? 0);
@@ -4024,16 +4113,23 @@ function renderAssetList(q){{
       }});
     if (!rows.length) continue;
     shown += rows.length;
-    html += `<div class="cgroup">${{title}} · ${{rows.length}}</div>` + rows.map(([l]) => {{
-      const d = TNEWS[l], f = chFavs.has(l);
-      return `<div class="citem" role="button" tabindex="0" data-label="${{esc(l)}}"
-        onclick="pickChart('${{esc(l)}}')" onkeydown="if(event.key==='Enter')pickChart('${{esc(l)}}')">
-        ${{assetLogo(l)}}<span class="cname">${{esc(l)}}</span>
-        <span class="cpct ${{d ? d.dir : ''}}">${{d ? d.pct : ''}}</span>
-        <span class="cfav${{f ? ' on' : ''}}" role="button" tabindex="-1"
-          title="${{f ? 'Remove from favorites' : 'Add to favorites'}}"
-          onclick="toggleFav(event,'${{esc(l)}}')">${{f ? '★' : '☆'}}</span></div>`;
-    }}).join('');
+    const draggable = chMode === 'fav';
+    const folded = favFolded.has(g) ? ' folded' : '';
+    html += `<div class="cgroup${{folded}}" data-g="${{g}}" role="button" tabindex="0"
+        onclick="toggleFavFold('${{g}}')" onkeydown="if(event.key==='Enter')toggleFavFold('${{g}}')">
+        <svg class="fold-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        ${{title}} · ${{rows.length}}</div><div class="cfav-group" data-group="${{g}}">` +
+      rows.map(([l]) => {{
+        const d = TNEWS[l], f = chFavs.has(l);
+        return `<div class="citem" role="button" tabindex="0" data-label="${{esc(l)}}"
+          ${{draggable ? 'draggable="true"' : ''}}
+          onclick="pickChart('${{esc(l)}}')" onkeydown="if(event.key==='Enter')pickChart('${{esc(l)}}')">
+          ${{assetLogo(l)}}<span class="cname">${{esc(l)}}</span>
+          <span class="cpct ${{d ? d.dir : ''}}">${{d ? d.pct : ''}}</span>
+          <span class="cfav${{f ? ' on' : ''}}" role="button" tabindex="-1"
+            title="${{f ? 'Remove from favorites' : 'Add to favorites'}}"
+            onclick="toggleFav(event,'${{esc(l)}}')">${{f ? '★' : '☆'}}</span></div>`;
+      }}).join('') + `</div>`;
   }}
   if (!shown) {{
     html = term ? '<p class="cnone">No symbol matches</p>'
@@ -4377,9 +4473,10 @@ function divergingBarChart(title, periods, values, opt){{
   }};
   const cols = periods.map((p, i) => {{
     const v = values[i];
-    // เทียบอยู่ = ช่องแคบลงครึ่งหนึ่ง ตัวเลขจะล้นออกนอกแท่ง — โหมดนั้นปิดเลขไปเลย
-    // ดูค่าจริงได้จาก tooltip และจากตารางข้างล่างซึ่งมีครบทุกงวดอยู่แล้ว
-    const bars = slot(v, 'main', chCur, p, !cmp) +
+    // เทียบอยู่ = ช่องแคบลงครึ่งหนึ่ง (โชว์เลขไม่ได้) และ opt.noLabel = การ์ดที่ตั้งใจไม่ให้
+    // มีเลขบนแท่งเลย (เช่นกราฟปันผลย้อน 10 ปี ที่ 10 ช่องไม่มีทางพอสำหรับเลขที่อ่านออก
+    // ในการ์ดกว้างเท่าจอมือถือ) — ทั้งสองกรณีดูค่าจริงได้จาก tooltip กับตารางข้างล่างแทน
+    const bars = slot(v, 'main', chCur, p, !cmp && !opt.noLabel) +
       (cmp ? slot(cmp[i], 'cmp', finCompareSym, p, false) : '');
     const na = (v == null || !isFinite(v)) ? '<div class="fin-bar-na">—</div>' : '';
     return `<div class="fin-bar-col">` +
@@ -4497,7 +4594,190 @@ function cagrText(rows, key){{
 }}
 
 // ── แถบเครื่องมือแดชบอร์ด (ปุ่มกระโดดหัวข้อ + เลือกหุ้นเทียบ) ──
+// ── ปันผล — คำนวณจากประวัติการจ่ายจริงที่ผูกมากับไฟล์กราฟ (chData.div) ──────
+// ทุกตัวเลขในหมวดนี้มาจากเงินปันผลที่บริษัทประกาศจริงเท่านั้น ไม่มีการประมาณ/พยากรณ์อนาคต
+function divRows(){{ return (chData && chData.div) || []; }}
+
+// ผลรวมเงินปันผลย้อนหลัง 12 เดือนนับจาก asOf (epoch วินาที) — ใช้ทำ "อัตราผลตอบแทนปัจจุบัน"
+function divTTM(rows, asOf){{
+  const cutoff = asOf - 365 * 86400;
+  const recent = rows.filter(d => d.date > cutoff && d.date <= asOf);
+  return {{sum: recent.reduce((a, d) => a + d.amount, 0), n: recent.length}};
+}}
+
+// ราคาปิดของแท่งล่าสุดที่ "ไม่เกิน" epoch ที่ให้มา — ใช้หาราคา ณ ต้นปีนั้นๆ
+function priceAt(daily, epoch){{
+  if (!daily || !daily.length) return null;
+  let best = null;
+  for (const b of daily) {{ if (b[0] <= epoch) best = b; else break; }}
+  return (best || daily[0])[4];
+}}
+
+function divCurrency(){{ return (CHARTS[chCur] || {{}}).cur || 'USD'; }}
+// ป้ายตัวเลขบนแท่งกราฟปันผลมีถึง 10 แท่ง (10 ปี) ช่องแคบกว่าตารางมาก — ใช้เวอร์ชันสั้น
+// 2 ตำแหน่งทศนิยมแทน 4 เฉพาะตอนวาดเป็นป้ายบนแท่ง ตัวเลขเต็มยังอยู่ครบในตารางข้างล่าง
+function divFmtShort(v){{
+  if (v == null || !isFinite(v)) return '—';
+  let s = d3.format(Math.abs(v) >= 1000 ? ',.0f' : ',.2f')(v);
+  if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\\.$/, '');
+  return s;
+}}
+// เงินปันผล/ราคาต่อหุ้นเป็นเลขทศนิยมเล็กๆ (0.27, 12.0, 1.4 บาท ฯลฯ) — finFmt ปัดเป็น
+// K/M/B ซึ่งไม่เหมาะ จึงใช้ทศนิยมตรงๆ แทน ตัดศูนย์ท้ายที่ไม่มีความหมายทิ้ง
+function divFmt(v){{
+  if (v == null || !isFinite(v)) return '—';
+  let s = d3.format(Math.abs(v) >= 1000 ? ',.0f' : ',.4f')(v);
+  if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\\.$/, '');
+  return s;
+}}
+
+function renderDivSection(){{
+  const rows = divRows();
+  const cur = divCurrency();
+  // ราคา "วันนี้" เอาจากซีรีส์ความละเอียดสูงสุดที่มี (1Y รายวัน) — แต่การย้อนหาราคา
+  // "ต้นปีที่ N ปีก่อน" ต้องใช้ซีรีส์ 10Y เท่านั้น เพราะ 1Y มีข้อมูลแค่ปีเดียวย้อนไม่ถึง
+  // (บั๊กที่เจอตอนทดสอบ: ใช้ 1Y ทำให้ทุกปีย้อนหลังโชว์ราคาเดียวกันหมด เพราะ priceAt หา
+  // แท่งที่เก่ากว่า epoch ที่ขอไม่เจอในซีรีส์ 1 ปี เลยตกไปใช้แท่งแรกสุดของ 1Y ซ้ำทุกครั้ง)
+  const daily = (chData && chData.tf && (chData.tf['1Y'] || chData.tf['10Y'])) || [];
+  const histSeries = (chData && chData.tf &&
+    (chData.tf['10Y'] || chData.tf['5Y'] || chData.tf['3Y'] || chData.tf['1Y'])) || [];
+  const price = daily.length ? daily[daily.length - 1][4] : null;
+  const now = Date.now() / 1000;
+  const ttm = divTTM(rows, now);
+  const hasDiv = rows.length > 0;
+  const yieldPct = (ttm.sum > 0 && price > 0) ? ttm.sum / price * 100 : null;
+  const monthlyEq = yieldPct != null ? yieldPct / 12 : null;
+
+  // ความถี่การจ่ายบอกตรงๆ จากจำนวนงวดจริงใน 12 เดือนที่ผ่านมา — ไม่เดาจากชื่อประเภทหุ้น
+  // กันไม่ให้ "อัตราต่อเดือน" ถูกเข้าใจผิดว่าบริษัทจ่ายปันผลทุกเดือนทั้งที่จริงจ่ายปีละครั้ง
+  const freqTxt = ttm.n === 0 ? 'no payment in the trailing 12 months'
+    : ttm.n === 1 ? '1 payment in the trailing 12 months'
+    : `${{ttm.n}} payments in the trailing 12 months` +
+      (ttm.n >= 11 ? ' (monthly)' : (ttm.n >= 3 && ttm.n <= 5) ? ' (quarterly)' :
+       ttm.n === 2 ? ' (semi-annual)' : '');
+
+  const kpis = !hasDiv ? '' : `<div class="fin-kpis">` +
+    `<div class="fin-kpi"><div class="fin-kpi-lbl">Annual Yield (TTM)</div>` +
+      `<div class="fin-kpi-val">${{yieldPct != null ? yieldPct.toFixed(2) + '%' : '—'}}</div></div>` +
+    `<div class="fin-kpi"><div class="fin-kpi-lbl">Monthly Equivalent</div>` +
+      `<div class="fin-kpi-val">${{monthlyEq != null ? monthlyEq.toFixed(2) + '%' : '—'}}</div>` +
+      `<div class="fin-kpi-cmp"><span>annual ÷ 12 — not a real monthly payment</span></div></div>` +
+    `<div class="fin-kpi"><div class="fin-kpi-lbl">Dividend / Share (TTM)</div>` +
+      `<div class="fin-kpi-val">${{divFmt(ttm.sum)}} ${{esc(cur)}}</div>` +
+      `<div class="fin-kpi-cmp"><span>${{esc(freqTxt)}}</span></div></div>` +
+    `<div class="fin-kpi"><div class="fin-kpi-lbl">Price / Share</div>` +
+      `<div class="fin-kpi-val">${{divFmt(price)}} ${{esc(cur)}}</div></div>` +
+    `</div>`;
+
+  const emptyMsg = hasDiv ? '' : `<p class="met-note">No dividend payments found in the ` +
+    `10 years of price history held for ${{esc(chCur)}}. The calculator below still works — ` +
+    `plug in a hypothetical dividend to see what yield it would imply.</p>`;
+
+  return kpis + emptyMsg + renderDivCalc(ttm.sum, price, cur) + renderDivHistory(rows, histSeries, cur);
+}}
+
+function renderDivCalc(dps, price, cur){{
+  const d = isFinite(dps) ? dps : 0, p = isFinite(price) ? price : 0;
+  return `<div class="div-calc">
+      <div class="div-calc-h">Yield calculator</div>
+      <p class="div-calc-note">Prefilled with this stock's own trailing figures — change any
+        number, clear it, or try a hypothetical. Nothing here is saved or sent anywhere.</p>
+      <div class="div-calc-row">
+        <label>Dividend / share (${{esc(cur)}})<input type="number" id="dcalc-dps" step="any"
+          value="${{d.toFixed(4)}}" oninput="updateDivCalc()"></label>
+        <label>Price / share (${{esc(cur)}})<input type="number" id="dcalc-price" step="any"
+          value="${{p.toFixed(4)}}" oninput="updateDivCalc()"></label>
+        <label>Shares held<input type="number" id="dcalc-shares" step="any" min="0"
+          placeholder="0" oninput="updateDivCalc()"></label>
+        <button type="button" class="div-calc-reset" onclick="resetDivCalc(${{d}},${{p}})">Reset</button>
+      </div>
+      <div class="div-calc-out" id="dcalc-out"></div>
+    </div>`;
+}}
+// เขียนแยกจาก renderFinTable โดยตั้งใจ — จะได้พิมพ์ในช่องคำนวณแล้วอัปเดตเฉพาะผลลัพธ์
+// ไม่ต้องวาดทั้งหน้าใหม่ทุกตัวอักษรที่พิมพ์ (เสียตำแหน่งเลื่อน/โฟกัสถ้าทำแบบนั้น)
+function updateDivCalc(){{
+  const out = document.getElementById('dcalc-out');
+  if (!out) return;
+  const dpsEl = document.getElementById('dcalc-dps'), priceEl = document.getElementById('dcalc-price'),
+    sharesEl = document.getElementById('dcalc-shares');
+  const dps = parseFloat(dpsEl.value), price = parseFloat(priceEl.value), shares = parseFloat(sharesEl.value);
+  const cur = divCurrency();
+  const yieldPct = (isFinite(dps) && isFinite(price) && price > 0) ? dps / price * 100 : null;
+  const monthly = yieldPct != null ? yieldPct / 12 : null;
+  const income = (isFinite(dps) && isFinite(shares) && shares > 0) ? dps * shares : null;
+  const cell = (lbl, val) => `<div class="dcalc-cell"><span>${{esc(lbl)}}</span><b>${{val}}</b></div>`;
+  out.innerHTML =
+    cell('Implied annual yield', yieldPct != null ? yieldPct.toFixed(2) + '%' : '—') +
+    cell('Monthly equivalent', monthly != null ? monthly.toFixed(2) + '%' : '—') +
+    cell('Annual income', income != null ? divFmt(income) + ' ' + esc(cur) : '—');
+  // แถวประวัติรายปีข้างล่างก็ใช้จำนวนหุ้นเดียวกันนี้ คำนวณรายได้ต่อปีให้ด้วยแบบเรียลไทม์
+  document.querySelectorAll('.div-income-cell').forEach(td => {{
+    const rd = parseFloat(td.dataset.dps);
+    td.textContent = (isFinite(rd) && isFinite(shares) && shares > 0)
+      ? divFmt(rd * shares) + ' ' + cur : '—';
+  }});
+}}
+function resetDivCalc(dps, price){{
+  document.getElementById('dcalc-dps').value = dps.toFixed(4);
+  document.getElementById('dcalc-price').value = price.toFixed(4);
+  document.getElementById('dcalc-shares').value = '';
+  updateDivCalc();
+}}
+
+// ประวัติรายปี — เอาเฉพาะปีปฏิทินที่จบแล้วจริง (ปีปัจจุบันยังไม่ครบปีจึงไม่นับ) และย้อนได้
+// สูงสุด 10 ปีตามที่แหล่งข้อมูลมีจริง (จะได้ไม่สัญญาความลึกที่ไม่มีข้อมูลรองรับ)
+function renderDivHistory(rows, series, cur){{
+  if (!rows.length) return '';
+  const nowYear = new Date().getUTCFullYear();
+  const byYear = {{}};
+  rows.forEach(d => {{
+    const y = new Date(d.date * 1000).getUTCFullYear();
+    if (y >= nowYear) return;
+    (byYear[y] = byYear[y] || []).push(d);
+  }});
+  const years = Object.keys(byYear).map(Number).sort((a, b) => b - a).slice(0, 10);
+  if (!years.length) return '';
+
+  const chartPeriods = years.slice().reverse().map(String);
+  const chartVals = chartPeriods.map(y => byYear[y].reduce((a, d) => a + d.amount, 0));
+  // สลับ finSpan ชั่วคราวเป็น annual ตอนวาดกราฟนี้ — กราฟปันผลเป็นรายปีเสมอไม่ว่าแท็บ
+  // งบการเงินด้านล่างจะสลับไปที่ QUARTERLY อยู่ก็ตาม ไม่งั้นป้ายหน่วยจะขึ้นผิดเป็น "per quarter"
+  const prevSpan = finSpan;
+  finSpan = 'annual';
+  const chart = divergingBarChart('Dividend per Share', chartPeriods, chartVals,
+    {{fmt: v => divFmtShort(v), unit: cur + '/share', noLabel: chartPeriods.length > 6}});
+  finSpan = prevSpan;
+
+  const tblRows = years.map(y => {{
+    const evs = byYear[y];
+    const dps = evs.reduce((a, d) => a + d.amount, 0);
+    const price0 = priceAt(series, Date.UTC(y, 0, 1) / 1000);
+    const yld = (price0 != null && price0 > 0) ? dps / price0 * 100 : null;
+    return {{y, dps, n: evs.length, price0, yld}};
+  }});
+  const rowsHtml = tblRows.map(r => `<tr>
+      <td>${{r.y}}</td>
+      <td>${{divFmt(r.dps)}} ${{esc(cur)}}<span class="div-pmt-n">${{r.n}} pmt${{r.n === 1 ? '' : 's'}}</span></td>
+      <td>${{r.price0 != null ? divFmt(r.price0) + ' ' + esc(cur) : '<span class="met-na">—</span>'}}</td>
+      <td>${{r.yld != null ? r.yld.toFixed(2) + '%' : '<span class="met-na">—</span>'}}</td>
+      <td>${{r.yld != null ? (r.yld / 12).toFixed(2) + '%' : '<span class="met-na">—</span>'}}</td>
+      <td class="div-income-cell" data-dps="${{r.dps}}">—</td>
+    </tr>`).join('');
+
+  return `<div class="div-hist">
+      <div class="met-sub-h"><b>History</b><span>complete calendar years · ${{years.length}} of up to 10</span></div>
+      ${{chart}}
+      <div class="fin-table-wrap"><table class="met-tbl">
+        <thead><tr><th>Year</th><th>Dividend / Share</th><th>Price at Year Start</th>
+          <th>Yield</th><th>Monthly Equiv.</th><th>Income (shares held)</th></tr></thead>
+        <tbody>${{rowsHtml}}</tbody>
+      </table></div>
+    </div>`;
+}}
+
 const FIN_SECTIONS = [
+  ['div',   'DIVIDENDS'],
   ['kpi',   'KEY METRICS'],
   ['grow',  'GROWTH'],
   ['prof',  'PROFITABILITY'],
@@ -4792,7 +5072,11 @@ function renderFinTable(){{
   const cols = rows.map(r => periodLabel(r.date, finSpan));
   const sortKey = (finSortCol >= 0 && rows[finSortCol]) ? rows[finSortCol] : null;
 
-  let html = '<div class="fin-inner">' + renderFinToolbar() +
+  let html = '<div class="fin-inner">' +
+    finSection('div', 'DIVIDENDS',
+      'trailing 12 months, priced today — every figure comes from dividends already paid',
+      renderDivSection()) +
+    renderFinToolbar() +
     renderFinKpiSection(rows, cmpRows) + renderFinDashboard(rows, cmpRows);
   let table = '<div class="fin-table-wrap"><table class="fin-table"><thead><tr><th>Line item</th>' +
     cols.map((c, i) => {{
@@ -4835,6 +5119,7 @@ function renderFinTable(){{
   const keep = body.scrollTop;
   body.innerHTML = html + '</div>';
   body.scrollTop = keep;
+  updateDivCalc();
 }}
 
 function pickFinSpan(span){{
@@ -5645,6 +5930,38 @@ document.getElementById('mmodal').addEventListener('click', ev => {{
     bar.insertBefore(src, after ? over.nextSibling : over);
   }});
   bar.addEventListener('drop', ev => ev.preventDefault());
+}})();
+
+// ── ลากจัดลำดับรายการโปรดในหน้ากราฟ (เฉพาะแท็บ FAVORITES) ──
+// ผูก listener ไว้ที่กล่องแม่ครั้งเดียวตอนโหลดหน้า ไม่ใช่ทุกครั้งที่ renderAssetList
+// วาดใหม่ — innerHTML ถูกแทนที่บ่อย แต่ตัวกล่องแม่เองไม่ได้ถูกสร้างใหม่ listener จึงอยู่รอด
+(() => {{
+  const list = document.getElementById('cmodal-list');
+  if (!list) return;
+  let src = null;
+  list.addEventListener('dragstart', ev => {{
+    src = ev.target.closest('.citem[draggable="true"]');
+    if (!src) return;
+    src.classList.add('dragging');
+    ev.dataTransfer.effectAllowed = 'move';
+    try {{ ev.dataTransfer.setData('text/plain', src.dataset.label); }} catch(e) {{}}
+  }});
+  list.addEventListener('dragend', () => {{
+    if (src) {{ src.classList.remove('dragging'); saveFavOrder(); }}
+    src = null;
+  }});
+  list.addEventListener('dragover', ev => {{
+    const over = ev.target.closest('.citem');
+    if (!over || !src || over === src) return;
+    // ห้ามลากข้ามกลุ่ม THAILAND/GLOBAL — กลุ่มของแต่ละตัวมาจากข้อมูลจริง ลากข้ามแล้ว
+    // วาดใหม่รอบหน้าจะกระโดดกลับกลุ่มเดิมทันที ดูเหมือนลากไม่ติด
+    if (over.closest('.cfav-group') !== src.closest('.cfav-group')) return;
+    ev.preventDefault();
+    const r = over.getBoundingClientRect();
+    const after = ev.clientY > r.top + r.height / 2;
+    over.parentNode.insertBefore(src, after ? over.nextSibling : over);
+  }});
+  list.addEventListener('drop', ev => ev.preventDefault());
 }})();
 
 // จำแท็บที่เลือกไว้ ไม่ให้เด้งกลับตอนหน้ารีเฟรชอัตโนมัติ
