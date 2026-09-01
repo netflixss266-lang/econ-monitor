@@ -1239,7 +1239,7 @@ def fetch_inflation():
                     "rate": round(rate, 2),
                     "period": f"{MONTH_ABBR[last[1] - 1]} {last[0]}",
                     "label": "US CPI", "freq": "year over year",
-                    "src": "US Bureau of Labor Statistics",
+                    "src": "US BLS",
                 }
     except Exception as ex:
         print(f"  ! เงินเฟ้อสหรัฐฯ ดึงไม่ได้: {ex}")
@@ -2553,11 +2553,15 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .calc{{flex:none;max-height:44%;overflow-y:auto}}
 .calc-row{{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
   padding:8px 13px;border-bottom:1px solid var(--line)}}
-.calc-k{{font-size:.74rem;color:var(--mute)}}
-.calc-k small{{display:block;font-size:.6rem;color:var(--dim);font-family:'IBM Plex Mono',monospace}}
+.calc-k{{font-size:.74rem;color:var(--mute);min-width:0}}
+.calc-k small{{display:block;font-size:.6rem;color:var(--dim);font-family:'IBM Plex Mono',monospace;
+  overflow-wrap:anywhere}}
 .calc-v{{font-family:'IBM Plex Mono',monospace;font-size:.86rem;font-weight:500;
-  text-align:right;white-space:nowrap}}
-.calc-v small{{display:block;font-size:.6rem;font-weight:400;color:var(--dim)}}
+  text-align:right;white-space:nowrap;min-width:0}}
+/* ตัวเลขหลักห้ามตัดบรรทัด แต่คำอธิบายใต้ตัวเลขยาวได้ ต้องยอมให้ตัดบรรทัด
+   ไม่งั้นบรรทัดอย่าง "ahead of inflation" จะดันแถวล้นออกนอกแผงบนจอแคบ */
+.calc-v small{{display:block;font-size:.6rem;font-weight:400;color:var(--dim);
+  white-space:normal}}
 .calc-na{{color:var(--dim)}}
 .calc-on-able{{cursor:pointer}}
 .calc-on-able:hover{{background:var(--hover)}}
@@ -3871,6 +3875,45 @@ function inflRow(){{
     `<small>${{esc(d.period)}}</small></span></div>`;
 }}
 
+// อัตราผลตอบแทนขั้นต่ำที่ต้องทำให้ได้เพื่อ "ไม่จน" — เงินเฟ้อกินกำลังซื้อไปเท่าไหร่
+// ต้องได้คืนอย่างน้อยเท่านั้น และถ้าผลตอบแทนโดนหักภาษี ต้องทำได้มากกว่านั้นอีก
+//   ได้ก่อนภาษี r → เหลือจริง r(1-t) ; ให้เท่าเงินเฟ้อ i ⇒ r = i / (1 - t)
+// อัตราภาษีของแต่ละคนไม่เท่ากัน จึงไม่เดาให้ แต่โชว์ทั้ง 0% / 10% / 20% ให้เทียบเอง
+function hurdleRow(){{
+  const grp = (TNEWS[chCur] || {{}}).group || (CHARTS[chCur] || {{}}).g || 'intl';
+  const d = INFL[grp] || INFL.intl;
+  if (!d) return '';
+  const i = d.rate / 100;
+  const pc = v => (v * 100).toFixed(2) + '%';
+
+  // ผลตอบแทนจริงของหุ้นตัวนี้รอบปีที่ผ่านมา เอามาเทียบกับเส้นที่ต้องข้าม
+  let actual = null;
+  const daily = (chData && chData.tf && chData.tf['1Y']) || null;
+  if (daily && daily.length > 20) {{
+    const c = daily.map(b => b[4]).filter(v => v != null && isFinite(v));
+    if (c.length > 20 && c[0] > 0) actual = c[c.length - 1] / c[0] - 1;
+  }}
+
+  if (i <= 0) {{
+    // เงินเฟ้อติดลบ = ของถูกลง ไม่มีเส้นให้ข้าม ผลตอบแทนบวกนิดเดียวก็ได้กำลังซื้อเพิ่ม
+    return `<div class="calc-row"><span class="calc-k">BEAT INFLATION` +
+      `<small>prices fell ${{pc(Math.abs(i))}} — any positive return gains purchasing power</small></span>` +
+      `<span class="calc-v up">0.00%` +
+      (actual != null ? `<small>this stock ${{actual >= 0 ? '+' : ''}}${{(actual * 100).toFixed(1)}}% over 1Y</small>` : '') +
+      `</span></div>`;
+  }}
+  const t10 = i / 0.9, t20 = i / 0.8;
+  const beats = actual != null ? actual > i : null;
+  return `<div class="calc-row"><span class="calc-k">BEAT INFLATION` +
+    `<small>break-even before tax · ${{pc(t10)}} if taxed 10% · ${{pc(t20)}} if taxed 20%</small></span>` +
+    `<span class="calc-v ${{beats === null ? '' : (beats ? 'up' : 'down')}}">${{pc(i)}}` +
+    (actual != null
+      ? `<small>this stock ${{actual >= 0 ? '+' : ''}}${{(actual * 100).toFixed(1)}}% over 1Y — ` +
+        `${{beats ? 'ahead of' : 'behind'}} inflation</small>`
+      : '') +
+    `</span></div>`;
+}}
+
 function renderCalc(){{
   const box = document.getElementById('ccalc');
   const rows = (chData?.tf || {{}})[chTf] || [];
@@ -3916,7 +3959,7 @@ function renderCalc(){{
         (total >= 0 ? '+' : '') + total.toFixed(1) + '%', 'trend') +
     row('BASE PRICE', 'mean of lowest 20% of lows over ' + chTf, fmt(base), '',
         ((last / base - 1) * 100).toFixed(1) + '% above base', 'base') +
-    inflRow() +
+    inflRow() + hurdleRow() +
     '<p class="calc-note">Click a highlighted row to plot it on the chart · ' +
     'computed from price history and available fundamentals · ' +
     'indicators only, not investment advice</p>';
