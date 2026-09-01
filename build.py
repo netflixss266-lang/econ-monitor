@@ -2490,6 +2490,33 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   color:var(--brass)}}
 .dcalc-cell i{{font-style:normal;font-family:'IBM Plex Mono',monospace;font-size:.66rem;
   color:var(--dim)}}
+
+/* ── กรอบทองวิ้งๆ — เน้นตัวเลขที่สำคัญที่สุดในหน้า ให้เด่นแบบกรอบไอเทมพรีเมียมในเกม
+   ขอบทองเรืองแสงเต้นจังหวะ (goldPulse) + แสงกวาดผ่านเฉียงๆ ซ้ำเป็นช่วง (goldSheen)
+   ทั้งสองตัวเป็น CSS animation ล้วน ไม่มี JS จึงไม่กินโหลดตอนเลื่อนหน้าเยอะๆ */
+@keyframes goldPulse{{
+  0%,100%{{box-shadow:0 0 0 1px rgba(198,169,97,.55),0 0 9px 1px rgba(198,169,97,.22)}}
+  50%{{box-shadow:0 0 0 1px rgba(244,239,227,.85),0 0 20px 4px rgba(198,169,97,.58)}}
+}}
+@keyframes goldSheen{{
+  0%{{transform:translateX(-140%) skewX(-20deg)}}
+  55%,100%{{transform:translateX(240%) skewX(-20deg)}}
+}}
+.gold-frame{{position:relative;overflow:hidden;border-color:var(--brass) !important;
+  animation:goldPulse 2.6s ease-in-out infinite}}
+.gold-frame::after{{content:'';position:absolute;top:-50%;bottom:-50%;width:30%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),rgba(244,239,227,.12),transparent);
+  animation:goldSheen 3.1s ease-in-out infinite;pointer-events:none}}
+@media(prefers-reduced-motion:reduce){{
+  .gold-frame,.gold-frame::after{{animation:none}}
+  .gold-frame{{box-shadow:0 0 0 1px rgba(198,169,97,.6),0 0 12px 2px rgba(198,169,97,.3)}}
+}}
+/* แท่งกราฟที่ติดกรอบทองมีป้ายตัวเลข (.fin-bar-num.out) ที่ตั้งใจให้ลอยออกนอกกรอบตัวเอง
+   เวลาแท่งเตี้ยเกินกว่าจะใส่ป้ายไว้ข้างในได้ — overflow:hidden ของ .gold-frame ปกติจะบังป้ายนั้น
+   ทิ้งไปเลย จึงใช้เวอร์ชันนี้เฉพาะแท่งกราฟ: ไม่ครอบตัด ไม่มีแสงกวาด เอาแค่ขอบเรืองแสงจังหวะ
+   ซึ่งไม่ต้องพึ่งการครอบตัดก็เด่นพอแล้ว */
+.fin-bar.gold-frame{{overflow:visible}}
+.fin-bar.gold-frame::after{{content:none}}
 .div-pmt-n{{display:inline-block;margin-left:7px;font-size:.68rem;color:var(--dim)}}
 .div-hist{{margin-top:8px}}
 /* หัวการ์ดกราฟ — ชื่อเรื่องเด่นชัด + บอกหน่วยไว้ใต้ชื่อ จะได้ไม่ต้องเดาว่าตัวเลขคืออะไร */
@@ -4463,7 +4490,7 @@ function divergingBarChart(title, periods, values, opt){{
   // ตัวเลขวางในแท่งเมื่อแท่งสูงพอ (ไม่งั้นตัวหนังสือจะล้นออกนอกแท่ง) — ~15% ของราง 150px
   // คือราว 22px พอดีกับตัวอักษร .86rem หนึ่งบรรทัด แท่งเตี้ยกว่านั้นเอาเลขไปไว้เหนือแท่ง
   const INSIDE_MIN = 15;
-  const slot = (v, cls, who, period, label) => {{
+  const slot = (v, cls, who, period, label, hi) => {{
     if (v == null || !isFinite(v)) return '<div class="fin-bar-slot"></div>';
     const pct = Math.abs(v) / range * 100, neg = v < 0;
     const top = neg ? zeroPct : zeroPct - pct;
@@ -4472,16 +4499,18 @@ function divergingBarChart(title, periods, values, opt){{
       ? `<span class="fin-bar-num ${{pct >= INSIDE_MIN ? 'in' : 'out'}}${{neg ? ' dn' : ''}}">` +
         `${{esc(fmt(v))}}</span>`
       : '';
-    return `<div class="fin-bar-slot"><div class="fin-bar ${{klass}}${{neg ? ' dn' : ''}}" ` +
+    return `<div class="fin-bar-slot"><div class="fin-bar ${{klass}}${{neg ? ' dn' : ''}}${{hi ? ' gold-frame' : ''}}" ` +
       `style="top:${{top.toFixed(2)}}%;height:${{pct.toFixed(2)}}%" ` +
       `title="${{esc(who)}} · ${{esc(period)}}: ${{esc(fmt(v))}}">${{num}}</div></div>`;
   }};
   const cols = periods.map((p, i) => {{
     const v = values[i];
+    const isLatest = i === periods.length - 1;
     // เทียบอยู่ = ช่องแคบลงครึ่งหนึ่ง (โชว์เลขไม่ได้) และ opt.noLabel = การ์ดที่ตั้งใจไม่ให้
     // มีเลขบนแท่งเลย (เช่นกราฟปันผลย้อน 10 ปี ที่ 10 ช่องไม่มีทางพอสำหรับเลขที่อ่านออก
     // ในการ์ดกว้างเท่าจอมือถือ) — ทั้งสองกรณีดูค่าจริงได้จาก tooltip กับตารางข้างล่างแทน
-    const bars = slot(v, 'main', chCur, p, !cmp && !opt.noLabel) +
+    // opt.highlightLatest = ติดกรอบทองที่แท่งงวดล่าสุด (เฉพาะกราฟที่ตั้งใจเน้น เช่น Balance Sheet)
+    const bars = slot(v, 'main', chCur, p, !cmp && !opt.noLabel, !!opt.highlightLatest && isLatest) +
       (cmp ? slot(cmp[i], 'cmp', finCompareSym, p, false) : '');
     const na = (v == null || !isFinite(v)) ? '<div class="fin-bar-na">—</div>' : '';
     return `<div class="fin-bar-col">` +
@@ -4662,12 +4691,12 @@ function renderDivSection(){{
        ttm.n === 2 ? ' (semi-annual)' : '');
 
   const kpis = !hasDiv ? '' : `<div class="fin-kpis">` +
-    `<div class="fin-kpi"><div class="fin-kpi-lbl">Annual Yield (TTM)</div>` +
+    `<div class="fin-kpi gold-frame"><div class="fin-kpi-lbl">Annual Yield (TTM)</div>` +
       `<div class="fin-kpi-val">${{yieldPct != null ? yieldPct.toFixed(2) + '%' : '—'}}</div></div>` +
     `<div class="fin-kpi"><div class="fin-kpi-lbl">Monthly Equivalent</div>` +
       `<div class="fin-kpi-val">${{monthlyEq != null ? monthlyEq.toFixed(2) + '%' : '—'}}</div>` +
       `<div class="fin-kpi-cmp"><span>annual ÷ 12 — not a real monthly payment</span></div></div>` +
-    `<div class="fin-kpi"><div class="fin-kpi-lbl">Dividend / Share (TTM)</div>` +
+    `<div class="fin-kpi gold-frame"><div class="fin-kpi-lbl">Dividend / Share (TTM)</div>` +
       `<div class="fin-kpi-val">${{divFmt(ttm.sum)}} ${{esc(cur)}}</div>` +
       `<div class="fin-kpi-cmp"><span>${{esc(freqTxt)}}</span></div></div>` +
     `<div class="fin-kpi"><div class="fin-kpi-lbl">Price / Share</div>` +
@@ -4691,7 +4720,8 @@ function renderDivCalc(dps, price, cur){{
         anywhere.</p>
       <div class="div-calc-row">
         <label class="div-calc-primary">Investment budget (${{esc(cur)}})<input type="number"
-          id="dcalc-budget" step="any" min="0" placeholder="e.g. 10000" oninput="updateDivCalc()"></label>
+          class="gold-frame" id="dcalc-budget" step="any" min="0" placeholder="e.g. 10000"
+          oninput="updateDivCalc()"></label>
         <label>Price / share (${{esc(cur)}})<input type="number" id="dcalc-price" step="any"
           value="${{p.toFixed(4)}}" oninput="updateDivCalc()"></label>
         <label>Dividend / share (${{esc(cur)}})<input type="number" id="dcalc-dps" step="any"
@@ -4727,7 +4757,11 @@ function updateDivCalc(){{
   out.innerHTML =
     cell('Shares you’d get', shares != null ? shares.toLocaleString() : '—',
       spent != null ? `${{divFmt(spent)}} ${{cur}} spent · ${{divFmt(left)}} ${{cur}} left over` : '') +
-    cell('Annual income', income != null ? divFmt(income) + ' ' + esc(cur) : '—') +
+    cell('Annual income', income != null ? divFmt(income) + ' ' + esc(cur) : '—',
+      // เฉลี่ยรายเดือนจากยอดทั้งปี ไม่ใช่เงินที่เข้าจริงทุกเดือน — บริษัทส่วนใหญ่จ่ายปันผล
+      // เป็นรอบไตรมาส ไม่ใช่รายเดือน จึงเขียน "avg" กำกับไว้กันเข้าใจผิดว่าเป็นเงินสดที่โอนเข้าจริง
+      // เฉลี่ย/เดือนไม่ใช่ตัวเลขที่รายงานจริง แค่ประมาณ — 2 ตำแหน่งพอ ใส่ 4 ตำแหน่งจะดูแม่นยำเกินจริง
+      income != null ? `≈ ${{divFmtShort(income / 12)}} ${{cur}} / month avg` : '') +
     cell('Implied annual yield', yieldPct != null ? yieldPct.toFixed(2) + '%' : '—') +
     cell('Monthly equivalent', monthly != null ? monthly.toFixed(2) + '%' : '—');
   // แถวประวัติรายปีข้างล่างก็ใช้จำนวนหุ้นที่คำนวณจากงบเดียวกันนี้ อัปเดตรายได้ต่อปีให้แบบเรียลไทม์
@@ -5013,6 +5047,8 @@ function renderFinKpiSection(rows, cmpRows){{
   const last = rows[rows.length - 1], prev = rows.length > 1 ? rows[rows.length - 2] : null;
   const cmpLast = cmpRows && cmpRows.length ? cmpRows[cmpRows.length - 1] : null;
   const period = periodLabel(last.date, finSpan);
+  // Net Income/Net Margin ติดกรอบทองเน้นพิเศษ — สองตัวที่มักเป็นจุดแรกที่คนดูงบมองหา
+  const GOLD_KPI = new Set(['ni', 'nm']);
   const tiles = FIN_KPI_DEFS.map(([key, label]) => {{
     const txt = finCellText(key, last[key]) ?? '—';
     const delta = prev ? finDelta(key, last[key], prev[key]) : '';
@@ -5020,7 +5056,8 @@ function renderFinKpiSection(rows, cmpRows){{
       ? `<div class="fin-kpi-cmp"><span>${{esc(finCompareSym)}}</span>` +
         `<b>${{esc(finCellText(key, cmpLast[key]) ?? '—')}}</b></div>`
       : '';
-    return `<div class="fin-kpi"><div class="fin-kpi-lbl">${{esc(label)}}</div>` +
+    const gold = GOLD_KPI.has(key) ? ' gold-frame' : '';
+    return `<div class="fin-kpi${{gold}}"><div class="fin-kpi-lbl">${{esc(label)}}</div>` +
       `<div class="fin-kpi-val">${{esc(txt)}}</div>${{delta}}${{cmp}}</div>`;
   }}).join('');
   const note = 'latest reported period · ' + period +
@@ -5055,8 +5092,11 @@ function renderFinDashboard(rows, cmpRows){{
   if (prof) out.push(finSection('prof', 'PROFITABILITY', 'how much of each unit of revenue is kept',
     `<div class="fin-panel-grid">${{prof}}</div>`));
 
-  const bal = [bar('assets', 'Total Assets'), bar('liab', 'Total Liabilities'),
-               bar('equity', 'Total Equity'), bar('cash', 'Cash & Equivalents')].filter(Boolean).join('');
+  // ฐานะการเงินล่าสุดคือสิ่งที่คนดูงบมักมองหาก่อน — แท่งงวดล่าสุดของ 4 กราฟนี้ติดกรอบทอง
+  const goldLatest = {{highlightLatest: true}};
+  const bal = [bar('assets', 'Total Assets', goldLatest), bar('liab', 'Total Liabilities', goldLatest),
+               bar('equity', 'Total Equity', goldLatest), bar('cash', 'Cash & Equivalents', goldLatest)]
+    .filter(Boolean).join('');
   if (bal) out.push(finSection('bal', 'BALANCE SHEET', 'what the company owns and owes',
     `<div class="fin-panel-grid">${{bal}}</div>`));
 
@@ -5101,7 +5141,9 @@ function renderFinTable(){{
     cols.map((c, i) => {{
       const on = i === finSortCol;
       const ic = on ? (finSortDir > 0 ? '▲' : '▼') : '';
-      return `<th class="${{on ? 'sorted' : ''}}" onclick="toggleFinSort(${{i}})">` +
+      // คอลัมน์ขวาสุด = งวดล่าสุดเสมอ (เรียงเก่า→ใหม่) ติดกรอบทองให้เห็นชัดว่างวดปัจจุบันอยู่ไหน
+      const latest = i === cols.length - 1 ? ' gold-frame' : '';
+      return `<th class="${{on ? 'sorted' : ''}}${{latest}}" onclick="toggleFinSort(${{i}})">` +
         `${{esc(c)}}${{ic ? `<span class="fin-sort-ic">${{ic}}</span>` : ''}}</th>`;
     }}).join('') + '</tr></thead><tbody>';
 
