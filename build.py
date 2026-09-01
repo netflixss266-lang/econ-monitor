@@ -2474,6 +2474,9 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   border:1px solid var(--line);color:var(--ink);font-family:'IBM Plex Mono',monospace;
   font-size:.92rem;font-variant-numeric:tabular-nums;width:100%}}
 .div-calc-row input:focus{{outline:none;border-color:var(--brass)}}
+/* งบลงทุนเป็นช่องหลัก — กว้างกว่าและมีกรอบทองเด่นกว่าอีกสองช่องที่เป็นแค่ค่าเริ่มต้นให้แก้ */
+.div-calc-primary{{flex:1.6;min-width:200px}}
+.div-calc-primary input{{border-color:var(--brass);font-size:1.05rem;font-weight:600}}
 .div-calc-reset{{flex:none;padding:9px 16px;border-radius:2px;cursor:pointer;
   background:var(--panel);border:1px solid var(--line);color:var(--mute);
   font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.08em}}
@@ -2485,6 +2488,8 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   text-transform:uppercase;color:var(--mute)}}
 .dcalc-cell b{{font-family:'IBM Plex Mono',monospace;font-size:1.15rem;font-weight:700;
   color:var(--brass)}}
+.dcalc-cell i{{font-style:normal;font-family:'IBM Plex Mono',monospace;font-size:.66rem;
+  color:var(--dim)}}
 .div-pmt-n{{display:inline-block;margin-left:7px;font-size:.68rem;color:var(--dim)}}
 .div-hist{{margin-top:8px}}
 /* หัวการ์ดกราฟ — ชื่อเรื่องเด่นชัด + บอกหน่วยไว้ใต้ชื่อ จะได้ไม่ต้องเดาว่าตัวเลขคืออะไร */
@@ -4680,15 +4685,17 @@ function renderDivCalc(dps, price, cur){{
   const d = isFinite(dps) ? dps : 0, p = isFinite(price) ? price : 0;
   return `<div class="div-calc">
       <div class="div-calc-h">Yield calculator</div>
-      <p class="div-calc-note">Prefilled with this stock's own trailing figures — change any
-        number, clear it, or try a hypothetical. Nothing here is saved or sent anywhere.</p>
+      <p class="div-calc-note">Enter how much you'd like to invest — shares, income and yield
+        fill in on their own. Price and dividend per share default to this stock's own current
+        figures; change either to test a different scenario. Nothing here is saved or sent
+        anywhere.</p>
       <div class="div-calc-row">
-        <label>Dividend / share (${{esc(cur)}})<input type="number" id="dcalc-dps" step="any"
-          value="${{d.toFixed(4)}}" oninput="updateDivCalc()"></label>
+        <label class="div-calc-primary">Investment budget (${{esc(cur)}})<input type="number"
+          id="dcalc-budget" step="any" min="0" placeholder="e.g. 10000" oninput="updateDivCalc()"></label>
         <label>Price / share (${{esc(cur)}})<input type="number" id="dcalc-price" step="any"
           value="${{p.toFixed(4)}}" oninput="updateDivCalc()"></label>
-        <label>Shares held<input type="number" id="dcalc-shares" step="any" min="0"
-          placeholder="0" oninput="updateDivCalc()"></label>
+        <label>Dividend / share (${{esc(cur)}})<input type="number" id="dcalc-dps" step="any"
+          value="${{d.toFixed(4)}}" oninput="updateDivCalc()"></label>
         <button type="button" class="div-calc-reset" onclick="resetDivCalc(${{d}},${{p}})">Reset</button>
       </div>
       <div class="div-calc-out" id="dcalc-out"></div>
@@ -4699,29 +4706,41 @@ function renderDivCalc(dps, price, cur){{
 function updateDivCalc(){{
   const out = document.getElementById('dcalc-out');
   if (!out) return;
-  const dpsEl = document.getElementById('dcalc-dps'), priceEl = document.getElementById('dcalc-price'),
-    sharesEl = document.getElementById('dcalc-shares');
-  const dps = parseFloat(dpsEl.value), price = parseFloat(priceEl.value), shares = parseFloat(sharesEl.value);
+  const dps = parseFloat(document.getElementById('dcalc-dps').value);
+  const price = parseFloat(document.getElementById('dcalc-price').value);
+  const budget = parseFloat(document.getElementById('dcalc-budget').value);
   const cur = divCurrency();
+
+  // จำนวนหุ้นมาจากงบที่กรอกล้วนๆ — ปัดลงเป็นหุ้นเต็ม เพราะตลาดหุ้นทั่วไปซื้อเศษหุ้นไม่ได้
+  // (ต่างจากราคา/ปันผลต่อหุ้นที่ยังพิมพ์ทศนิยมได้ตามที่รายงานจริง)
+  const shares = (isFinite(budget) && isFinite(price) && price > 0 && budget > 0)
+    ? Math.floor(budget / price) : null;
+  const spent = shares != null ? shares * price : null;
+  const left = (spent != null && isFinite(budget)) ? budget - spent : null;
+
   const yieldPct = (isFinite(dps) && isFinite(price) && price > 0) ? dps / price * 100 : null;
   const monthly = yieldPct != null ? yieldPct / 12 : null;
-  const income = (isFinite(dps) && isFinite(shares) && shares > 0) ? dps * shares : null;
-  const cell = (lbl, val) => `<div class="dcalc-cell"><span>${{esc(lbl)}}</span><b>${{val}}</b></div>`;
+  const income = (isFinite(dps) && shares != null && shares > 0) ? dps * shares : null;
+
+  const cell = (lbl, val, sub) => `<div class="dcalc-cell"><span>${{esc(lbl)}}</span><b>${{val}}</b>` +
+    (sub ? `<i>${{esc(sub)}}</i>` : '') + `</div>`;
   out.innerHTML =
+    cell('Shares you’d get', shares != null ? shares.toLocaleString() : '—',
+      spent != null ? `${{divFmt(spent)}} ${{cur}} spent · ${{divFmt(left)}} ${{cur}} left over` : '') +
+    cell('Annual income', income != null ? divFmt(income) + ' ' + esc(cur) : '—') +
     cell('Implied annual yield', yieldPct != null ? yieldPct.toFixed(2) + '%' : '—') +
-    cell('Monthly equivalent', monthly != null ? monthly.toFixed(2) + '%' : '—') +
-    cell('Annual income', income != null ? divFmt(income) + ' ' + esc(cur) : '—');
-  // แถวประวัติรายปีข้างล่างก็ใช้จำนวนหุ้นเดียวกันนี้ คำนวณรายได้ต่อปีให้ด้วยแบบเรียลไทม์
+    cell('Monthly equivalent', monthly != null ? monthly.toFixed(2) + '%' : '—');
+  // แถวประวัติรายปีข้างล่างก็ใช้จำนวนหุ้นที่คำนวณจากงบเดียวกันนี้ อัปเดตรายได้ต่อปีให้แบบเรียลไทม์
   document.querySelectorAll('.div-income-cell').forEach(td => {{
     const rd = parseFloat(td.dataset.dps);
-    td.textContent = (isFinite(rd) && isFinite(shares) && shares > 0)
+    td.textContent = (isFinite(rd) && shares != null && shares > 0)
       ? divFmt(rd * shares) + ' ' + cur : '—';
   }});
 }}
 function resetDivCalc(dps, price){{
   document.getElementById('dcalc-dps').value = dps.toFixed(4);
   document.getElementById('dcalc-price').value = price.toFixed(4);
-  document.getElementById('dcalc-shares').value = '';
+  document.getElementById('dcalc-budget').value = '';
   updateDivCalc();
 }}
 
