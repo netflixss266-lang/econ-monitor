@@ -1189,6 +1189,9 @@ def cat_icon(cat, extra=""):
 
 INFL_FILE = "inflation.json"
 INFL_HOURS = 12       # เช็ควันละสองครั้ง — ตัวเลขจริงออกเดือนละครั้ง แต่ไม่รู้ว่าวันไหน
+# ไฟล์แคชเก็บ "ข้อความที่จะแสดง" (ชื่อแหล่ง/งวด) ไว้ด้วย ไม่ใช่แค่ตัวเลข
+# แก้ข้อความในโค้ดแล้วของเก่าจึงยังค้างอยู่จนกว่าแคชจะหมดอายุ — ต้องมีเลขรุ่นกำกับ
+INFL_SCHEMA = 2
 
 
 def fetch_inflation():
@@ -1202,7 +1205,7 @@ def fetch_inflation():
     จะได้เห็นชัดว่าเลขสองฝั่งไม่ได้สดเท่ากัน ไม่ใช่เอาไปเทียบกันตรงๆ
     """
     cached = load_json(INFL_FILE)
-    if cached.get("at"):
+    if cached.get("at") and cached.get("v") == INFL_SCHEMA:
         try:
             age = (NOW - datetime.fromisoformat(cached["at"])).total_seconds() / 3600
             if 0 <= age < INFL_HOURS:
@@ -1264,7 +1267,7 @@ def fetch_inflation():
         print(f"  ! เงินเฟ้อไทย ดึงไม่ได้: {ex}")
 
     if out:
-        save_json(INFL_FILE, {"at": NOW.isoformat(), "data": out})
+        save_json(INFL_FILE, {"v": INFL_SCHEMA, "at": NOW.isoformat(), "data": out})
         bits = " · ".join(f"{v['label']} {v['rate']}% ({v['period']})" for v in out.values())
         print(f"  ✓ เงินเฟ้อ {bits}")
     else:
