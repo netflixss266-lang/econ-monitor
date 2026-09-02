@@ -4098,7 +4098,13 @@ function toggleFavFold(g){{
 
 function toggleFav(ev, label){{
   ev.stopPropagation();
-  chFavs.has(label) ? chFavs.delete(label) : chFavs.add(label);
+  if (chFavs.has(label)) {{
+    chFavs.delete(label);
+  }} else {{
+    chFavs.add(label);
+    // ติดดาวปุ๊บดึงงบเตรียมไว้เลย พอกดเข้าไปดูจะได้ไม่ต้องรอโหลด
+    if (!netIsFrugal()) loadFin(label);
+  }}
   saveFavs();
   renderAssetList(document.getElementById('csearch').value);
 }}
@@ -4405,6 +4411,40 @@ const FIN_FIELDS = [
 const FIN_SEC = {{income: 'INCOME STATEMENT', balance: 'BALANCE SHEET', ratios: 'KEY RATIOS'}};
 const FIN_PCT_KEYS = new Set(['gm', 'om', 'nm', 'roe', 'roa']);
 let finCache = {{}}, finSpan = 'annual', finSortCol = -1, finSortDir = -1, finCompareSym = null;
+
+// โหลดงบการเงินของตัวเดียว — ใช้ร่วมกันทั้งตอนกดเปิดจริงและตอนโหลดล่วงหน้าให้รายการโปรด
+// เก็บตัว promise ไว้ด้วย ไม่ใช่แค่ผลลัพธ์ ถ้าผู้ใช้กดเข้าไปพอดีตอนโหลดล่วงหน้ายังค้างอยู่
+// จะได้เกาะสายเดิม ไม่ยิงขอไฟล์เดิมซ้ำสองรอบ
+const finInflight = {{}};
+const FIN_NONE = () => ({{annual: [], quarterly: []}});
+function loadFin(label){{
+  if (finCache[label]) return Promise.resolve(finCache[label]);
+  if (finInflight[label]) return finInflight[label];
+  // ไม่มีงบการเงิน (.f) ไม่ต้องยิงขอไฟล์เลย — รู้อยู่แล้วว่าไม่มี (เช่น ETF อย่าง JEPQ)
+  if (!CHARTS[label]?.f) {{ finCache[label] = FIN_NONE(); return Promise.resolve(finCache[label]); }}
+  const p = fetch('{FIN_DIR}/' + CHARTS[label].s + '.json')
+    .then(r => {{ if (!r.ok) throw new Error('http ' + r.status); return r.json(); }})
+    .then(d => {{ finCache[label] = d; delete finInflight[label]; return d; }})
+    // เน็ตสะดุดตอนโหลดล่วงหน้าห้ามจำว่า "ไม่มีงบ" ถาวร — ไม่ cache ไว้ พอกดเข้าไปจริงจะได้ลองใหม่
+    .catch(() => {{ delete finInflight[label]; return FIN_NONE(); }});
+  finInflight[label] = p;
+  return p;
+}}
+
+// โหมดประหยัดเน็ต/เน็ตช้า ไม่ต้องโหลดของ "เผื่อกด" ให้เปลืองแทน
+const netIsFrugal = () => {{
+  const c = navigator.connection;
+  return !!(c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '')));
+}};
+
+// ดึงงบของรายการโปรดมาพักไว้ตอนเครื่องว่าง กด FINANCIALS แล้วขึ้นทันทีไม่ต้องรอโหลด
+// ไฟล์ละ ~3 KB ทั้งชุดรายการโปรดยังไม่ถึง 100 KB — เดินทีละ 3 สาย ไม่แย่งเน็ตกับข่าว/กราฟ
+function prefetchFavFin(){{
+  if (netIsFrugal()) return;
+  const queue = [...chFavs].filter(l => CHARTS[l]?.f && !finCache[l] && !finInflight[l]);
+  const pump = () => {{ if (queue.length) loadFin(queue.shift()).then(pump); }};
+  for (let k = 0; k < 3; k++) pump();
+}}
 
 const finFmt = v => {{
   if (v == null || !isFinite(v)) return null;
@@ -5244,16 +5284,13 @@ async function openFinancials(){{
   document.querySelector('.fin-tabs').hidden = !hasFin;
   document.getElementById('finmodal').hidden = false;
   document.body.style.overflow = 'hidden';
-  if (!finCache[chCur]) {{
+  // จับชื่อตัวที่กำลังเปิดไว้ก่อน — ถ้าผู้ใช้กดลูกศรเปลี่ยนตัวระหว่างที่ยังโหลดไม่เสร็จ
+  // ของที่โหลดมาต้องไม่ไปตกใส่ตัวใหม่ (ของเดิมเขียน finCache[chCur] หลัง await จึงสลับกันได้)
+  const sym = chCur;
+  if (!finCache[sym]) {{
     document.getElementById('fin-body').innerHTML = '<div class="cempty">Loading…</div>';
-    // ไม่มีงบการเงิน (.f เป็น false) ไม่ต้องยิงขอ fin/<slug>.json เลย — รู้อยู่แล้วว่าไม่มีไฟล์
-    if (!hasFin) {{
-      finCache[chCur] = {{annual: [], quarterly: []}};
-    }} else {{
-      try {{
-        finCache[chCur] = await fetch('{FIN_DIR}/' + CHARTS[chCur].s + '.json').then(r => r.json());
-      }} catch (e) {{ finCache[chCur] = {{annual: [], quarterly: []}}; }}
-    }}
+    await loadFin(sym);
+    if (chCur !== sym) return;        // เปลี่ยนตัวไปแล้ว ปล่อยให้รอบของตัวใหม่วาดเอง
   }}
   if (chCur && (hasFin || hasDiv)) {{
     renderFinTable();
@@ -5269,12 +5306,8 @@ function closeFinancials(){{
 // แล้ว re-render ทั้งแดชบอร์ด (แท่งกราฟขึ้นเป็นคู่ + KPI มีบรรทัดเทียบเพิ่ม)
 async function setFinCompare(label){{
   finCompareSym = label || null;
-  if (finCompareSym && !finCache[finCompareSym]) {{
-    const slug = CHARTS[finCompareSym]?.s;
-    try {{
-      finCache[finCompareSym] = slug ? await fetch('{FIN_DIR}/' + slug + '.json').then(r => r.json()) : null;
-    }} catch (e) {{ finCache[finCompareSym] = null; }}
-  }}
+  // ตัวที่เอามาเทียบมักเป็นรายการโปรดที่โหลดล่วงหน้าไว้แล้ว กรณีนั้นขึ้นทันทีไม่ต้องรอ
+  if (finCompareSym && !finCache[finCompareSym]) await loadFin(finCompareSym);
   renderFinTable();
 }}
 document.getElementById('finmodal').addEventListener('click', ev => {{
@@ -6059,6 +6092,14 @@ document.getElementById('mmodal').addEventListener('click', ev => {{
   try {{ s = sessionStorage.getItem('scope') || 'all'; }} catch(e) {{}}
   if (!document.querySelector(`.tab[data-scope="${{s}}"]`)) s = 'all';
   setScope(s);
+}})();
+
+// พอหน้าเว็บนิ่งแล้วค่อยแอบดึงงบการเงินของรายการโปรดมาพักไว้ — ต้องรอให้ข่าว รูป และกราฟ
+// โหลดเสร็จก่อน ของพวกนั้นคือสิ่งที่ผู้ใช้เห็นทันที ส่วนงบเป็นของ "เผื่อกด" ยอมมาทีหลังได้
+(() => {{
+  const go = () => (window.requestIdleCallback || (f => setTimeout(f, 1200)))(prefetchFavFin);
+  if (document.readyState === 'complete') go();
+  else window.addEventListener('load', go, {{once: true}});
 }})();
 
 // เอา overlay อินโทรออกจาก DOM หลังเล่นจบ
