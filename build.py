@@ -2511,6 +2511,13 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
     box-shadow:0 0 0 1px rgba(198,169,97,.6),0 0 12px 2px rgba(198,169,97,.3)}}
 }}
 .div-pmt-n{{display:inline-block;margin-left:7px;font-size:.68rem;color:var(--dim)}}
+/* ยอดแปลงเป็นบาท — เป็นของรอง ต้องอ่านออกแต่ห้ามแย่งสายตาไปจากตัวเลขสกุลจริง */
+/* วางเป็นพี่น้องของ .fin-kpi-val ไม่ใช่ลูก — ตัวนั้น nowrap+overflow:hidden ยอดบาทที่ยาวกว่า
+   กรอบจะโดนตัดหายไปเงียบๆ บนจอมือถือ ตรงนี้จึงยอมให้ตัดบรรทัดได้แทนที่จะโดนซ่อน */
+.thb-eq{{display:block;font-family:'IBM Plex Mono',monospace;font-size:.68rem;
+  color:var(--dim);font-weight:400;letter-spacing:.01em;margin-top:4px;
+  overflow-wrap:anywhere}}
+.fin-kpi .thb-eq{{font-size:.7rem}}
 .div-hist{{margin-top:8px}}
 /* หัวการ์ดกราฟ — ชื่อเรื่องเด่นชัด + บอกหน่วยไว้ใต้ชื่อ จะได้ไม่ต้องเดาว่าตัวเลขคืออะไร */
 .fin-chart-h{{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
@@ -2612,6 +2619,10 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   .fin-cmp{{margin-left:0;width:100%}}
   .fin-cmp select{{flex:1;max-width:none}}
   .fin-kpis{{grid-template-columns:repeat(auto-fit,minmax(148px,1fr))}}
+  /* การ์ดแคบลงเหลือ ~125px ตัวเลขพร้อมหน่วยอย่าง "7.207 USD" เลยยาวเกินจนโดนตัดเป็น "7.207 …"
+     ย่อขนาดฟอนต์ตามความกว้างการ์ดแทนการตัดทิ้ง — ตัวเลขต้องอ่านครบก่อนสวย */
+  .fin-kpi-val{{font-size:clamp(1.05rem,7.5cqw,1.55rem)}}
+  .fin-kpi{{container-type:inline-size}}
   .fin-panel-grid{{grid-template-columns:1fr}}
   .fin-table th,.fin-table td{{padding:11px 15px}}
   .fin-table th:first-child,.fin-table td:first-child{{min-width:150px;font-size:.9rem}}
@@ -4700,6 +4711,51 @@ function divFmt(v){{
   return s;
 }}
 
+// ── ช่องกรอกจำนวนเงิน ────────────────────────────────────
+// input type=number ใส่ , ไม่ได้ (เบราว์เซอร์ถือว่าค่าไม่ถูกต้องแล้วคืนค่าว่าง) แต่งบก้อนโต
+// อย่าง 500000 อ่านไม่ออกเลยถ้าไม่มีตัวคั่น จึงเปลี่ยนเป็น type=text แล้วจัดรูปแบบเอง
+const groupDigits = s => {{
+  const [i, ...rest] = s.split('.');
+  const gi = i.replace(/\\B(?=(\\d{{3}})+(?!\\d))/g, ',');
+  return rest.length ? gi + '.' + rest.join('') : gi;
+}};
+const moneyVal = el => parseFloat((el.value || '').replace(/,/g, ''));
+// จัดรูปแบบระหว่างพิมพ์ แล้วเลื่อนเคอร์เซอร์ตามจำนวนหลัก (ไม่ใช่ตามตำแหน่งตัวอักษร)
+// ไม่งั้นพอ , โผล่เพิ่มกลางตัวเลข เคอร์เซอร์จะเด้งไปท้ายช่องทุกครั้งที่พิมพ์
+function fmtMoneyInput(el){{
+  const pos = el.selectionStart;
+  const digitsBefore = (el.value.slice(0, pos).match(/[\\d.]/g) || []).length;
+  let clean = el.value.replace(/[^\\d.]/g, '');
+  const dot = clean.indexOf('.');            // เก็บจุดทศนิยมได้จุดเดียว
+  if (dot >= 0) clean = clean.slice(0, dot + 1) + clean.slice(dot + 1).replace(/\\./g, '');
+  const out = groupDigits(clean);
+  el.value = out;
+  let seen = 0, np = digitsBefore ? out.length : 0;
+  for (let k = 0; k < out.length && digitsBefore; k++) {{
+    if (/[\\d.]/.test(out[k]) && ++seen === digitsBefore) {{ np = k + 1; break; }}
+  }}
+  try {{ el.setSelectionRange(np, np); }} catch(e) {{}}
+}}
+
+// เรตแลกเงินเอาจากคู่ USD/THB ที่แถบราคาของเว็บดึงสดอยู่แล้ว ไม่ได้ฮาร์ดโค้ดหรือเดาเอง
+// ถ้าดึงเรตไม่ได้ให้คืน null แล้วไม่ต้องโชว์ยอดบาทเลย ดีกว่าโชว์ตัวเลขที่ไม่รู้ที่มา
+function usdThbRate(){{
+  const v = parseFloat((TNEWS['USD/THB'] || {{}}).price);
+  return isFinite(v) && v > 0 ? v : null;
+}}
+// ยอดบาทเทียบเท่าแบบเล็กๆ ต่อท้ายตัวเลขสกุล USD — หุ้นไทยเป็นบาทอยู่แล้วไม่ต้องแปลงซ้ำ
+function thbEq(v, cur){{
+  if (cur !== 'USD' || v == null || !isFinite(v)) return '';
+  const r = usdThbRate();
+  return r ? `<span class="thb-eq">≈ ${{divFmtShort(v * r)}} THB</span>` : '';
+}}
+// เวอร์ชันข้อความล้วน สำหรับที่ที่ทั้งก้อนโดน escape อยู่แล้ว (ใส่แท็กเข้าไปไม่ได้)
+function thbEqTxt(v, cur){{
+  if (cur !== 'USD' || v == null || !isFinite(v)) return '';
+  const r = usdThbRate();
+  return r ? ` · ≈ ${{divFmtShort(v * r)}} THB` : '';
+}}
+
 function renderDivSection(){{
   const rows = divRows();
   const cur = divCurrency();
@@ -4732,17 +4788,26 @@ function renderDivSection(){{
       `<div class="fin-kpi-val">${{monthlyEq != null ? monthlyEq.toFixed(2) + '%' : '—'}}</div>` +
       `<div class="fin-kpi-cmp"><span>annual ÷ 12 — not a real monthly payment</span></div></div>` +
     `<div class="fin-kpi gold-frame"><div class="fin-kpi-lbl">Dividend / Share (TTM)</div>` +
-      `<div class="fin-kpi-val">${{divFmt(ttm.sum)}} ${{esc(cur)}}</div>` +
+      `<div class="fin-kpi-val">${{divFmt(ttm.sum)}} ${{esc(cur)}}</div>${{thbEq(ttm.sum, cur)}}` +
       `<div class="fin-kpi-cmp"><span>${{esc(freqTxt)}}</span></div></div>` +
     `<div class="fin-kpi"><div class="fin-kpi-lbl">Price / Share</div>` +
-      `<div class="fin-kpi-val">${{divFmt(price)}} ${{esc(cur)}}</div></div>` +
+      `<div class="fin-kpi-val">${{divFmt(price)}} ${{esc(cur)}}</div>${{thbEq(price, cur)}}</div>` +
     `</div>`;
 
   const emptyMsg = hasDiv ? '' : `<p class="met-note">No dividend payments found in the ` +
     `10 years of price history held for ${{esc(chCur)}}. The calculator below still works — ` +
     `plug in a hypothetical dividend to see what yield it would imply.</p>`;
 
-  return kpis + emptyMsg + renderDivCalc(ttm.sum, price, cur) + renderDivHistory(rows, histSeries, cur);
+  // ยอดบาทเป็นของแถมไว้พออ่านออก ไม่ใช่ตัวเลขที่ใครรายงาน — ต้องบอกเรตที่ใช้และที่มาไว้ตรงๆ
+  // และเรตนี้เป็นเรตวันนี้ตัวเดียว ใช้คูณย้อนอดีตในตารางด้วย ซึ่งไม่ใช่เรตของปีนั้นจริงๆ
+  const rate = cur === 'USD' ? usdThbRate() : null;
+  const fxNote = rate ? `<p class="met-note">THB figures are a conversion at today's ` +
+    `USD/THB rate (${{divFmtShort(rate)}}), taken from the live pair on this page — shown for ` +
+    `reference only. Dividends are paid in USD, and past years are converted at today's rate, ` +
+    `not the rate that applied back then.</p>` : '';
+
+  return kpis + fxNote + emptyMsg +
+    renderDivCalc(ttm.sum, price, cur) + renderDivHistory(rows, histSeries, cur);
 }}
 
 function renderDivCalc(dps, price, cur){{
@@ -4754,13 +4819,13 @@ function renderDivCalc(dps, price, cur){{
         figures; change either to test a different scenario. Nothing here is saved or sent
         anywhere.</p>
       <div class="div-calc-row">
-        <label class="div-calc-primary">Investment budget (${{esc(cur)}})<input type="number"
-          class="gold-frame" id="dcalc-budget" step="any" min="0" placeholder="e.g. 10000"
-          oninput="updateDivCalc()"></label>
-        <label>Price / share (${{esc(cur)}})<input type="number" id="dcalc-price" step="any"
-          value="${{p.toFixed(4)}}" oninput="updateDivCalc()"></label>
-        <label>Dividend / share (${{esc(cur)}})<input type="number" id="dcalc-dps" step="any"
-          value="${{d.toFixed(4)}}" oninput="updateDivCalc()"></label>
+        <label class="div-calc-primary">Investment budget (${{esc(cur)}})<input type="text"
+          inputmode="decimal" class="gold-frame" id="dcalc-budget" placeholder="e.g. 10,000"
+          oninput="fmtMoneyInput(this);updateDivCalc()"></label>
+        <label>Price / share (${{esc(cur)}})<input type="text" inputmode="decimal" id="dcalc-price"
+          value="${{groupDigits(p.toFixed(4))}}" oninput="fmtMoneyInput(this);updateDivCalc()"></label>
+        <label>Dividend / share (${{esc(cur)}})<input type="text" inputmode="decimal" id="dcalc-dps"
+          value="${{groupDigits(d.toFixed(4))}}" oninput="fmtMoneyInput(this);updateDivCalc()"></label>
         <button type="button" class="div-calc-reset" onclick="resetDivCalc(${{d}},${{p}})">Reset</button>
       </div>
       <div class="div-calc-out" id="dcalc-out"></div>
@@ -4771,9 +4836,9 @@ function renderDivCalc(dps, price, cur){{
 function updateDivCalc(){{
   const out = document.getElementById('dcalc-out');
   if (!out) return;
-  const dps = parseFloat(document.getElementById('dcalc-dps').value);
-  const price = parseFloat(document.getElementById('dcalc-price').value);
-  const budget = parseFloat(document.getElementById('dcalc-budget').value);
+  const dps = moneyVal(document.getElementById('dcalc-dps'));
+  const price = moneyVal(document.getElementById('dcalc-price'));
+  const budget = moneyVal(document.getElementById('dcalc-budget'));
   const cur = divCurrency();
 
   // จำนวนหุ้นมาจากงบที่กรอกล้วนๆ — ปัดลงเป็นหุ้นเต็ม เพราะตลาดหุ้นทั่วไปซื้อเศษหุ้นไม่ได้
@@ -4792,23 +4857,25 @@ function updateDivCalc(){{
   out.innerHTML =
     cell('Shares you’d get', shares != null ? shares.toLocaleString() : '—',
       spent != null ? `${{divFmt(spent)}} ${{cur}} spent · ${{divFmt(left)}} ${{cur}} left over` : '') +
-    cell('Annual income', income != null ? divFmt(income) + ' ' + esc(cur) : '—',
+    cell('Annual income', income != null ? divFmt(income) + ' ' + esc(cur) + thbEq(income, cur) : '—',
       // เฉลี่ยรายเดือนจากยอดทั้งปี ไม่ใช่เงินที่เข้าจริงทุกเดือน — บริษัทส่วนใหญ่จ่ายปันผล
       // เป็นรอบไตรมาส ไม่ใช่รายเดือน จึงเขียน "avg" กำกับไว้กันเข้าใจผิดว่าเป็นเงินสดที่โอนเข้าจริง
       // เฉลี่ย/เดือนไม่ใช่ตัวเลขที่รายงานจริง แค่ประมาณ — 2 ตำแหน่งพอ ใส่ 4 ตำแหน่งจะดูแม่นยำเกินจริง
-      income != null ? `≈ ${{divFmtShort(income / 12)}} ${{cur}} / month avg` : '') +
+      income != null ? `≈ ${{divFmtShort(income / 12)}} ${{cur}} / month avg` +
+        thbEqTxt(income / 12, cur) : '') +
     cell('Implied annual yield', yieldPct != null ? yieldPct.toFixed(2) + '%' : '—') +
     cell('Monthly equivalent', monthly != null ? monthly.toFixed(2) + '%' : '—');
   // แถวประวัติรายปีข้างล่างก็ใช้จำนวนหุ้นที่คำนวณจากงบเดียวกันนี้ อัปเดตรายได้ต่อปีให้แบบเรียลไทม์
   document.querySelectorAll('.div-income-cell').forEach(td => {{
     const rd = parseFloat(td.dataset.dps);
-    td.textContent = (isFinite(rd) && shares != null && shares > 0)
-      ? divFmt(rd * shares) + ' ' + cur : '—';
+    const inc = (isFinite(rd) && shares != null && shares > 0) ? rd * shares : null;
+    td.innerHTML = inc != null
+      ? divFmt(inc) + ' ' + esc(cur) + thbEq(inc, cur) : '—';
   }});
 }}
 function resetDivCalc(dps, price){{
-  document.getElementById('dcalc-dps').value = dps.toFixed(4);
-  document.getElementById('dcalc-price').value = price.toFixed(4);
+  document.getElementById('dcalc-dps').value = groupDigits(dps.toFixed(4));
+  document.getElementById('dcalc-price').value = groupDigits(price.toFixed(4));
   document.getElementById('dcalc-budget').value = '';
   updateDivCalc();
 }}
@@ -4846,8 +4913,8 @@ function renderDivHistory(rows, series, cur){{
   }});
   const rowsHtml = tblRows.map(r => `<tr>
       <td>${{r.y}}</td>
-      <td>${{divFmt(r.dps)}} ${{esc(cur)}}<span class="div-pmt-n">${{r.n}} pmt${{r.n === 1 ? '' : 's'}}</span></td>
-      <td>${{r.price0 != null ? divFmt(r.price0) + ' ' + esc(cur) : '<span class="met-na">—</span>'}}</td>
+      <td>${{divFmt(r.dps)}} ${{esc(cur)}}<span class="div-pmt-n">${{r.n}} pmt${{r.n === 1 ? '' : 's'}}</span>${{thbEq(r.dps, cur)}}</td>
+      <td>${{r.price0 != null ? divFmt(r.price0) + ' ' + esc(cur) + thbEq(r.price0, cur) : '<span class="met-na">—</span>'}}</td>
       <td>${{r.yld != null ? r.yld.toFixed(2) + '%' : '<span class="met-na">—</span>'}}</td>
       <td>${{r.yld != null ? (r.yld / 12).toFixed(2) + '%' : '<span class="met-na">—</span>'}}</td>
       <td class="div-income-cell" data-dps="${{r.dps}}">—</td>
