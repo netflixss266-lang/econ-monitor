@@ -34,7 +34,8 @@ REBUILD_MIN = 30       # ต้องตรงกับ cron ใน .github/work
 CHART_FULL_HOURS = 6   # ดึงแท่งเทียนชุดเต็มทุกกี่ชั่วโมง (รอบอื่นอัปเดตแค่กราฟรายวัน)
 # ขยับเลขนี้ทุกครั้งที่เพิ่ม/เปลี่ยนช่วงเวลาใน CHART_RANGES เพื่อทิ้ง cache รุ่นเก่า —
 # ความสดอย่างเดียวจับไม่ได้ว่า cache "ครบชุดไหม" (ตอนเพิ่ม 10Y เจอปัญหานี้กับงบการเงินมาแล้ว)
-CHART_SCHEMA = 5      # 2=10Y · 3=ชื่อเต็ม · 4=ล้าง prefix ชื่อหุ้นไทย · 5=เก็บประวัติปันผล
+CHART_SCHEMA = 6      # 2=10Y · 3=ชื่อเต็ม · 4=ล้าง prefix ชื่อหุ้นไทย · 5=เก็บประวัติปันผล
+                      # 6=ธง "d" ในดัชนี บอกว่ามีปันผล (ให้ ETF อย่าง JEPQ ที่ไม่มีงบเข้าเมนูได้)
 PER_CATEGORY = 18
 PER_ROW = 14          # จำนวนการ์ดต่อแถว (แยกไทย/ต่างประเทศแล้วจึงลดลงจาก PER_CATEGORY)
 CACHE_FILE = "cache.json"
@@ -580,6 +581,12 @@ def build_charts(markets=None):
             index[label]["n"] = nm
         if meta.get("c"):
             index[label]["cur"] = meta["c"]
+        # ธงบอกว่า "มีประวัติปันผลจริง" แบบเบาๆ ไว้ในดัชนี — เหมือน .f (มีงบการเงิน)
+        # ฝั่งเว็บจะได้ตัดสินใจได้ (ปุ่ม FINANCIALS โชว์ไหม / อยู่ในลิสต์เลื่อนซ้าย-ขวาไหม)
+        # โดยไม่ต้องดึงไฟล์กราฟรายตัวมาเช็คก่อน — กองทุน/ETF อย่าง JEPQ ไม่มีงบการเงิน
+        # (ไม่ติด .f) แต่มีปันผลจริง จึงต้องมีธงนี้แยกไว้ต่างหาก ไม่งั้นหน้าเว็บจะซ่อนไปเลย
+        if div_by_label.get(label):
+            index[label]["d"] = 1
     total = sum(len(c) for tfs in frames.values() for c in tfs.values())
     print(f"  ✓ กราฟ {len(index)}/{len(uni)} สินทรัพย์ · {total:,} แท่งเทียน")
     if index:
@@ -3248,7 +3255,7 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
       </div>
       <button class="fin-btn" type="button" id="fin-btn" onclick="openFinancials()" hidden>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M7 19V9M12 19V5M17 19v-7"/></svg>
-        FINANCIALS</button>
+        <span id="fin-btn-lbl">FINANCIALS</span></button>
       <button class="fin-btn expand-btn" type="button" id="cexpand" onclick="toggleChartFull()"
               aria-pressed="false" title="Expand the chart to the full window (Esc to exit)">
         <svg viewBox="0 0 24 24" aria-hidden="true" id="cexpand-ic">
@@ -3348,12 +3355,12 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
       </div>
     </div>
     <div class="fin-body" id="fin-body"><div class="cempty">Loading…</div></div>
-    <p class="fin-note">Figures are company-reported financial statements sourced from Yahoo
-      Finance, up to the last {FIN_YEARS} fiscal years / most recent reported quarters.
-      Five years is all this source carries — anything older simply isn't published in the
-      feed, so it is left out rather than estimated. Banks and insurers often show "—" for
-      cost of revenue / gross profit, which doesn't apply to their business model.
-      Indicators only, not investment advice.
+    <p class="fin-note"><span id="fin-note-stmt">Figures are company-reported financial
+      statements sourced from Yahoo Finance, up to the last {FIN_YEARS} fiscal years / most
+      recent reported quarters. Five years is all this source carries — anything older simply
+      isn't published in the feed, so it is left out rather than estimated. Banks and insurers
+      often show "—" for cost of revenue / gross profit, which doesn't apply to their business
+      model. </span>Indicators only, not investment advice.
       <span id="fin-checked"></span></p>
   </div>
 </div>
@@ -4225,7 +4232,11 @@ async function pickChart(label){{
   const note = document.getElementById('cnote');
   note.textContent = chData.note || '';
   note.hidden = !chData.note;
-  document.getElementById('fin-btn').hidden = !CHARTS[label].f;
+  // ปุ่มนี้โชว์ได้สองเหตุผล: มีงบการเงิน (.f) หรือมีแต่ปันผลจริง (.d — เช่น ETF ที่ไม่ยื่นงบ
+  // แบบบริษัทแต่จ่ายปันผลจริง อย่าง JEPQ) ป้ายข้อความจึงต้องเปลี่ยนตามว่ามีอะไรให้ดูจริง
+  const hasFin = !!CHARTS[label].f, hasDiv = !!CHARTS[label].d;
+  document.getElementById('fin-btn').hidden = !hasFin && !hasDiv;
+  document.getElementById('fin-btn-lbl').textContent = hasFin ? 'FINANCIALS' : 'DIVIDENDS';
   renderFullBar();               // เปลี่ยนหุ้นแล้วสถิติ 10 ปีต้องเปลี่ยนตาม
   renderChart();
 }}
@@ -5101,11 +5112,39 @@ function renderFinTable(){{
   const body = document.getElementById('fin-body');
   const data = finCache[chCur];
   if (!data) {{ body.innerHTML = '<div class="cempty">Loading…</div>'; return; }}
+
+  // DIVIDENDS ไม่ขึ้นกับงบการเงินเลย — มาจาก chData.div ของไฟล์กราฟโดยตรง จึงวาดได้เสมอ
+  // ไม่ว่าจะมีงบหรือไม่ก็ตาม (ก่อนหน้านี้ฟังก์ชันนี้ return ก่อนถึงตรงนี้เวลาไม่มีงบ ทำให้
+  // ETF อย่าง JEPQ ที่มีปันผลจริงแต่ไม่มีงบ ไม่เคยเห็นส่วนปันผลของตัวเองเลย)
+  let html = '<div class="fin-inner">' +
+    finSection('div', 'DIVIDENDS',
+      'trailing 12 months, priced today — every figure comes from dividends already paid',
+      renderDivSection());
+  const finish = () => {{
+    // เก็บตำแหน่งเลื่อนไว้ก่อนวาดใหม่ — กดเรียงคอลัมน์หรือเปลี่ยนหุ้นเทียบแล้วไม่ให้เด้งกลับบนสุด
+    const keep = body.scrollTop;
+    body.innerHTML = html + '</div>';
+    body.scrollTop = keep;
+    updateDivCalc();
+  }};
+
+  // ไม่มีงบการเงินเลยทั้งรายปีและรายไตรมาส — ต่างจาก "span นี้ยังไม่มีข้อมูล" ข้างล่าง
+  // ซึ่งเป็นบริษัทจริงที่มีงบอีก span หนึ่งอยู่ ตรงนี้ไม่มีงบให้เลยสักงวด (เช่น ETF) จบแค่
+  // DIVIDENDS พอ ไม่ต้องขึ้น KEY METRICS/GROWTH/ฯลฯ ที่ไม่มีข้อมูลให้วาดอยู่ดี
+  if (!(data.annual || []).length && !(data.quarterly || []).length) {{
+    html += `<p class="met-note">No income statement or balance sheet on file for ` +
+      `${{esc(chCur)}} — likely a fund or ETF, which doesn't file the same annual/quarterly ` +
+      `reports a company does. The dividend history above is real and unaffected by this.</p>`;
+    finish();
+    return;
+  }}
+
   let rows = data[finSpan] || [];
   if (finSpan === 'quarterly') rows = currentYearQuarters(rows);
   if (!rows.length) {{
-    body.innerHTML = `<div class="fin-empty"><b>No ${{finSpan}} data reported yet</b>` +
+    html += `<div class="fin-empty"><b>No ${{finSpan}} data reported yet</b>` +
       '<span>Try the other tab, or check back after the next earnings release.</span></div>';
+    finish();
     return;
   }}
   rows = withRatios(rows);
@@ -5113,11 +5152,7 @@ function renderFinTable(){{
   const cols = rows.map(r => periodLabel(r.date, finSpan));
   const sortKey = (finSortCol >= 0 && rows[finSortCol]) ? rows[finSortCol] : null;
 
-  let html = '<div class="fin-inner">' +
-    finSection('div', 'DIVIDENDS',
-      'trailing 12 months, priced today — every figure comes from dividends already paid',
-      renderDivSection()) +
-    renderFinToolbar() +
+  html += renderFinToolbar() +
     renderFinKpiSection(rows, cmpRows) + renderFinDashboard(rows, cmpRows);
   let table = '<div class="fin-table-wrap"><table class="fin-table"><thead><tr><th>Line item</th>' +
     cols.map((c, i) => {{
@@ -5156,11 +5191,7 @@ function renderFinTable(){{
   table += '</tbody></table></div>';
   html += finSection('stmt', 'STATEMENTS',
     'click a period column to sort line items within each group', table);
-  // เก็บตำแหน่งเลื่อนไว้ก่อนวาดใหม่ — กดเรียงคอลัมน์หรือเปลี่ยนหุ้นเทียบแล้วไม่ให้เด้งกลับบนสุด
-  const keep = body.scrollTop;
-  body.innerHTML = html + '</div>';
-  body.scrollTop = keep;
-  updateDivCalc();
+  finish();
 }}
 
 function pickFinSpan(span){{
@@ -5173,14 +5204,20 @@ function pickFinSpan(span){{
 
 // ลูกศรเปลี่ยนหุ้นโดยไม่ต้องปิดหน้าต่าง — ไล่ในรายการโปรดก่อนถ้าหุ้นปัจจุบันติดดาวไว้
 // (และมีงบให้ดู) ไม่งั้นไล่ทุกตัวที่มีงบการเงิน กันเผื่อเข้ามาจากการค้นหา
-function finNavList(){{
-  const withData = Object.keys(CHARTS).filter(l => CHARTS[l].f);
+//
+// includeDivOnly = true: ใช้กับลูกศร ‹ › เลื่อนหุ้นในหัวหน้าต่าง — รวม ETF ที่ไม่มีงบแต่มี
+// ปันผลจริงด้วย (เช่น JEPQ) จะได้เลื่อนไปเจอ ไม่ข้ามไปเงียบๆ
+// ปล่อยว่าง (ค่าเริ่มต้น false): ใช้กับดรอปดาวน์ "เทียบกับ" ที่ต้องมีแถวงบการเงินมาจับคู่
+// เทียบกัน — ตัวที่ไม่มีงบจับคู่เทียบไม่ได้อยู่ดี จึงยังกรองด้วย .f เหมือนเดิม
+function finNavList(includeDivOnly){{
+  const withData = Object.keys(CHARTS).filter(l =>
+    CHARTS[l].f || (includeDivOnly && CHARTS[l].d));
   const favs = withData.filter(l => chFavs.has(l));
   const list = (favs.length > 1 && favs.includes(chCur)) ? favs : withData;
   return list.slice().sort((a, b) => a.localeCompare(b));
 }}
 async function finNav(step){{
-  const list = finNavList();
+  const list = finNavList(true);
   if (list.length < 2) return;
   const i = list.indexOf(chCur);
   const next = list[((i < 0 ? 0 : i) + step + list.length) % list.length];
@@ -5189,25 +5226,36 @@ async function finNav(step){{
 }}
 
 async function openFinancials(){{
-  if (!chCur || !CHARTS[chCur]?.f) return;
+  const hasFin = !!CHARTS[chCur]?.f, hasDiv = !!CHARTS[chCur]?.d;
+  if (!chCur || !(hasFin || hasDiv)) return;
   document.getElementById('metmodal').hidden = true;
   finSortCol = -1; finSortDir = -1; finCompareSym = null;
   document.getElementById('fin-name').textContent = chCur;
   setSymFull('fin-full', chCur);
   document.getElementById('fin-currency').textContent =
     TNEWS[chCur]?.group === 'th' ? 'THB' : '';
+  // "เช็คงบล่าสุดเมื่อไร" มีความหมายเฉพาะตอนมีงบการเงินจริง — ETF ที่มีแต่ปันผลไม่ต้องมีบรรทัดนี้
   document.getElementById('fin-checked').textContent =
-    window.__FIN_AT__ ? 'Statements last checked ' + window.__FIN_AT__ +
+    (hasFin && window.__FIN_AT__) ? 'Statements last checked ' + window.__FIN_AT__ +
       ' · rechecked daily, sooner if a new quarter is reported' : '';
+  // ป้ายบอกที่มาของงบ + แท็บ ANNUAL/QUARTERLY มีความหมายเฉพาะตอนมีงบจริง — ตัวที่มีแต่
+  // ปันผล (เช่น JEPQ) ไม่มีอะไรให้สลับดู ซ่อนทั้งคู่ไว้ไม่งั้นจะดูเหมือนมีงบทั้งที่ไม่มี
+  document.getElementById('fin-note-stmt').hidden = !hasFin;
+  document.querySelector('.fin-tabs').hidden = !hasFin;
   document.getElementById('finmodal').hidden = false;
   document.body.style.overflow = 'hidden';
   if (!finCache[chCur]) {{
     document.getElementById('fin-body').innerHTML = '<div class="cempty">Loading…</div>';
-    try {{
-      finCache[chCur] = await fetch('{FIN_DIR}/' + CHARTS[chCur].s + '.json').then(r => r.json());
-    }} catch (e) {{ finCache[chCur] = {{annual: [], quarterly: []}}; }}
+    // ไม่มีงบการเงิน (.f เป็น false) ไม่ต้องยิงขอ fin/<slug>.json เลย — รู้อยู่แล้วว่าไม่มีไฟล์
+    if (!hasFin) {{
+      finCache[chCur] = {{annual: [], quarterly: []}};
+    }} else {{
+      try {{
+        finCache[chCur] = await fetch('{FIN_DIR}/' + CHARTS[chCur].s + '.json').then(r => r.json());
+      }} catch (e) {{ finCache[chCur] = {{annual: [], quarterly: []}}; }}
+    }}
   }}
-  if (chCur && CHARTS[chCur]?.f) {{
+  if (chCur && (hasFin || hasDiv)) {{
     renderFinTable();
     document.getElementById('fin-body').scrollTop = 0;   // เปลี่ยนหุ้น = เริ่มอ่านจากบนสุดใหม่
   }}
