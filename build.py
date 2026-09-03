@@ -347,6 +347,17 @@ MDLZ GILD CVS ADP VRTX C SCHW MMC ZTS CI SO REGN AMT PGR BSX EOG CB DUK SLB MO
 BDX ITW APD NOC CSX FDX MU WM TGT PNC USB EMR AON ORLY MCK HUM PSA MAR MCO SHW
 AJG ROP AFL TRV SRE PCAR OXY DXCM CTAS MSI PSX GM F DAL UAL AAL CCL RCL ABNB
 UBER LYFT SQ PYPL SHOP SNOW PLTR COIN RIVN LCID SOFI HOOD DKNG ROKU SPOT ZM
+TSM SPCX
+""".split()
+
+# กองทุน/ETF ที่เน้นกระแสเงินปันผล — แยกก้อนไว้เพราะไม่ใช่บริษัทเดินเครื่องผลิต จึงไม่มีงบ
+# การเงินให้ดึง (ไม่ติดธง .f) แต่มีประวัติปันผลจริง เลยเข้าเมนูผ่านธง .d แทน
+# แบ่งเป็นสามพวก: covered call เน้นปันผลสูง / ปันผลรายเดือน / พันธบัตรระยะสั้นแบบจ่ายทุกเดือน
+UNIVERSE_US += """
+QQQI SPYI JEPI QYLD XYLD RYLD DIVO IWMI BALI
+O MAIN ARCC
+SGOV BIL TFLO USFR
+SCHD VYM DGRO HDV SPHD
 """.split()
 
 
@@ -363,9 +374,12 @@ def universe_symbols():
             seen.add(t)
             out.append((t + ".BK", t, "th"))
     for t in UNIVERSE_US:
-        if t not in seen:
-            seen.add(t)
-            out.append((t, t.replace("-", "."), "intl"))
+        # เทียบด้วยชื่อที่แสดง (BRK.B) ไม่ใช่ชื่อ ticker ดิบ (BRK-B) — ของเดิมเทียบคนละตัวกับที่
+        # เก็บลง seen ตัวที่มีอยู่ในแถบราคาแล้วจึงหลุดเข้ามาซ้ำ โดนดึงข้อมูลสองรอบทุก build
+        label = t.replace("-", ".")
+        if label not in seen:
+            seen.add(label)
+            out.append((t, label, "intl"))
     return out
 
 
@@ -520,16 +534,24 @@ def build_charts(markets=None):
     os.makedirs(CHART_DIR, exist_ok=True)
     idx_path = f"{CHART_DIR}/index.json"
     cached = load_json(idx_path)
+    uni = universe_symbols()
     if cached.get("index") and cached.get("at") and cached.get("v") == CHART_SCHEMA:
         try:
             age = (NOW - datetime.fromisoformat(cached["at"])).total_seconds() / 3600
-            if 0 <= age < CHART_FULL_HOURS:
+            # ความสดอย่างเดียวไม่พอ เหมือนกรณี schema — พอเพิ่มสัญลักษณ์ใหม่เข้าจักรวาล
+            # cache ที่ยัง "สด" อยู่จะไม่มีตัวใหม่เลย แล้วถูกใช้ซ้ำจนตัวใหม่ไม่ขึ้นเว็บ
+            # เทียบกับรายชื่อที่ "ลองดึง" รอบก่อน ไม่ใช่ตัวที่ดึงสำเร็จ — ตัวที่ Yahoo ไม่มี
+            # ข้อมูลจริงๆ จะได้ไม่ทำให้ต้องดึงชุดเต็มใหม่ทุกรอบไปตลอด
+            fresh = [label for _, label, _ in uni]
+            added = set(fresh) - set(cached.get("uni") or [])
+            if 0 <= age < CHART_FULL_HOURS and not added:
                 print(f"  ↻ ใช้ชุดกราฟเดิมที่ดึงมา {age:.1f} ชม.ที่แล้ว")
                 return refresh_intraday(cached["index"])
+            if added:
+                print(f"  ↻ มีสัญลักษณ์ใหม่ {len(added)} ตัว — ดึงชุดเต็มใหม่")
         except Exception:
             pass
 
-    uni = universe_symbols()
     jobs = [(sym, label, tf, rng, iv) for sym, label, _ in uni
             for tf, rng, iv in CHART_RANGES]
 
@@ -590,7 +612,10 @@ def build_charts(markets=None):
     total = sum(len(c) for tfs in frames.values() for c in tfs.values())
     print(f"  ✓ กราฟ {len(index)}/{len(uni)} สินทรัพย์ · {total:,} แท่งเทียน")
     if index:
-        save_json(idx_path, {"v": CHART_SCHEMA, "at": NOW.isoformat(), "index": index})
+        # เก็บรายชื่อที่ "ลองดึง" ไว้ด้วย ไม่ใช่แค่ตัวที่ดึงสำเร็จ — ตัวที่ Yahoo ไม่มีข้อมูลจะได้
+        # ไม่ถูกนับว่าขาดตลอดกาลจนต้องดึงชุดเต็มใหม่ทุกรอบ (ดูเงื่อนไขใช้ cache ซ้ำด้านบน)
+        save_json(idx_path, {"v": CHART_SCHEMA, "at": NOW.isoformat(), "index": index,
+                             "uni": sorted(label for _, label, _ in uni)})
     return index
 
 
@@ -4801,12 +4826,17 @@ function renderDivSection(){{
   // ยอดบาทเป็นของแถมไว้พออ่านออก ไม่ใช่ตัวเลขที่ใครรายงาน — ต้องบอกเรตที่ใช้และที่มาไว้ตรงๆ
   // และเรตนี้เป็นเรตวันนี้ตัวเดียว ใช้คูณย้อนอดีตในตารางด้วย ซึ่งไม่ใช่เรตของปีนั้นจริงๆ
   const rate = cur === 'USD' ? usdThbRate() : null;
+  // โชว์เรตด้วยสตริงเดิมจากแถบราคา ไม่เอาไปผ่าน divFmtShort ซึ่งตัดศูนย์ท้ายทิ้ง (33.30 → 33.3)
+  // เรตค่าเงินตัดทศนิยมทิ้งแล้วดูเหมือนละเอียดน้อยกว่าที่มีจริง และไม่ตรงกับที่แถบราคาโชว์
+  const rateTxt = esc((TNEWS['USD/THB'] || {{}}).price || '');
   const fxNote = rate ? `<p class="met-note">THB figures are a conversion at today's ` +
-    `USD/THB rate (${{divFmtShort(rate)}}), taken from the live pair on this page — shown for ` +
+    `USD/THB rate (${{rateTxt}}), taken from the live pair on this page — shown for ` +
     `reference only. Dividends are paid in USD, and past years are converted at today's rate, ` +
     `not the rate that applied back then.</p>` : '';
 
-  return kpis + fxNote + emptyMsg +
+  // เรียง: ตัวเลข → เหตุผลถ้าไม่มีปันผล → หมายเหตุเรตแลกเงิน ตัวที่ไม่มีปันผลจะได้อ่านเจอ
+  // ว่า "ไม่มีปันผล" ก่อน ไม่ใช่เจอหมายเหตุเรื่องเรตเงินบาทลอยมาก่อนทั้งที่ยังไม่มีตัวเลขให้แปลง
+  return kpis + emptyMsg + fxNote +
     renderDivCalc(ttm.sum, price, cur) + renderDivHistory(rows, histSeries, cur);
 }}
 
