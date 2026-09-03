@@ -34,8 +34,9 @@ REBUILD_MIN = 30       # ต้องตรงกับ cron ใน .github/work
 CHART_FULL_HOURS = 6   # ดึงแท่งเทียนชุดเต็มทุกกี่ชั่วโมง (รอบอื่นอัปเดตแค่กราฟรายวัน)
 # ขยับเลขนี้ทุกครั้งที่เพิ่ม/เปลี่ยนช่วงเวลาใน CHART_RANGES เพื่อทิ้ง cache รุ่นเก่า —
 # ความสดอย่างเดียวจับไม่ได้ว่า cache "ครบชุดไหม" (ตอนเพิ่ม 10Y เจอปัญหานี้กับงบการเงินมาแล้ว)
-CHART_SCHEMA = 6      # 2=10Y · 3=ชื่อเต็ม · 4=ล้าง prefix ชื่อหุ้นไทย · 5=เก็บประวัติปันผล
+CHART_SCHEMA = 7      # 2=10Y · 3=ชื่อเต็ม · 4=ล้าง prefix ชื่อหุ้นไทย · 5=เก็บประวัติปันผล
                       # 6=ธง "d" ในดัชนี บอกว่ามีปันผล (ให้ ETF อย่าง JEPQ ที่ไม่มีงบเข้าเมนูได้)
+                      # 7=ช่อง "y" อัตราปันผล TTM ไว้เรียงลำดับในแถบรายการโปรด
 PER_CATEGORY = 18
 PER_ROW = 14          # จำนวนการ์ดต่อแถว (แยกไทย/ต่างประเทศแล้วจึงลดลงจาก PER_CATEGORY)
 CACHE_FILE = "cache.json"
@@ -525,6 +526,33 @@ def refresh_intraday(index):
     return index
 
 
+def ttm_yield(divs, tfs):
+    """อัตราผลตอบแทนปันผล 12 เดือนล่าสุด (%) — คิดให้ตรงกับ divTTM ฝั่งหน้าเว็บ
+
+    ราคาที่ใช้หารคือราคาปิดล่าสุดจากซีรีส์ละเอียดสุดที่มี (1Y ก่อน แล้วค่อย 10Y)
+    เหมือนที่ renderDivSection ใช้ ไม่งั้นตัวเลขสองฝั่งจะไม่ตรงกันแล้วลำดับจะดูมั่ว
+    คืน None ถ้าคิดไม่ได้จริงๆ ดีกว่าใส่ 0 ซึ่งจะกลายเป็น "ปันผล 0%" ทั้งที่แค่ไม่รู้
+    """
+    if not divs:
+        return None
+    series = tfs.get("1Y") or tfs.get("10Y") or None
+    if not series:
+        return None
+    try:
+        price = series[-1][4]
+        if not price or price <= 0:
+            return None
+        now = NOW.timestamp()
+        cutoff = now - 365 * 86400
+        total = sum(d["amount"] for d in divs
+                    if d.get("date") and cutoff < d["date"] <= now)
+        if total <= 0:
+            return None
+        return round(total / price * 100, 2)
+    except Exception:
+        return None
+
+
 def build_charts(markets=None):
     """เขียนไฟล์แท่งเทียนแยกรายสินทรัพย์ไว้ให้หน้าเว็บโหลดตอนเปิดกราฟ
 
@@ -609,6 +637,12 @@ def build_charts(markets=None):
         # (ไม่ติด .f) แต่มีปันผลจริง จึงต้องมีธงนี้แยกไว้ต่างหาก ไม่งั้นหน้าเว็บจะซ่อนไปเลย
         if div_by_label.get(label):
             index[label]["d"] = 1
+            # อัตราผลตอบแทนปันผล 12 เดือนล่าสุด คิดไว้ตั้งแต่ตอน build เก็บลงดัชนีเลย
+            # ฝั่งเว็บจะได้เรียงลำดับได้ทันทีโดยไม่ต้องโหลดไฟล์กราฟทีละตัวมาคำนวณเอง
+            # (คิดแบบเดียวกับ divTTM ในหน้าเว็บเป๊ะๆ — ย้อน 365 วัน หารด้วยราคาปิดล่าสุด)
+            y = ttm_yield(div_by_label[label], tfs)
+            if y is not None:
+                index[label]["y"] = y
     total = sum(len(c) for tfs in frames.values() for c in tfs.values())
     print(f"  ✓ กราฟ {len(index)}/{len(uni)} สินทรัพย์ · {total:,} แท่งเทียน")
     if index:
@@ -2208,6 +2242,10 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cfav-tab:hover{{color:var(--ink)}}
 .cfav-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
 .cpct{{font-family:'IBM Plex Mono',monospace;font-size:.7rem}}
+/* อัตราปันผลข้างชื่อหุ้นไทยในแท็บรายการโปรด — บอกว่าทำไมลำดับถึงเรียงแบบนี้
+   ถ้าเรียงตามค่าที่มองไม่เห็น ลำดับจะดูมั่วไปเลย */
+.cyld{{flex:none;font-family:'IBM Plex Mono',monospace;font-size:.62rem;
+  color:var(--brass);opacity:.75;letter-spacing:.02em}}
 .cfav{{flex:none;width:20px;text-align:center;font-size:.82rem;line-height:1;
   color:var(--faint);cursor:pointer}}
 .cfav:hover{{color:var(--brass)}}
@@ -4164,6 +4202,18 @@ function renderAssetList(q){{
         && (chMode === 'all' || chFavs.has(l))
         && (!term || l.toLowerCase().includes(term)))
       .sort((a, b) => {{
+        // กลุ่มไทยในแท็บรายการโปรด เรียงตามอัตราปันผลมากไปน้อย ตัวที่ไม่มีปันผลไปท้ายกลุ่ม
+        // กฎนี้ต้องมาก่อนลำดับที่ลากเอง เพราะ saveFavOrder เก็บ "ทุกตัวที่เห็นในลิสต์" ตั้งแต่
+        // ลากครั้งแรก ถ้าให้ลำดับลากชนะ คนที่เคยลากสักครั้งจะไม่มีวันเห็นการเรียงตามปันผลเลย
+        // (กลุ่ม GLOBAL ยังลากจัดเองได้ตามเดิม ไม่ได้แตะ)
+        if (chMode === 'fav' && g === 'th') {{
+          const ya = CHARTS[a[0]].y, yb = CHARTS[b[0]].y;
+          if (ya != null || yb != null) {{
+            if (ya == null) return 1;
+            if (yb == null) return -1;
+            if (yb !== ya) return yb - ya;
+          }}
+        }}
         // โหมด FAVORITES: เคารพลำดับที่ลากจัดเองก่อน ตัวที่ยังไม่เคยลากตกไปท้ายกลุ่ม
         if (chMode === 'fav' && favOrder.length) {{
           const ia = favOrder.indexOf(a[0]), ib = favOrder.indexOf(b[0]);
@@ -4180,7 +4230,10 @@ function renderAssetList(q){{
       }});
     if (!rows.length) continue;
     shown += rows.length;
-    const draggable = chMode === 'fav';
+    // กลุ่มไทยเรียงตามปันผลอัตโนมัติแล้ว ลากไปก็เด้งกลับที่เดิมตอนวาดใหม่ — ปิดการลากไปเลย
+    // ดีกว่าปล่อยให้ลากได้แล้วไม่ติด (โหมด ALL ก็ปิดอยู่แล้วด้วยเหตุผลเดียวกัน)
+    const draggable = chMode === 'fav' && g !== 'th';
+    const showYld = chMode === 'fav' && g === 'th';
     const folded = favFolded.has(g) ? ' folded' : '';
     html += `<div class="cgroup${{folded}}" data-g="${{g}}" role="button" tabindex="0"
         onclick="toggleFavFold('${{g}}')" onkeydown="if(event.key==='Enter')toggleFavFold('${{g}}')">
@@ -4192,6 +4245,8 @@ function renderAssetList(q){{
           ${{draggable ? 'draggable="true"' : ''}}
           onclick="pickChart('${{esc(l)}}')" onkeydown="if(event.key==='Enter')pickChart('${{esc(l)}}')">
           ${{assetLogo(l)}}<span class="cname">${{esc(l)}}</span>
+          ${{showYld && CHARTS[l].y != null
+              ? `<span class="cyld" title="Dividend yield, trailing 12 months">${{CHARTS[l].y}}%</span>` : ''}}
           <span class="cpct ${{d ? d.dir : ''}}">${{d ? d.pct : ''}}</span>
           <span class="cfav${{f ? ' on' : ''}}" role="button" tabindex="-1"
             title="${{f ? 'Remove from favorites' : 'Add to favorites'}}"
