@@ -328,6 +328,71 @@ def fetch_fundamentals(markets):
     print(f"  ✓ ข้อมูลพื้นฐาน {got}/{len(markets)} สินทรัพย์")
 
 
+FUND_FILE = "fund.json"
+FUND_SCHEMA = 1
+FUND_HOURS = 20        # P/E กำไรต่อหุ้น ราคาเป้าหมาย ขยับวันละครั้ง ไม่ต้องดึงทุกรอบ build
+
+
+def fetch_fund_all():
+    """ข้อมูลพื้นฐานของทุกตัวในจักรวาล ไม่ใช่เฉพาะที่อยู่ในแถบราคา
+
+    เดิมดึงแค่ 21 ตัวในแถบราคา แผง METRICS ของอีก 260 ตัวเลยขึ้น "—" หมด
+    ทั้งที่ Yahoo มีข้อมูลให้ — และบทวิเคราะห์ที่จะอ้างมูลค่าเหมาะสมก็ใช้ไม่ได้ตามไปด้วย
+
+    เก็บแยกไฟล์พร้อมเลขรุ่น เพราะรูปแบบเปลี่ยนเมื่อไรต้องทิ้งของเก่า ความสดอย่างเดียวไม่พอ
+    """
+    cached = load_json(FUND_FILE)
+    if cached.get("v") == FUND_SCHEMA and cached.get("at") and cached.get("d"):
+        try:
+            age = (NOW - datetime.fromisoformat(cached["at"])).total_seconds() / 3600
+            if 0 <= age < FUND_HOURS:
+                print(f"  ↻ ใช้ข้อมูลพื้นฐานเดิมที่ดึงมา {age:.1f} ชม.ที่แล้ว")
+                return cached["d"]
+        except Exception:
+            pass
+
+    sess, crumb = yahoo_session()
+    if not sess:
+        return cached.get("d") or {}
+
+    def one(job):
+        sym, label, _ = job
+        try:
+            r = sess.get(f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
+                         params={"modules": "defaultKeyStatistics,summaryDetail,financialData",
+                                 "crumb": crumb}, timeout=12)
+            if r.status_code != 200:
+                return label, None
+            res = r.json()["quoteSummary"]["result"][0]
+
+            def val(mod, key):
+                v = (res.get(mod) or {}).get(key)
+                v = v.get("raw") if isinstance(v, dict) else v
+                return round(v, 4) if isinstance(v, (int, float)) else None
+
+            f = {"pe": val("summaryDetail", "trailingPE"),
+                 "fpe": val("summaryDetail", "forwardPE"),
+                 "eps": val("defaultKeyStatistics", "trailingEps"),
+                 "bvps": val("defaultKeyStatistics", "bookValue"),
+                 "target": val("financialData", "targetMeanPrice")}
+            return label, (f if any(v is not None for v in f.values()) else None)
+        except Exception:
+            return label, None
+
+    out = {}
+    uni = universe_symbols()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for label, f in pool.map(one, uni):
+            if f:
+                out[label] = f
+    if not out:
+        print("  ⚠ ดึงข้อมูลพื้นฐานไม่สำเร็จ — ใช้ชุดเดิม")
+        return cached.get("d") or {}
+    print(f"  ✓ ข้อมูลพื้นฐาน {len(out)}/{len(uni)} สินทรัพย์")
+    save_json(FUND_FILE, {"v": FUND_SCHEMA, "at": NOW.isoformat(), "d": out})
+    return out
+
+
 # จักรวาลหุ้นสำหรับเมนูค้นหาในหน้ากราฟ — หุ้นหลักของตลาดไทยและสหรัฐ
 # (ไม่ได้ครอบคลุมทุกตัวในตลาด เพราะต้องดึงข้อมูลใหม่ทุก 3 ชม.)
 UNIVERSE_TH = """
@@ -1766,7 +1831,7 @@ if (window.ResizeObserver) new ResizeObserver(() => redraw(120)).observe(svg.nod
 
 
 def render(news, markets, charts=None, logos=None, streams=None, fin_at=None,
-           infl=None):
+           infl=None, fund=None):
     def pick(items, n):
         """หน้าตาเน้นรูป → เลือกข่าวที่มีรูปก่อน แล้วค่อยเรียงตามเวลาเหมือนเดิม
         (ทุกข่าวอยู่ในกรอบ 24 ชม.อยู่แล้ว ลำดับจึงไม่เพี้ยนมาก)"""
@@ -2020,6 +2085,7 @@ def render(news, markets, charts=None, logos=None, streams=None, fin_at=None,
          for m in markets}, ensure_ascii=False)
     charts_json = json.dumps(charts or {}, ensure_ascii=False)
     logos_json = json.dumps(logos or {}, ensure_ascii=False)
+    fund_json = json.dumps(fund or {}, ensure_ascii=False)
     fin_at_str = ""
     if fin_at:
         try:
@@ -3545,6 +3611,7 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
 <script>window.__MARKERS__ = {markers_json}; window.__ICONS__ = {icons_json};
 window.__TNEWS__ = {tnews_json}; window.__CHARTS__ = {charts_json};
 window.__LOGOS__ = {logos_json}; window.__FIN_AT__ = {fin_at_json};
+window.__FUND__ = {fund_json};
 window.__INFL__ = {infl_json}; window.__PULSE__ = {pulse_json};</script>
 <script>{MAP_JS}</script>
 <script>
@@ -3623,6 +3690,7 @@ addEventListener('keydown', ev => {{
 
 // ── กราฟแท่งเทียน ────────────────────────────────────────
 const CHARTS = window.__CHARTS__ || {{}};
+const FUND = window.__FUND__ || {{}};
 const CH_TF = ['1D','1M','3M','6M','1Y','3Y','5Y','10Y'];
 const LOGOS = window.__LOGOS__ || {{}};
 
@@ -4106,7 +4174,7 @@ function hurdleRow(){{
 function renderCalc(){{
   const box = document.getElementById('ccalc');
   const rows = (chData?.tf || {{}})[chTf] || [];
-  const f = (TNEWS[chCur] || {{}}).fund || {{}};
+  const f = FUND[chCur] || (TNEWS[chCur] || {{}}).fund || {{}};
   if (!rows.length) {{ box.innerHTML = ''; return; }}
   const closes = rows.map(r => r[4]);
   const last = closes[closes.length - 1];
@@ -5131,6 +5199,22 @@ function finReadFacts(rows){{
   }};
   f.decel = (f.revSpan > 0 && f.revYoY > 0 && f.revYoY * (f.n - 1) < f.revSpan);
   f.accel = (f.revSpan > 0 && f.revYoY > 0 && !f.decel);
+  // ตัวเลขมูลค่าสองตัวที่หน้านี้คำนวณ/ดึงมาอยู่แล้ว — สูตร Graham กับค่ากลางเป้าหมายนักวิเคราะห์
+  // เอามาเล่าเป็นข้อเท็จจริงพร้อมบอกที่มา ไม่ใช่คำตัดสินของผมเองว่าควรซื้อหรือขาย
+  const fu = FUND[chCur] || (TNEWS[chCur] || {{}}).fund || {{}};
+  const px0 = (chData && chData.tf && chData.tf['1Y']) ? chData.tf['1Y'].slice(-1)[0][4] : null;
+  if (px0 > 0) {{
+    if (fu.eps > 0 && fu.bvps > 0) {{
+      f.fair = Math.sqrt(22.5 * fu.eps * fu.bvps);
+      f.fairGap = (f.fair / px0 - 1) * 100;
+    }}
+    if (fu.target > 0) {{
+      f.tgt = fu.target;
+      f.tgtGap = (fu.target / px0 - 1) * 100;
+    }}
+    f.px0 = px0;
+    f.cur = (CHARTS[chCur] || {{}}).cur || '';
+  }}
   const daily = (chData && chData.tf && chData.tf['1Y']) || null;
   if (daily && daily.length >= 200) {{
     const c = daily.map(b => b[4]);
@@ -5178,6 +5262,20 @@ const FIN_READ_T = {{
       `${{Math.abs(f.maGap).toFixed(1)}}%</b> และรอบปีที่ผ่านมา ` +
       `<span class="${{f.sg(f.yr)}}">${{f.n1(f.yr)}}%</span> — ` +
       `อันนี้บอกว่าราคาที่ผ่านมาเป็นยังไง ไม่ได้บอกว่าต่อไปจะไปทางไหน`,
+    val: f => {{
+      const bits = [];
+      if (f.fair != null)
+        bits.push(`สูตร Graham (√(22.5×กำไรต่อหุ้น×มูลค่าตามบัญชี)) ให้มูลค่า <b>${{f.n0(f.fair)}}</b> ` +
+          `<span class="${{f.sg(f.fairGap)}}">(${{f.n1(f.fairGap)}}% จากราคาปัจจุบัน)</span>`);
+      if (f.tgt != null)
+        bits.push(`ค่ากลางราคาเป้าหมายของนักวิเคราะห์อยู่ที่ <b>${{f.n0(f.tgt)}}</b> ` +
+          `<span class="${{f.sg(f.tgtGap)}}">(${{f.n1(f.tgtGap)}}%)</span>`);
+      return `เทียบกับราคาปัจจุบัน <b>${{f.n0(f.px0)}}</b>: ` + bits.join(' · ') +
+        ` — สองตัวนี้เป็นของสองเจ้าคนละที่มา ` +
+        `ตัวแรกเป็นสูตรสำเร็จจากงบที่รายงาน ตัวหลังเป็นความเห็นของโบรกเกอร์ที่เปลี่ยนได้ตลอด ` +
+        `ยกมาให้เห็นเฉยๆ ไม่ใช่ราคาที่ผมบอกว่าถูกหรือแพง`;
+    }},
+    wVal: 'สมมติฐานเบื้องหลังราคาเป้าหมายของนักวิเคราะห์ ซึ่งมักปรับตามราคาที่เพิ่งวิ่งไป',
     wDecel: 'งวดที่ช้าลงเป็นแค่สะดุดชั่วคราว หรือกลายเป็นจังหวะใหม่',
     wFall: 'รายได้จะกลับมาโตได้ไหม หรืองวดที่ตกกลายเป็นแนวโน้ม',
     wMargin: 'ส่วนต่างกำไรจะหยุดหดได้ไหม หรือบางลงไปอีก',
@@ -5223,6 +5321,20 @@ const FIN_READ_T = {{
       `${{f.maGap >= 0 ? 'above' : 'below'}}</b> its 200-day average and ` +
       `<span class="${{f.sg(f.yr)}}">${{f.n1(f.yr)}}%</span> over the past year — ` +
       `which says how the price has behaved, not where it goes next.`,
+    val: f => {{
+      const bits = [];
+      if (f.fair != null)
+        bits.push(`the Graham formula (√(22.5×EPS×book value)) puts fair value at ` +
+          `<b>${{f.n0(f.fair)}}</b> <span class="${{f.sg(f.fairGap)}}">(${{f.n1(f.fairGap)}}% from spot)</span>`);
+      if (f.tgt != null)
+        bits.push(`the mean broker target sits at <b>${{f.n0(f.tgt)}}</b> ` +
+          `<span class="${{f.sg(f.tgtGap)}}">(${{f.n1(f.tgtGap)}}%)</span>`);
+      return `Against a current price of <b>${{f.n0(f.px0)}}</b>: ` + bits.join(' · ') +
+        `. These come from two unrelated places — the first a fixed formula over reported ` +
+        `figures, the second an opinion brokers revise at will. Quoted as they stand, not as ` +
+        `a judgement from me on whether the price is right.`;
+    }},
+    wVal: 'The assumptions under the broker target, which tends to follow the price it is meant to lead.',
     wDecel: 'Whether the slower latest period is a blip or the new pace.',
     wFall: 'Whether the topline turns back up, or the latest drop becomes a trend.',
     wMargin: 'Whether margin compression stops, or thins further.',
@@ -5241,6 +5353,7 @@ function finReadNote(rows){{
   if (!f) return '';
   const L = FIN_READ_T[finReadLang] || FIN_READ_T.en;
   f.n1 = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+  f.n0 = v => d3.format(Math.abs(v) >= 1000 ? ',.0f' : ',.2f')(v);
   f.sg = v => v >= 0 ? 'up' : 'down';
   f.yrs = L.yrs(f.n);
   const say = [], watch = [];
@@ -5259,6 +5372,11 @@ function finReadNote(rows){{
     if (f.roe != null && f.roe > 50 && f.de > 1) watch.push(L.wRoe);
   }}
   if (f.maGap != null) say.push(L.px(f));
+  // ย่อหน้ามูลค่าขึ้นเฉพาะตอนมีตัวเลขจริงอย่างน้อยหนึ่งตัว ไม่มีก็เงียบไป ไม่เดาแทน
+  if (f.px0 != null && (f.fair != null || f.tgt != null)) {{
+    say.push(L.val(f));
+    if (f.tgt != null) watch.push(L.wVal);
+  }}
   if (!say.length) return '';
   watch.push(L.wNext);
   if (f.noGross) watch.push(L.wBank);
@@ -6397,10 +6515,11 @@ if __name__ == "__main__":
         print(f"จับคู่ข่าวกับสินทรัพย์ได้ {linked} รายการ")
     save_cache(news, markets)
 
-    charts, logos, fin_at, infl = {}, {}, None, {}
+    charts, logos, fin_at, infl, fund = {}, {}, None, {}, {}
     if markets:
         print("ดึงข้อมูลพื้นฐาน...")
         fetch_fundamentals(markets)
+        fund = fetch_fund_all()
         logos = fetch_logos()
         print("ดึงข้อมูลแท่งเทียน...")
         charts = build_charts(markets)
@@ -6414,5 +6533,5 @@ if __name__ == "__main__":
     print()
 
     with open("index.html", "w", encoding="utf-8") as f:
-        f.write(render(news, markets, charts, logos, streams, fin_at, infl))
+        f.write(render(news, markets, charts, logos, streams, fin_at, infl, fund))
     print(f"เสร็จ · index.html · {NOW.strftime('%H:%M')} น.")

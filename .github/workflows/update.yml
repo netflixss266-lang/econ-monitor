@@ -42,6 +42,7 @@ jobs:
             market_history.json
             logos.json
             inflation.json
+            fund.json
             chart
             fin
           key: state-${{ github.run_id }}
