@@ -2435,6 +2435,10 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cfav-tab:hover{{color:var(--ink)}}
 .cfav-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
 .cpct{{font-family:'IBM Plex Mono',monospace;font-size:.7rem}}
+/* คำอธิบายสั้นข้างชื่อชุดดอกเบี้ย — ต้องอ่านออกว่าตัวไหนสั้นตัวไหนยาวโดยไม่ต้องกดเข้าไป */
+.ctag{{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:'IBM Plex Mono',monospace;font-size:.58rem;color:var(--dim);letter-spacing:.02em}}
+.citem .cname:has(+ .ctag){{flex:none}}
 /* ปุ่มสลับภาษาในหัวเมนู */
 .lang-sw{{display:flex;gap:3px;margin-left:auto;margin-right:10px}}
 .lang-sw button{{padding:2px 8px;border:1px solid var(--line);border-radius:2px;
@@ -3858,6 +3862,9 @@ const I18N = {{
   us3mFull:  ['US 3-Month Treasury Yield', 'ดอกเบี้ยสหรัฐ 3 เดือน (พันธบัตรระยะสั้น)'],
   us10yFull: ['US 10-Year Treasury Yield', 'ดอกเบี้ยสหรัฐ 10 ปี (พันธบัตรระยะยาว)'],
   usaaaFull: ["Moody's Aaa Corporate Bond Yield", "ดอกเบี้ยหุ้นกู้เอกชนเรตติ้ง Aaa (Moody's)"],
+  us3mTag:   ['short · 3-month bill', 'ระยะสั้น · ตั๋วเงินคลัง 3 เดือน'],
+  us10yTag:  ['long · 10-year note', 'ระยะยาว · พันธบัตร 10 ปี'],
+  usaaaTag:  ['long · Aaa corporate', 'ระยะยาว · หุ้นกู้เอกชน Aaa'],
   sortManual:['manual', 'ลากเอง'],
 }};
 let siteLang = 'en';
@@ -4238,6 +4245,8 @@ function pickType(t){{
 // ชื่อเต็มบริษัทมาจาก meta ของกราฟที่ Yahoo แนบมาให้อยู่แล้ว — ดัชนี/ค่าเงิน/ทอง
 // ไม่มีชื่อเต็มที่ต่างจากตัวย่อ ก็ไม่ต้องโชว์บรรทัดเปล่า
 const SYM_I18N = {{'US 3M': 'us3mFull', 'US 10Y': 'us10yFull', 'US AAA': 'usaaaFull'}};
+// คำอธิบายสั้นข้างชื่อในลิสต์ — ลำพัง "US 3M" ไม่บอกว่าสั้นหรือยาว ต้องกดเข้าไปถึงจะรู้
+const SYM_TAG = {{'US 3M': 'us3mTag', 'US 10Y': 'us10yTag', 'US AAA': 'usaaaTag'}};
 function symFull(label){{
   // ชื่อบริษัทมาจากแหล่งข้อมูลจึงแปลไม่ได้ แต่ชื่อชุดดอกเบี้ยเราตั้งเอง เลยสลับภาษาตามได้
   if (SYM_I18N[label]) return T(SYM_I18N[label]);
@@ -4569,7 +4578,8 @@ function renderAssetList(q){{
         return `<div class="citem" role="button" tabindex="0" data-label="${{esc(l)}}"
           ${{draggable ? 'draggable="true"' : ''}}
           onclick="pickChart('${{esc(l)}}')" onkeydown="if(event.key==='Enter')pickChart('${{esc(l)}}')">
-          ${{assetLogo(l)}}<span class="cname">${{esc(l)}}</span>
+          ${{SYM_TAG[l] ? '' : assetLogo(l)}}<span class="cname">${{esc(l)}}</span>
+          ${{SYM_TAG[l] ? `<span class="ctag">${{esc(T(SYM_TAG[l]))}}</span>` : ''}}
           ${{showYld && CHARTS[l].y != null
               ? `<span class="cyld" title="Dividend yield, trailing 12 months">${{CHARTS[l].y}}%</span>` : ''}}
           <span class="cpct ${{d ? d.dir : ''}}">${{d ? d.pct : ''}}</span>
