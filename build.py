@@ -5805,6 +5805,13 @@ function renderChart(){{
       : dt.toLocaleDateString('th-TH', {{day: '2-digit', month: 'short',
           year: ['1Y', '3Y', '5Y', '10Y'].includes(chTf) ? '2-digit' : undefined}});
   }};
+  // ป้ายบนแกนเวลาใช้แบบย่อกว่าแถบอ่านค่า — ช่วงยาวตั้งแต่ 1 ปีขึ้นไปป้ายห่างกันเป็นเดือน
+  // วันที่จึงเป็นสัญญาณรบกวน ตัดออกแล้วป้ายสั้นลงเกือบครึ่ง ใส่ป้ายได้มากขึ้นในความกว้างเท่าเดิม
+  // (แถบอ่านค่าตอนชี้เมาส์ยังใช้ fmtT ที่มีวันที่เต็ม เพราะตรงนั้นต้องรู้ว่าแท่งไหนจริงๆ)
+  const LONG_TF = ['1Y', '3Y', '5Y', '10Y'];
+  const fmtAxis = ts => LONG_TF.includes(chTf)
+    ? new Date(ts * 1000).toLocaleDateString('th-TH', {{month: 'short', year: '2-digit'}})
+    : fmtT(ts);
   const fmtP = n => d3.format(Math.abs(n) >= 1000 ? ',.0f' : ',.2f')(n);
   const fmtV = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B'
     : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M'
@@ -5861,12 +5868,19 @@ function renderChart(){{
       .domain([lo - pad, hi + pad]).range([mainH, 0]);
     paneAxis(main, logOn ? main.y.ticks(5, ',.0f').concat([lo, hi]) : main.y.ticks(6), fmtP);
 
-    const step = Math.max(1, Math.round((i1 - i0) / 6));
+    // จำนวนป้ายวันที่ต้องคิดจากความกว้างที่มีจริง ไม่ใช่ตายตัว 7 ป้ายทุกจอ — ป้ายแบบมีปี
+    // อย่าง "03 ก.ย. 69" กว้างราว 70px เจ็ดป้ายกินพื้นที่เกินความกว้างกราฟบนมือถือ
+    // เคยทำให้ช่วง 10Y บนจอแคบป้ายซ้อนกัน 6 จาก 7 ป้ายจนอ่านไม่ออกเลย
+    // ความกว้างป้ายวัดจากของจริง: "ก.ย. 69" ~46px · "04 มิ.ย." ~48px · "20:30" ~38px
+    // บวกช่องไฟกันชนกันอีกราว 12px
+    const lblW = chTf === '1D' ? 50 : LONG_TF.includes(chTf) ? 58 : 60;
+    const seg = Math.max(1, Math.min(6, Math.floor(iw / lblW) - 1));
+    const step = Math.max(1, Math.ceil((i1 - i0) / seg));
     const xt = [];
     for (let i = i0; i <= i1; i += step) xt.push(i);
     gX.selectAll('text').data(xt).join('text')
       .attr('x', d => zx(d)).attr('y', 14).attr('text-anchor', 'middle')
-      .text(d => fmtT(rows[d][0]));
+      .text(d => fmtAxis(rows[d][0]));
 
     const gC = main.body;
     if (chType === 'line') {{
