@@ -444,6 +444,7 @@ RATE_SYMS = [
 # ประวัติยาวจาก FRED ของธนาคารกลางสหรัฐ (ไฟล์ CSV เปิดสาธารณะ ไม่ต้องใช้คีย์)
 # Yahoo ให้ดอกเบี้ยย้อนได้แค่ปี 1985 (42 ปี) ซึ่งไม่พอสำหรับดูภาพยาวข้ามยุคดอกเบี้ยสูงปี 1980
 # FRED เป็นค่าเฉลี่ยรายเดือน ไม่มีราคาเปิด/สูง/ต่ำ จึงเก็บเป็นค่าเดียวทั้งแท่ง ไม่ใช่แท่งเทียนปลอม
+RATES_HIST_FILE = "rates_history.json"   # commit ไว้ในรีโป ไม่ใช่ไฟล์ cache
 FRED_SERIES = {
     "US 3M":  ("TB3MS", 1934),
     "US 10Y": ("GS10", 1953),
@@ -738,17 +739,35 @@ def build_charts(markets=None):
             if "divs" in meta:
                 div_by_label[label] = meta["divs"]
 
-    # ต่อประวัติยาวจาก FRED ให้ชุดดอกเบี้ย — Yahoo ให้แค่ตั้งแต่ปี 1985
+    # ต่อประวัติยาวให้ชุดดอกเบี้ย — Yahoo ให้แค่ตั้งแต่ปี 1985
     # ช่วงยาวปั้นจากค่าเฉลี่ยรายเดือน ค่าเดียวทั้งแท่ง (เปิด=สูง=ต่ำ=ปิด) เพราะแหล่งข้อมูล
     # ไม่มีราคาระหว่างเดือนจริง จะแต่งเป็นแท่งเทียนก็เท่ากับสร้างข้อมูลที่ไม่มีอยู่
+    #
+    # FRED เข้าไม่ได้จาก GitHub Actions (เงียบหายไปเลย ไม่ใช่ตอบ error) ประวัติจึงถูก commit
+    # ไว้ในรีโปเป็นไฟล์ตายตัว — ตัวเลขในอดีตไม่มีวันเปลี่ยนอยู่แล้ว ส่วนเดือนใหม่ๆ ที่ FRED
+    # เพิ่มมาจะถูกอัปเดตตอนรันบนเครื่องที่เข้า FRED ได้ แล้ว commit ตามไป
+    snap = load_json(RATES_HIST_FILE).get("s") or {}
+    hist_changed = False
     for label, (series_id, since) in FRED_SERIES.items():
+        pts = list((snap.get(label) or {}).get("pts") or [])
         try:
-            pts = fetch_fred_history(series_id)
+            live = fetch_fred_history(series_id)
         except Exception:
-            pts = []
+            live = []
+        if len(live) > len(pts):          # ดึงสดได้และใหม่กว่าที่เก็บไว้
+            pts, hist_changed = live, True
+            snap[label] = {"id": series_id, "pts": live}
+        elif not live:
+            print(f"  ↻ ประวัติยาว {label} ใช้ชุดที่เก็บไว้ (เข้า FRED ไม่ได้)")
         if len(pts) < 24:
-            print(f"  ⚠ ประวัติยาว {label} ดึงไม่สำเร็จ — ใช้เท่าที่ Yahoo มี")
+            print(f"  ⚠ ประวัติยาว {label} ไม่มีข้อมูล — ใช้เท่าที่ Yahoo มี")
             continue
+        # ต่อท้ายด้วยเดือนที่ใหม่กว่าชุดประวัติ โดยดึงจากกราฟรายเดือนของ Yahoo ที่มีอยู่แล้ว
+        # ตัวที่ไม่มีใน Yahoo (US AAA) จะจบที่เดือนล่าสุดของชุดประวัติตามจริง ไม่เดาต่อ
+        tail = (frames.get(label) or {}).get("10Y") or []
+        for b in tail:
+            if b[0] > pts[-1][0]:
+                pts = pts + [[b[0], b[4]]]
         bars = [[t, v, v, v, v, 0] for t, v in pts]
         tfs = frames.setdefault(label, {})
         tfs["MAX"] = bars
@@ -767,6 +786,10 @@ def build_charts(markets=None):
         if y0 > since:
             print(f"  ⚠ ประวัติยาว {label} เริ่มที่ {y0} แต่ควรได้ถึง {since} — ข้อมูลขาด")
         print(f"  ✓ ประวัติยาว {label} {len(bars)} เดือน ตั้งแต่ {y0} ({yrs:.0f} ปี)")
+    if hist_changed:
+        save_json(RATES_HIST_FILE, {"v": 1, "src": "FRED (fredgraph.csv)",
+                                    "note": "monthly averages", "s": snap})
+        print("  ✓ อัปเดตไฟล์ประวัติยาวแล้ว — อย่าลืม commit ตาม")
 
     # ทองไทยไม่มีให้ดึงย้อนหลัง ต้องประกอบจากทองโลก × ค่าเงิน
     spot = next((m.get("raw_price") for m in (markets or [])
