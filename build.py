@@ -2294,6 +2294,11 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cfav-tab:hover{{color:var(--ink)}}
 .cfav-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
 .cpct{{font-family:'IBM Plex Mono',monospace;font-size:.7rem}}
+/* ปุ่มสลับวิธีเรียงหุ้นไทย อยู่ในหัวข้อกลุ่มซึ่งกดพับได้ ต้องดูออกว่าเป็นปุ่มแยกอีกอัน */
+.th-sort{{float:right;margin:-1px 0 0;padding:1px 6px;border:1px solid var(--line);
+  border-radius:2px;background:none;cursor:pointer;color:var(--dim);
+  font-family:'IBM Plex Mono',monospace;font-size:.55rem;letter-spacing:.04em}}
+.th-sort:hover{{color:var(--brass);border-color:var(--brass)}}
 /* ป้ายเตือนตอนดูกราฟดอกเบี้ย — กันเข้าใจผิดว่าเป็นข้อมูลของหุ้นที่เลือกอยู่ */
 .cview-note{{margin:0 0 4px;font-family:'IBM Plex Mono',monospace;font-size:.6rem;
   letter-spacing:.04em;color:var(--brass);opacity:.85}}
@@ -3444,14 +3449,19 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
               <div class="tfbar" id="cmodal-tf"></div>
             </div>
             <div class="cctrl-g">
-              <span class="cctrl-lbl">VIEW</span>
+              <span class="cctrl-lbl">ดูกราฟอะไร</span>
               <div class="tfbar cview">
                 <button class="tfbtn on" type="button" data-cv="price"
-                        onclick="pickView('price')">PRICE</button>
+                        onclick="pickView('price')"
+                        title="กราฟราคาของหุ้นที่เลือกอยู่">ราคาหุ้น</button>
                 <button class="tfbtn" type="button" data-cv="m3"
-                        onclick="pickView('rate','m3')">US 3M</button>
+                        onclick="pickView('rate','m3')"
+                        title="ดอกเบี้ยพันธบัตรสหรัฐอายุ 3 เดือน — ตัวแทนดอกเบี้ยนโยบายที่เฟดคุมอยู่ เป็นของตลาดรวม ไม่ใช่ของหุ้นตัวนี้"
+                        >ดอกเบี้ยสั้น 3 เดือน</button>
                 <button class="tfbtn" type="button" data-cv="y10"
-                        onclick="pickView('rate','y10')">US 10Y</button>
+                        onclick="pickView('rate','y10')"
+                        title="ดอกเบี้ยพันธบัตรสหรัฐอายุ 10 ปี — ต้นทุนเงินระยะยาวที่ตลาดใช้คิดลดกำไรอนาคต หุ้นเทคอ่อนไหวกับเส้นนี้มากสุด"
+                        >ดอกเบี้ยยาว 10 ปี</button>
               </div>
             </div>
             <div class="cctrl-g">
@@ -4280,6 +4290,18 @@ function saveFavOrder(){{
 }}
 
 // กลุ่ม THAILAND/GLOBAL พับเก็บได้ทีละกลุ่ม จำไว้ข้ามเซสชัน
+// วิธีเรียงหุ้นไทยในแท็บรายการโปรด: 'yield' เรียงตามปันผลอัตโนมัติ · 'manual' ลากจัดเอง
+// สองอย่างนี้อยู่ด้วยกันไม่ได้ เพราะการเรียงอัตโนมัติจะทับลำดับที่ลากไว้ทุกครั้งที่วาดใหม่
+// จึงให้เลือกเอาว่าจะใช้แบบไหน แล้วจำไว้ข้ามเซสชัน
+let thSort = 'yield';
+try {{ thSort = localStorage.getItem('thSort') === 'manual' ? 'manual' : 'yield'; }} catch(e) {{}}
+function toggleThSort(ev){{
+  ev.stopPropagation();                 // อย่าให้ไปโดนปุ่มพับกลุ่มที่ครอบอยู่
+  thSort = thSort === 'yield' ? 'manual' : 'yield';
+  try {{ localStorage.setItem('thSort', thSort); }} catch(e) {{}}
+  renderAssetList(document.getElementById('csearch').value);
+}}
+
 let favFolded = new Set();
 try {{ favFolded = new Set(JSON.parse(localStorage.getItem('favFold') || '[]')); }} catch(e) {{}}
 function toggleFavFold(g){{
@@ -4324,7 +4346,7 @@ function renderAssetList(q){{
         // กฎนี้ต้องมาก่อนลำดับที่ลากเอง เพราะ saveFavOrder เก็บ "ทุกตัวที่เห็นในลิสต์" ตั้งแต่
         // ลากครั้งแรก ถ้าให้ลำดับลากชนะ คนที่เคยลากสักครั้งจะไม่มีวันเห็นการเรียงตามปันผลเลย
         // (กลุ่ม GLOBAL ยังลากจัดเองได้ตามเดิม ไม่ได้แตะ)
-        if (chMode === 'fav' && g === 'th') {{
+        if (chMode === 'fav' && g === 'th' && thSort === 'yield') {{
           const ya = CHARTS[a[0]].y, yb = CHARTS[b[0]].y;
           if (ya != null || yb != null) {{
             if (ya == null) return 1;
@@ -4348,15 +4370,23 @@ function renderAssetList(q){{
       }});
     if (!rows.length) continue;
     shown += rows.length;
-    // กลุ่มไทยเรียงตามปันผลอัตโนมัติแล้ว ลากไปก็เด้งกลับที่เดิมตอนวาดใหม่ — ปิดการลากไปเลย
-    // ดีกว่าปล่อยให้ลากได้แล้วไม่ติด (โหมด ALL ก็ปิดอยู่แล้วด้วยเหตุผลเดียวกัน)
-    const draggable = chMode === 'fav' && g !== 'th';
-    const showYld = chMode === 'fav' && g === 'th';
+    // ลากได้เฉพาะตอนที่ลำดับจะอยู่จริง — กลุ่มไทยโหมดเรียงตามปันผลจะทับลำดับที่ลากทุกครั้ง
+    // ที่วาดใหม่ ปล่อยให้ลากได้แล้วเด้งกลับแย่กว่าปิดไปเลย (โหมด ALL ปิดด้วยเหตุผลเดียวกัน)
+    const thAuto = g === 'th' && thSort === 'yield';
+    const draggable = chMode === 'fav' && !thAuto;
+    const showYld = chMode === 'fav' && thAuto;
     const folded = favFolded.has(g) ? ' folded' : '';
     html += `<div class="cgroup${{folded}}" data-g="${{g}}" role="button" tabindex="0"
         onclick="toggleFavFold('${{g}}')" onkeydown="if(event.key==='Enter')toggleFavFold('${{g}}')">
         <svg class="fold-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-        ${{title}} · ${{rows.length}}</div><div class="cfav-group" data-group="${{g}}">` +
+        ${{title}} · ${{rows.length}}${{
+          chMode === 'fav' && g === 'th'
+            ? `<button type="button" class="th-sort" onclick="toggleThSort(event)"
+                 title="${{thSort === 'yield'
+                   ? 'เรียงตามปันผลอยู่ — กดเพื่อกลับไปลากจัดลำดับเอง'
+                   : 'ลากจัดลำดับเองอยู่ — กดเพื่อเรียงตามปันผลอัตโนมัติ'}}">${{
+                 thSort === 'yield' ? 'ปันผล' : 'ลากเอง'}}</button>` : ''
+        }}</div><div class="cfav-group" data-group="${{g}}">` +
       rows.map(([l]) => {{
         const d = TNEWS[l], f = chFavs.has(l);
         return `<div class="citem" role="button" tabindex="0" data-label="${{esc(l)}}"
