@@ -431,8 +431,8 @@ SCHD VYM DGRO HDV SPHD
 # จะได้ใช้ท่อดึงข้อมูล/เขียนไฟล์กราฟ/ดัชนี ชุดเดียวกับหุ้นทุกตัวโดยไม่ต้องเขียนทางแยก
 # ชื่อเต็มกำหนดเองเพราะชื่อที่ Yahoo ส่งมาอ่านไม่รู้เรื่อง ("CBOE Interest Rate 10 Year T No")
 RATE_SYMS = [
-    ("^IRX", "US 3M",  "ดอกเบี้ยสหรัฐ 3 เดือน (พันธบัตรระยะสั้น)"),
-    ("^TNX", "US 10Y", "ดอกเบี้ยสหรัฐ 10 ปี (พันธบัตรระยะยาว)"),
+    ("^IRX", "US 3M",  "US 3-Month Treasury Yield"),
+    ("^TNX", "US 10Y", "US 10-Year Treasury Yield"),
 ]
 RATE_NAMES = {label: name for _, label, name in RATE_SYMS}
 
@@ -650,9 +650,15 @@ def build_charts(markets=None):
             # ข้อมูลจริงๆ จะได้ไม่ทำให้ต้องดึงชุดเต็มใหม่ทุกรอบไปตลอด
             fresh = [label for _, label, _ in uni]
             added = set(fresh) - set(cached.get("uni") or [])
-            if 0 <= age < CHART_FULL_HOURS and not added:
+            # ดัชนีสดอย่างเดียวยังไม่พอ ไฟล์ที่ดัชนีชี้ไปต้องมีอยู่จริงด้วย — ถ้าหายไป
+            # (cache คืนมาไม่ครบ หรือไฟล์ถูกลบ) หน้าเว็บจะยิงขอแล้วได้ 404 เงียบๆ ไม่มีอะไรฟ้อง
+            gone = [l for l, e in cached["index"].items()
+                    if not os.path.exists(f"{CHART_DIR}/{e.get('s')}.json")]
+            if 0 <= age < CHART_FULL_HOURS and not added and not gone:
                 print(f"  ↻ ใช้ชุดกราฟเดิมที่ดึงมา {age:.1f} ชม.ที่แล้ว")
                 return refresh_intraday(cached["index"])
+            if gone:
+                print(f"  ↻ ไฟล์กราฟหาย {len(gone)} ตัว — ดึงชุดเต็มใหม่")
             if added:
                 print(f"  ↻ มีสัญลักษณ์ใหม่ {len(added)} ตัว — ดึงชุดเต็มใหม่")
         except Exception:
@@ -2322,6 +2328,13 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cfav-tab:hover{{color:var(--ink)}}
 .cfav-tab.on{{color:#0A0E1A;background:var(--brass);border-color:var(--brass);font-weight:700}}
 .cpct{{font-family:'IBM Plex Mono',monospace;font-size:.7rem}}
+/* ปุ่มสลับภาษาในหัวเมนู */
+.lang-sw{{display:flex;gap:3px;margin-left:auto;margin-right:10px}}
+.lang-sw button{{padding:2px 8px;border:1px solid var(--line);border-radius:2px;
+  background:none;cursor:pointer;color:var(--dim);
+  font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.06em}}
+.lang-sw button:hover{{color:var(--brass);border-color:var(--brass)}}
+.lang-sw button.on{{background:var(--brass);border-color:var(--brass);color:var(--bg);font-weight:600}}
 /* ปุ่มสลับวิธีเรียงหุ้นไทย อยู่ในหัวข้อกลุ่มซึ่งกดพับได้ ต้องดูออกว่าเป็นปุ่มแยกอีกอัน */
 .th-sort{{float:right;margin:-1px 0 0;padding:1px 6px;border:1px solid var(--line);
   border-radius:2px;background:none;cursor:pointer;color:var(--dim);
@@ -3455,12 +3468,12 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
       <div class="cmodal-pick">
         <div class="cfav-bar">
           <button class="cfav-tab on" type="button" data-mode="fav"
-                  onclick="setAssetMode('fav')">★ FAVORITES</button>
+                  onclick="setAssetMode('fav')">★ <span data-i18n="favorites">FAVORITES</span></button>
           <button class="cfav-tab" type="button" data-mode="all"
-                  onclick="setAssetMode('all')">ALL</button>
+                  onclick="setAssetMode('all')"><span data-i18n="allSyms">ALL</span></button>
         </div>
         <input class="search csearch" id="csearch" type="search" autocomplete="off"
-               placeholder="Search symbol…" oninput="filterAssets(this.value)">
+               data-i18n-ph="searchSym" placeholder="Search symbol…" oninput="filterAssets(this.value)">
         <div class="cmodal-list" id="cmodal-list"></div>
       </div>
       <div class="cmodal-chart">
@@ -3469,16 +3482,16 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
           <div id="creadout" class="creadout"></div>
           <div class="cctrl">
             <div class="cctrl-g">
-              <span class="cctrl-lbl">RANGE</span>
+              <span class="cctrl-lbl" data-i18n="range">RANGE</span>
               <div class="tfbar" id="cmodal-tf"></div>
             </div>
             <div class="cctrl-g">
-              <span class="cctrl-lbl">CHART TYPE</span>
+              <span class="cctrl-lbl" data-i18n="chartType">CHART TYPE</span>
               <div class="tfbar ctype">
                 <button class="tfbtn on" type="button" data-ct="candle"
-                        onclick="pickType('candle')">CANDLES</button>
+                        onclick="pickType('candle')" data-i18n="candles">CANDLES</button>
                 <button class="tfbtn" type="button" data-ct="line"
-                        onclick="pickType('line')">LINE</button>
+                        onclick="pickType('line')" data-i18n="lineType">LINE</button>
               </div>
             </div>
           </div>
@@ -3487,9 +3500,9 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
       <div class="cmodal-side" id="cmodal-side">
         <button class="cnews-head cfold" type="button" onclick="toggleCalc()"
                 aria-expanded="true" aria-controls="ccalc">
-          <svg class="scope-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>METRICS</button>
+          <svg class="scope-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg><span data-i18n="metrics">METRICS</span></button>
         <div class="calc" id="ccalc"></div>
-        <div class="cnews-head">RELATED NEWS</div>
+        <div class="cnews-head" data-i18n="relNews">RELATED NEWS</div>
         <div class="cnews-list" id="cnews-list"></div>
       </div>
     </div>
@@ -3513,9 +3526,9 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
               aria-label="Next symbol">›</button>
       <div class="fin-tabs" role="tablist">
         <button class="fin-tab on" type="button" data-span="annual"
-                onclick="pickFinSpan('annual')">ANNUAL</button>
+                onclick="pickFinSpan('annual')" data-i18n="annual">ANNUAL</button>
         <button class="fin-tab" type="button" data-span="quarterly"
-                onclick="pickFinSpan('quarterly')">QUARTERLY · THIS YEAR</button>
+                onclick="pickFinSpan('quarterly')" data-i18n="quarterly">QUARTERLY · THIS YEAR</button>
       </div>
     </div>
     <div class="fin-body" id="fin-body"><div class="cempty">Loading…</div></div>
@@ -3559,7 +3572,7 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
   <div class="gsearch">
     <svg class="gsearch-ic" viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-    <input id="gsearch" type="search" autocomplete="off" placeholder="Search all news…"
+    <input id="gsearch" type="search" autocomplete="off" data-i18n-ph="searchAll" placeholder="Search all news…"
            oninput="globalSearch(this.value)">
     <button class="gsearch-x" type="button" id="gsearch-x" hidden
             onclick="document.getElementById('gsearch').value='';globalSearch('');"
@@ -3570,32 +3583,36 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
 <div class="navdim" id="navdim" onclick="toggleNav(false)"></div>
 <aside class="navpanel" id="navpanel" aria-label="Menu">
   <div class="nav-head">
-    <span>MENU</span>
+    <span data-i18n="menu">MENU</span>
+    <span class="lang-sw">
+      <button type="button" data-lang="en" class="on" onclick="setSiteLang('en')">EN</button>
+      <button type="button" data-lang="th" onclick="setSiteLang('th')">ไทย</button>
+    </span>
     <button class="nav-x" type="button" onclick="toggleNav(false)" aria-label="Close">×</button>
   </div>
   <nav class="tabs" id="tabs" role="tablist" title="Drag to reorder">
-    <button class="tab active" type="button" role="tab" draggable="true" data-id="all" data-scope="all" onclick="setScope('all')">HOME<span class="tab-n">{len(news)}</span></button>
+    <button class="tab active" type="button" role="tab" draggable="true" data-id="all" data-scope="all" onclick="setScope('all')"><span data-i18n="home">HOME</span><span class="tab-n">{len(news)}</span></button>
     {''.join(f'''<button class="tab" type="button" role="tab" draggable="true" data-id="{sc}" data-scope="{sc}" onclick="setScope('{sc}')">{lb}<span class="tab-n">{groups[sc]["n"]}</span></button>''' for sc, lb in SCOPES)}
     <button class="tab tab-icon" type="button" draggable="true" data-id="chart" onclick="openCharts()">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>CHARTS</button>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span data-i18n="charts">CHARTS</span></button>
     <button class="tab tab-icon" type="button" draggable="true" data-id="map" onclick="openMap()">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg>NEWS MAP</button>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg><span data-i18n="newsmap">NEWS MAP</span></button>
     {live_tab}
   </nav>
-  <div class="nav-foot">drag to reorder</div>
+  <div class="nav-foot" data-i18n="dragOrder">drag to reorder</div>
 </aside>
 
-<div class="gsearch-empty" id="gsearch-empty" hidden>No stories match your search.</div>
+<div class="gsearch-empty" id="gsearch-empty" data-i18n="noMatch" hidden>No stories match your search.</div>
 
 {front_page}
 
 <div class="grid-side">
   <section class="panel">
-    <div class="panel-head"><h2>TOP LOCATIONS</h2></div>
+    <div class="panel-head"><h2 data-i18n="topLoc">TOP LOCATIONS</h2></div>
     <div>{''.join(hot_row(m, i) for i, m in enumerate(markers[:10])) or '<div class="hot"><span></span><span>—</span></div>'}</div>
   </section>
   <section class="panel">
-    <div class="panel-head"><h2>TOP KEYWORDS</h2></div>
+    <div class="panel-head"><h2 data-i18n="topKw">TOP KEYWORDS</h2></div>
     <div class="kws">{''.join(kw_tile(k, i) for i, k in enumerate(kws))}</div>
   </section>
 </div>
@@ -3691,6 +3708,79 @@ addEventListener('keydown', ev => {{
 // ── กราฟแท่งเทียน ────────────────────────────────────────
 const CHARTS = window.__CHARTS__ || {{}};
 const FUND = window.__FUND__ || {{}};
+
+// ── ภาษาของหน้าเว็บ ──────────────────────────────────────
+// สลับได้เฉพาะ "ป้ายกำกับ" ของตัวเว็บ — หัวข้อข่าว สรุปข่าว และชื่อบริษัท ยังเป็นภาษาต้นทาง
+// เพราะแปลข่าวจริงต้องแปลด้วยคนหรือเครื่องแปล ถ้าให้เว็บเดาแปลเองจะกลายเป็นการแต่งเนื้อข่าว
+const I18N = {{
+  menu:      ['MENU', 'เมนู'],
+  home:      ['HOME', 'หน้าแรก'],
+  charts:    ['CHARTS', 'กราฟ'],
+  newsmap:   ['NEWS MAP', 'แผนที่ข่าว'],
+  dragOrder: ['drag to reorder', 'ลากเพื่อจัดลำดับ'],
+  topLoc:    ['TOP LOCATIONS', 'พื้นที่ที่เป็นข่าวมากสุด'],
+  topKw:     ['TOP KEYWORDS', 'คำที่พบบ่อยสุด'],
+  searchAll: ['Search all news…', 'ค้นหาข่าวทั้งหมด…'],
+  noMatch:   ['No stories match your search.', 'ไม่พบข่าวที่ตรงกับคำค้น'],
+  searchSym: ['Search symbol…', 'ค้นหาชื่อหุ้น…'],
+  favorites: ['FAVORITES', 'รายการโปรด'],
+  allSyms:   ['ALL', 'ทั้งหมด'],
+  range:     ['RANGE', 'ช่วงเวลา'],
+  chartType: ['CHART TYPE', 'ชนิดกราฟ'],
+  candles:   ['CANDLES', 'แท่งเทียน'],
+  lineType:  ['LINE', 'เส้น'],
+  metrics:   ['METRICS', 'ตัวเลขสำคัญ'],
+  relNews:   ['RELATED NEWS', 'ข่าวที่เกี่ยวข้อง'],
+  fullView:  ['FULL VIEW', 'ดูเต็มจอ'],
+  grpTh:     ['THAILAND', 'หุ้นไทย'],
+  grpIntl:   ['GLOBAL', 'ต่างประเทศ'],
+  grpRate:   ['INTEREST RATE', 'อัตราดอกเบี้ย'],
+  financials:['FINANCIALS', 'งบการเงิน'],
+  dividends: ['DIVIDENDS', 'เงินปันผล'],
+  annual:    ['ANNUAL', 'รายปี'],
+  quarterly: ['QUARTERLY · THIS YEAR', 'รายไตรมาส · ปีนี้'],
+  secKpi:    ['KEY METRICS', 'ตัวเลขหลัก'],
+  secGrow:   ['GROWTH', 'การเติบโต'],
+  secProf:   ['PROFITABILITY', 'ความสามารถทำกำไร'],
+  secBal:    ['BALANCE SHEET', 'ฐานะการเงิน'],
+  secLev:    ['LEVERAGE & RETURNS', 'หนี้สินและผลตอบแทน'],
+  secStmt:   ['STATEMENTS', 'งบการเงินเต็ม'],
+  noFavs:    ['No favorites yet.', 'ยังไม่มีรายการโปรด'],
+  noSym:     ['No symbol matches', 'ไม่พบชื่อหุ้นที่ตรงกับคำค้น'],
+  sortDiv:   ['by yield', 'ปันผล'],
+  us3mFull:  ['US 3-Month Treasury Yield', 'ดอกเบี้ยสหรัฐ 3 เดือน (พันธบัตรระยะสั้น)'],
+  us10yFull: ['US 10-Year Treasury Yield', 'ดอกเบี้ยสหรัฐ 10 ปี (พันธบัตรระยะยาว)'],
+  sortManual:['manual', 'ลากเอง'],
+}};
+let siteLang = 'en';
+try {{ siteLang = localStorage.getItem('siteLang') === 'th' ? 'th' : 'en'; }} catch(e) {{}}
+const T = k => (I18N[k] || ['', ''])[siteLang === 'th' ? 1 : 0];
+
+// ป้ายที่อยู่ใน HTML ตรงๆ ติด data-i18n ไว้ แล้วเดินเปลี่ยนทีเดียวตอนสลับภาษา
+// ส่วนป้ายที่ JS สร้างขึ้นเองใช้ T() ตอนวาด จึงต้องสั่งวาดใหม่ตามไปด้วย
+function applyLang(){{
+  document.documentElement.lang = siteLang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {{
+    const v = T(el.dataset.i18n);
+    if (v) el.childNodes.length && el.firstChild.nodeType === 3
+      ? el.firstChild.nodeValue = v : el.textContent = v;
+  }});
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {{
+    const v = T(el.dataset.i18nPh); if (v) el.placeholder = v;
+  }});
+  document.querySelectorAll('.lang-sw button').forEach(b =>
+    b.classList.toggle('on', b.dataset.lang === siteLang));
+}}
+function setSiteLang(l){{
+  siteLang = l === 'th' ? 'th' : 'en';
+  try {{ localStorage.setItem('siteLang', siteLang); }} catch(e) {{}}
+  applyLang();
+  // ป้ายที่ JS วาดเองต้องวาดใหม่ ไม่งั้นจะค้างภาษาเดิมจนกว่าจะเปิดปิดหน้าต่างใหม่
+  if (typeof renderAssetList === 'function' && document.getElementById('cmodal-list'))
+    renderAssetList(document.getElementById('csearch')?.value || '');
+  if (typeof renderFinTable === 'function' && !document.getElementById('finmodal').hidden)
+    renderFinTable();
+}}
 const CH_TF = ['1D','1M','3M','6M','1Y','3Y','5Y','10Y'];
 const LOGOS = window.__LOGOS__ || {{}};
 
@@ -4033,7 +4123,10 @@ function pickType(t){{
 
 // ชื่อเต็มบริษัทมาจาก meta ของกราฟที่ Yahoo แนบมาให้อยู่แล้ว — ดัชนี/ค่าเงิน/ทอง
 // ไม่มีชื่อเต็มที่ต่างจากตัวย่อ ก็ไม่ต้องโชว์บรรทัดเปล่า
+const SYM_I18N = {{'US 3M': 'us3mFull', 'US 10Y': 'us10yFull'}};
 function symFull(label){{
+  // ชื่อบริษัทมาจากแหล่งข้อมูลจึงแปลไม่ได้ แต่ชื่อชุดดอกเบี้ยเราตั้งเอง เลยสลับภาษาตามได้
+  if (SYM_I18N[label]) return T(SYM_I18N[label]);
   const n = (CHARTS[label] || {{}}).n;
   return (n && n.toLowerCase() !== String(label).toLowerCase()) ? n : '';
 }}
@@ -4299,7 +4392,7 @@ function setAssetMode(m){{
 // เรียงตัวที่อยู่ในแถบราคาก่อน แล้วค่อยเรียง % มากไปน้อย
 function renderAssetList(q){{
   const term = (q || '').trim().toLowerCase();
-  const groups = {{th: 'THAILAND', intl: 'GLOBAL', rate: 'INTEREST RATE'}};
+  const groups = {{th: T('grpTh'), intl: T('grpIntl'), rate: T('grpRate')}};
   let html = '', shown = 0;
   for (const [g, title] of Object.entries(groups)) {{
     const rows = Object.entries(CHARTS)
@@ -4355,7 +4448,7 @@ function renderAssetList(q){{
                  title="${{thSort === 'yield'
                    ? 'เรียงตามปันผลอยู่ — กดเพื่อกลับไปลากจัดลำดับเอง'
                    : 'ลากจัดลำดับเองอยู่ — กดเพื่อเรียงตามปันผลอัตโนมัติ'}}">${{
-                 thSort === 'yield' ? 'ปันผล' : 'ลากเอง'}}</button>` : ''
+                 thSort === 'yield' ? T('sortDiv') : T('sortManual')}}</button>` : ''
         }}</div><div class="cfav-group" data-group="${{g}}">` +
       rows.map(([l]) => {{
         const d = TNEWS[l], f = chFavs.has(l);
@@ -4372,7 +4465,7 @@ function renderAssetList(q){{
       }}).join('') + `</div>`;
   }}
   if (!shown) {{
-    html = term ? '<p class="cnone">No symbol matches</p>'
+    html = term ? `<p class="cnone">${{T('noSym')}}</p>`
       : (chMode === 'fav'
         ? '<p class="cnone-hint">No favorites yet.<br>Open <b>ALL</b> and tap ☆ next to a symbol to pin it here.</p>'
         : '<p class="cnone">No symbols</p>');
@@ -4451,7 +4544,7 @@ async function pickChart(label){{
   // แบบบริษัทแต่จ่ายปันผลจริง อย่าง JEPQ) ป้ายข้อความจึงต้องเปลี่ยนตามว่ามีอะไรให้ดูจริง
   const hasFin = !!CHARTS[label].f, hasDiv = !!CHARTS[label].d;
   document.getElementById('fin-btn').hidden = !hasFin && !hasDiv;
-  document.getElementById('fin-btn-lbl').textContent = hasFin ? 'FINANCIALS' : 'DIVIDENDS';
+  document.getElementById('fin-btn-lbl').textContent = hasFin ? T('financials') : T('dividends');
   renderFullBar();               // เปลี่ยนหุ้นแล้วสถิติ 10 ปีต้องเปลี่ยนตาม
   renderChart();
 }}
@@ -5135,17 +5228,12 @@ function renderDivHistory(rows, series, cur){{
 }}
 
 const FIN_SECTIONS = [
-  ['div',   'DIVIDENDS'],
-  ['kpi',   'KEY METRICS'],
-  ['grow',  'GROWTH'],
-  ['prof',  'PROFITABILITY'],
-  ['bal',   'BALANCE SHEET'],
-  ['lev',   'LEVERAGE & RETURNS'],
-  ['stmt',  'STATEMENTS'],
+  ['div', 'dividends'], ['kpi', 'secKpi'], ['grow', 'secGrow'], ['prof', 'secProf'],
+  ['bal', 'secBal'], ['lev', 'secLev'], ['stmt', 'secStmt'],
 ];
 function renderFinToolbar(){{
-  const jump = FIN_SECTIONS.map(([id, label]) =>
-    `<button type="button" onclick="finJump('${{id}}')">${{esc(label)}}</button>`).join('');
+  const jump = FIN_SECTIONS.map(([id, key]) =>
+    `<button type="button" onclick="finJump('${{id}}')">${{esc(T(key))}}</button>`).join('');
   const opts = finNavList().filter(l => l !== chCur).map(l =>
     `<option value="${{esc(l)}}"${{l === finCompareSym ? ' selected' : ''}}>${{esc(l)}}</option>`
   ).join('');
@@ -5419,7 +5507,7 @@ function renderFinKpiSection(rows, cmpRows){{
     (prev ? ' — change shown vs ' + periodLabel(prev.date, finSpan) : '');
   const body = `<div class="fin-kpi-wrap"><div class="fin-kpis">${{tiles}}</div>` +
     finReadNote(rows) + `</div>`;
-  return finSection('kpi', 'KEY METRICS', note, body);
+  return finSection('kpi', T('secKpi'), note, body);
 }}
 
 // กลุ่มแผงกราฟแยกหัวข้อวิเคราะห์ — โตขึ้นแค่ไหน (Growth), กำไรต่อบาทรายได้ (Profitability),
@@ -5436,7 +5524,7 @@ function renderFinDashboard(rows, cmpRows){{
 
   const grow = [bar('rev', 'Revenue', {{stat: cagrText(rows, 'rev')}}),
                 bar('ni', 'Net Income', {{stat: cagrText(rows, 'ni')}})].filter(Boolean).join('');
-  if (grow) out.push(finSection('grow', 'GROWTH', 'revenue and bottom line over the periods shown',
+  if (grow) out.push(finSection('grow', T('secGrow'), 'revenue and bottom line over the periods shown',
     `<div class="fin-panel-grid">${{grow}}</div>`));
 
   const prof = [marginLineChart('Margin trend', periods, [
@@ -5444,19 +5532,19 @@ function renderFinDashboard(rows, cmpRows){{
       {{name: 'Operating', vals: rows.map(r => r.om)}},
       {{name: 'Net', vals: rows.map(r => r.nm)}},
     ]), bar('nm', 'Net Margin', pct), bar('roa', 'Return on Assets', ret)].filter(Boolean).join('');
-  if (prof) out.push(finSection('prof', 'PROFITABILITY', 'how much of each unit of revenue is kept',
+  if (prof) out.push(finSection('prof', T('secProf'), 'how much of each unit of revenue is kept',
     `<div class="fin-panel-grid">${{prof}}</div>`));
 
   const bal = [bar('assets', 'Total Assets'), bar('liab', 'Total Liabilities'),
                bar('equity', 'Total Equity'), bar('cash', 'Cash & Equivalents')]
     .filter(Boolean).join('');
-  if (bal) out.push(finSection('bal', 'BALANCE SHEET', 'what the company owns and owes',
+  if (bal) out.push(finSection('bal', T('secBal'), 'what the company owns and owes',
     `<div class="fin-panel-grid">${{bal}}</div>`));
 
   const lev = [bar('de', 'Debt / Equity', {{fmt: v => v.toFixed(2) + 'x', unit: 'times equity'}}),
                bar('roe', 'Return on Equity', ret),
                bar('debt', 'Total Debt')].filter(Boolean).join('');
-  if (lev) out.push(finSection('lev', 'LEVERAGE & RETURNS', 'borrowing level and shareholder return',
+  if (lev) out.push(finSection('lev', T('secLev'), 'borrowing level and shareholder return',
     `<div class="fin-panel-grid">${{lev}}</div>`));
 
   return out.join('');
@@ -5477,7 +5565,7 @@ function renderFinTable(){{
   // ไม่ว่าจะมีงบหรือไม่ก็ตาม (ก่อนหน้านี้ฟังก์ชันนี้ return ก่อนถึงตรงนี้เวลาไม่มีงบ ทำให้
   // ETF อย่าง JEPQ ที่มีปันผลจริงแต่ไม่มีงบ ไม่เคยเห็นส่วนปันผลของตัวเองเลย)
   let html = '<div class="fin-inner">' +
-    finSection('div', 'DIVIDENDS',
+    finSection('div', T('dividends'),
       'trailing 12 months, priced today — every figure comes from dividends already paid',
       renderDivSection());
   const finish = () => {{
@@ -5549,7 +5637,7 @@ function renderFinTable(){{
     }}
   }}
   table += '</tbody></table></div>';
-  html += finSection('stmt', 'STATEMENTS',
+  html += finSection('stmt', T('secStmt'),
     'click a period column to sort line items within each group', table);
   finish();
 }}
@@ -6439,6 +6527,9 @@ document.getElementById('mmodal').addEventListener('click', ev => {{
   if (document.readyState === 'complete') go();
   else window.addEventListener('load', go, {{once: true}});
 }})();
+
+// ใช้ภาษาที่จำไว้ตั้งแต่ตอนโหลดหน้า ก่อนที่ผู้ใช้จะทันเห็นป้ายภาษาเดิม
+applyLang();
 
 // เอา overlay อินโทรออกจาก DOM หลังเล่นจบ
 (() => {{
