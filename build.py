@@ -362,10 +362,23 @@ SCHD VYM DGRO HDV SPHD
 """.split()
 
 
+# อัตราดอกเบี้ยพันธบัตรสหรัฐ — อยู่ในจักรวาลเหมือนสินทรัพย์ตัวหนึ่ง ไม่ใช่กรณีพิเศษ
+# จะได้ใช้ท่อดึงข้อมูล/เขียนไฟล์กราฟ/ดัชนี ชุดเดียวกับหุ้นทุกตัวโดยไม่ต้องเขียนทางแยก
+# ชื่อเต็มกำหนดเองเพราะชื่อที่ Yahoo ส่งมาอ่านไม่รู้เรื่อง ("CBOE Interest Rate 10 Year T No")
+RATE_SYMS = [
+    ("^IRX", "US 3M",  "ดอกเบี้ยสหรัฐ 3 เดือน (พันธบัตรระยะสั้น)"),
+    ("^TNX", "US 10Y", "ดอกเบี้ยสหรัฐ 10 ปี (พันธบัตรระยะยาว)"),
+]
+RATE_NAMES = {label: name for _, label, name in RATE_SYMS}
+
+
 def universe_symbols():
     """(สัญลักษณ์ Yahoo, ชื่อที่แสดง, ตลาด) ของทุกตัวในเมนูค้นหา"""
     out = []
     seen = set()
+    for sym, label, _ in RATE_SYMS:
+        seen.add(label)
+        out.append((sym, label, "rate"))
     for label, sym, group in TICKERS:          # ตัวที่อยู่ในแถบราคาอยู่แล้ว
         if sym != THAI_GOLD and label not in seen:
             seen.add(label)
@@ -553,58 +566,6 @@ def ttm_yield(divs, tfs):
         return None
 
 
-RATES_SCHEMA = 2          # 2=เก็บครบทุกช่วงเวลาแบบเดียวกับกราฟหุ้น (เดิมเป็นซีรีส์รายวันชุดเดียว)
-RATES_HOURS = 12          # ดอกเบี้ยพันธบัตรขยับวันละครั้ง ไม่ต้องดึงถี่กว่านี้
-RATE_SERIES = [           # (สัญลักษณ์ Yahoo, คีย์, ชื่อที่แสดง)
-    ("^IRX", "m3",  "US 3-Month"),
-    ("^TNX", "y10", "US 10-Year"),
-]
-
-
-def fetch_rates():
-    """อัตราผลตอบแทนพันธบัตรสหรัฐ เก็บครบทุกช่วงเวลาเหมือนกราฟหุ้นหนึ่งตัว
-
-    เก็บรูปแบบเดียวกับ chart/<slug>.json เป๊ะๆ (แท่ง [เวลา, เปิด, สูง, ต่ำ, ปิด, ปริมาณ])
-    หน้าเว็บจะได้สลับมาวาดด้วยกลไกเดิมทั้งชุด — ซูม เส้นครอสแฮร์ ปุ่มช่วงเวลา แท่งเทียน
-    ใช้ได้หมดโดยไม่ต้องเขียนตัววาดขึ้นใหม่ ดัชนีพวกนี้มีราคาเปิด/สูง/ต่ำจริง ไม่ใช่แค่ราคาปิด
-
-    เป็นไฟล์เดียวใช้ร่วมทุกสินทรัพย์ เพราะดอกเบี้ยเป็นของตลาดรวม ไม่ใช่ของหุ้นรายตัว
-    """
-    path = f"{CHART_DIR}/_rates.json"
-    cached = load_json(path)
-    if cached.get("v") == RATES_SCHEMA and cached.get("at") and cached.get("s"):
-        try:
-            age = (NOW - datetime.fromisoformat(cached["at"])).total_seconds() / 3600
-            if 0 <= age < RATES_HOURS:
-                print(f"  ↻ ใช้ชุดดอกเบี้ยเดิมที่ดึงมา {age:.1f} ชม.ที่แล้ว")
-                return
-        except Exception:
-            pass
-
-    os.makedirs(CHART_DIR, exist_ok=True)
-    jobs = [(sym, key, name, tf, rng, iv)
-            for sym, key, name in RATE_SERIES for tf, rng, iv in CHART_RANGES]
-
-    def one(job):
-        sym, key, name, tf, rng, iv = job
-        try:
-            return key, name, tf, fetch_candles(sym, rng, iv)
-        except Exception:
-            return key, name, tf, None
-
-    out = {}
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        for key, name, tf, candles in pool.map(one, jobs):
-            if candles:
-                out.setdefault(key, {"n": name, "tf": {}})["tf"][tf] = candles
-    if not out:
-        print("  ⚠ ดึงดอกเบี้ยไม่สำเร็จ — คงชุดเดิมไว้")
-        return
-    print("  ✓ ดอกเบี้ยพันธบัตร " + " · ".join(
-        f"{v['n']} {v['tf']['1Y'][-1][4]:.2f}%" for v in out.values() if v["tf"].get("1Y")))
-    save_json(path, {"v": RATES_SCHEMA, "at": NOW.isoformat(), "s": out})
-
-
 def build_charts(markets=None):
     """เขียนไฟล์แท่งเทียนแยกรายสินทรัพย์ไว้ให้หน้าเว็บโหลดตอนเปิดกราฟ
 
@@ -677,7 +638,8 @@ def build_charts(markets=None):
                    "div": div_by_label.get(label, [])})
         index[label] = {"s": slug, "g": group}
         meta = meta_by_label.get(label) or {}
-        nm = clean_company_name(meta.get("n"), label)
+        # ชื่อที่ Yahoo ส่งมาให้ดัชนีดอกเบี้ยอ่านไม่รู้เรื่อง ใช้ชื่อที่เรากำหนดเองแทน
+        nm = RATE_NAMES.get(label) or clean_company_name(meta.get("n"), label)
         # ชื่อเต็มซ้ำกับตัวย่อ (เช่นดัชนี/ค่าเงิน) ไม่ต้องเก็บ ประหยัดขนาดไฟล์หน้าแรก
         if nm:
             index[label]["n"] = nm
@@ -2299,9 +2261,6 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   border-radius:2px;background:none;cursor:pointer;color:var(--dim);
   font-family:'IBM Plex Mono',monospace;font-size:.55rem;letter-spacing:.04em}}
 .th-sort:hover{{color:var(--brass);border-color:var(--brass)}}
-/* ป้ายเตือนตอนดูกราฟดอกเบี้ย — กันเข้าใจผิดว่าเป็นข้อมูลของหุ้นที่เลือกอยู่ */
-.cview-note{{margin:0 0 4px;font-family:'IBM Plex Mono',monospace;font-size:.6rem;
-  letter-spacing:.04em;color:var(--brass);opacity:.85}}
 /* อัตราปันผลข้างชื่อหุ้นไทยในแท็บรายการโปรด — บอกว่าทำไมลำดับถึงเรียงแบบนี้
    ถ้าเรียงตามค่าที่มองไม่เห็น ลำดับจะดูมั่วไปเลย */
 .cyld{{flex:none;font-family:'IBM Plex Mono',monospace;font-size:.56rem;
@@ -3439,7 +3398,6 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
         <div class="cmodal-list" id="cmodal-list"></div>
       </div>
       <div class="cmodal-chart">
-        <div class="cview-note" id="cview-note" hidden></div>
         <div id="cchart"></div>
         <div class="cbottom">
           <div id="creadout" class="creadout"></div>
@@ -3447,22 +3405,6 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
             <div class="cctrl-g">
               <span class="cctrl-lbl">RANGE</span>
               <div class="tfbar" id="cmodal-tf"></div>
-            </div>
-            <div class="cctrl-g">
-              <span class="cctrl-lbl">ดูกราฟอะไร</span>
-              <div class="tfbar cview">
-                <button class="tfbtn on" type="button" data-cv="price"
-                        onclick="pickView('price')"
-                        title="กราฟราคาของหุ้นที่เลือกอยู่">ราคาหุ้น</button>
-                <button class="tfbtn" type="button" data-cv="m3"
-                        onclick="pickView('rate','m3')"
-                        title="ดอกเบี้ยพันธบัตรสหรัฐอายุ 3 เดือน — ตัวแทนดอกเบี้ยนโยบายที่เฟดคุมอยู่ เป็นของตลาดรวม ไม่ใช่ของหุ้นตัวนี้"
-                        >ดอกเบี้ยสั้น 3 เดือน</button>
-                <button class="tfbtn" type="button" data-cv="y10"
-                        onclick="pickView('rate','y10')"
-                        title="ดอกเบี้ยพันธบัตรสหรัฐอายุ 10 ปี — ต้นทุนเงินระยะยาวที่ตลาดใช้คิดลดกำไรอนาคต หุ้นเทคอ่อนไหวกับเส้นนี้มากสุด"
-                        >ดอกเบี้ยยาว 10 ปี</button>
-              </div>
             </div>
             <div class="cctrl-g">
               <span class="cctrl-lbl">CHART TYPE</span>
@@ -3692,7 +3634,6 @@ function assetLogo(label){{
   return `<span class="clogo">${{ini}}${{img}}</span>`;
 }}
 let chCur = null, chTf = '3M', chCache = {{}}, chData = null, chZoom = null, chType = 'candle';
-let chView = 'price';           // 'price' = กราฟหุ้น · 'rate' = กราฟดอกเบี้ยพันธบัตรสหรัฐ
 // ── เครื่องมือวิเคราะห์ทางเทคนิค ──────────────────────────
 // d = คำอธิบาย: f ชื่อเต็ม · w วิเคราะห์อะไร · t ใช้เมื่อไร · u มักใช้ทำอะไร
 const IND = [
@@ -3784,24 +3725,6 @@ const IND = [
 const IND_MAP = {{}};
 IND.forEach(g => g.items.forEach(i => {{ IND_MAP[i.k] = i; }}));
 
-// ── กราฟอัตราดอกเบี้ยพันธบัตรสหรัฐ ───────────────────────
-// เป็นกราฟแยกที่กดสลับมาดูแทนกราฟราคา ไม่ใช่แผงซ้อนใต้ราคา — ดอกเบี้ยเป็นของตลาดรวม
-// ไม่ใช่ของหุ้นรายตัว เอามาต่อท้ายกราฟหุ้นทุกตัวจึงชวนให้เข้าใจผิดว่าเป็นข้อมูลของตัวนั้น
-// ข้อมูลเก็บรูปแบบเดียวกับกราฟหุ้น เลยใช้ตัววาด/ซูม/ครอสแฮร์ชุดเดิมได้ทั้งหมด
-// โหลดตอนกดสลับครั้งแรกเท่านั้น ไม่ถ่วงตอนเปิดหน้าเว็บ
-let RATES = null, ratesLoading = false;
-const RATE_LINES = [['m3', 'US 3M', '#E8825A'], ['y10', 'US 10Y', '#5BC8AF']];
-let chRate = 'm3';               // เส้นที่กำลังดูอยู่ในโหมดดอกเบี้ย
-function loadRates(then){{
-  if (RATES) {{ then && then(); return; }}
-  if (ratesLoading) return;
-  ratesLoading = true;
-  fetch('{CHART_DIR}/_rates.json')
-    .then(r => {{ if (!r.ok) throw new Error('http ' + r.status); return r.json(); }})
-    .then(d => {{ RATES = d.s || {{}}; }})
-    .catch(() => {{ RATES = {{}}; }})
-    .finally(() => {{ ratesLoading = false; then && then(); renderChart(); }});
-}}
 let chInd = new Set(), chTools = new Set(['grid']);
 try {{
   const a = JSON.parse(localStorage.getItem('chInd') || '[]');
@@ -4038,32 +3961,6 @@ function pickType(t){{
   chType = t;
   document.querySelectorAll('.ctype .tfbtn').forEach(b => b.classList.toggle('on', b.dataset.ct === t));
   renderChart();
-}}
-
-// สลับระหว่างกราฟราคาหุ้นกับกราฟดอกเบี้ยพันธบัตรสหรัฐ — คนละกราฟกันคนละชุดข้อมูล
-// ล้างซูมทุกครั้งที่สลับ เพราะกรอบซูมของกราฟเดิมไม่มีความหมายกับอีกชุดที่จำนวนแท่งต่างกัน
-function pickView(v, which){{
-  chView = v;
-  if (which) chRate = which;
-  chZoom = null;
-  const key = v === 'price' ? 'price' : chRate;
-  document.querySelectorAll('.cview .tfbtn').forEach(b =>
-    b.classList.toggle('on', b.dataset.cv === key));
-  syncViewLabel();
-  if (v === 'rate' && !RATES) loadRates(syncViewLabel);
-  else renderChart();
-}}
-// แถบหัวกราฟบอกว่ากำลังดูอะไรอยู่ — โหมดดอกเบี้ยต้องไม่ปล่อยให้ชื่อหุ้นค้างอยู่
-// ไม่งั้นจะดูเหมือนดอกเบี้ยชุดนี้เป็นข้อมูลของหุ้นตัวนั้น ทั้งที่เป็นของตลาดรวม
-function syncViewLabel(){{
-  const badge = document.getElementById('cview-note');
-  if (!badge) return;
-  const on = chView === 'rate';
-  badge.hidden = !on;
-  if (on) {{
-    const nm = ((RATES || {{}})[chRate] || {{}}).n || '';
-    badge.textContent = nm + ' Treasury yield · ทั้งตลาด ไม่ใช่ข้อมูลของ ' + (chCur || '');
-  }}
 }}
 
 // ชื่อเต็มบริษัทมาจาก meta ของกราฟที่ Yahoo แนบมาให้อยู่แล้ว — ดัชนี/ค่าเงิน/ทอง
@@ -4334,13 +4231,16 @@ function setAssetMode(m){{
 // เรียงตัวที่อยู่ในแถบราคาก่อน แล้วค่อยเรียง % มากไปน้อย
 function renderAssetList(q){{
   const term = (q || '').trim().toLowerCase();
-  const groups = {{th: 'THAILAND', intl: 'GLOBAL'}};
+  const groups = {{th: 'THAILAND', intl: 'GLOBAL', rate: 'INTEREST RATE'}};
   let html = '', shown = 0;
   for (const [g, title] of Object.entries(groups)) {{
     const rows = Object.entries(CHARTS)
+      // กลุ่มดอกเบี้ยมีแค่สองตัวและไม่ได้อยู่ในรายการโปรดของใครโดยปริยาย — ถ้าให้ซ่อนตาม
+      // โหมด FAVORITES ก็จะไม่มีใครหาเจอ จึงโชว์ตลอดทั้งสองโหมด (ยังค้นหาได้ตามปกติ)
       .filter(([l, c]) => (c.g || 'intl') === g
-        && (chMode === 'all' || chFavs.has(l))
-        && (!term || l.toLowerCase().includes(term)))
+        && (chMode === 'all' || g === 'rate' || chFavs.has(l))
+        && (!term || l.toLowerCase().includes(term)
+            || (c.n || '').toLowerCase().includes(term)))
       .sort((a, b) => {{
         // กลุ่มไทยในแท็บรายการโปรด เรียงตามอัตราปันผลมากไปน้อย ตัวที่ไม่มีปันผลไปท้ายกลุ่ม
         // กฎนี้ต้องมาก่อนลำดับที่ลากเอง เพราะ saveFavOrder เก็บ "ทุกตัวที่เห็นในลิสต์" ตั้งแต่
@@ -4372,8 +4272,10 @@ function renderAssetList(q){{
     shown += rows.length;
     // ลากได้เฉพาะตอนที่ลำดับจะอยู่จริง — กลุ่มไทยโหมดเรียงตามปันผลจะทับลำดับที่ลากทุกครั้ง
     // ที่วาดใหม่ ปล่อยให้ลากได้แล้วเด้งกลับแย่กว่าปิดไปเลย (โหมด ALL ปิดด้วยเหตุผลเดียวกัน)
+    // กลุ่มดอกเบี้ยโชว์ตลอดไม่ขึ้นกับรายการโปรด การลากจัดลำดับจึงไม่มีความหมาย
+    // (ซ้ำร้ายจะไปปนอยู่ใน favOrder ที่เก็บทุกแถวที่มองเห็น) ปิดไปเลย
     const thAuto = g === 'th' && thSort === 'yield';
-    const draggable = chMode === 'fav' && !thAuto;
+    const draggable = chMode === 'fav' && !thAuto && g !== 'rate';
     const showYld = chMode === 'fav' && thAuto;
     const folded = favFolded.has(g) ? ' folded' : '';
     html += `<div class="cgroup${{folded}}" data-g="${{g}}" role="button" tabindex="0"
@@ -4449,8 +4351,6 @@ function pickTf(tf){{ chTf = tf; renderChart(); }}
 async function pickChart(label){{
   if (!CHARTS[label]) return;
   chCur = label;
-  // เลือกหุ้นตัวใหม่ = กลับมาที่กราฟราคาเสมอ ไม่ค้างอยู่ที่กราฟดอกเบี้ยจนงงว่ากดดูอะไรอยู่
-  if (chView !== 'price') pickView('price');
   document.querySelectorAll('.citem').forEach(b =>
     b.classList.toggle('on', b.dataset.label === label));
   const d = TNEWS[label];
@@ -5721,15 +5621,7 @@ document.addEventListener('click', ev => {{
 
 function renderChart(){{
   const host = document.getElementById('cchart');
-  // โหมดดอกเบี้ยแค่สลับ "แหล่งข้อมูล" ตั้งแต่บรรทัดนี้ ที่เหลือทั้งกราฟใช้กลไกเดิมทุกอย่าง
-  const src = chView === 'rate' ? ((RATES || {{}})[chRate] || null) : chData;
-  if (chView === 'rate' && !src) {{
-    host.innerHTML = '<div class="cempty">' +
-      (ratesLoading ? 'Loading rates…' : 'No rate data') + '</div>';
-    loadRates();
-    return;
-  }}
-  const avail = CH_TF.filter(t => (src?.tf || {{}})[t]?.length);
+  const avail = CH_TF.filter(t => (chData?.tf || {{}})[t]?.length);
   if (!avail.length) {{ host.innerHTML = '<div class="cempty">No chart data</div>'; return; }}
   if (!avail.includes(chTf)) chTf = avail.includes('3M') ? '3M' : avail[0];
   // เจาะเฉพาะปุ่มช่วงเวลา ไม่งั้นจะไปปิดปุ่มเลือกชนิดกราฟที่ใช้คลาสเดียวกัน
@@ -5739,7 +5631,7 @@ function renderChart(){{
     b.style.opacity = avail.includes(b.dataset.tf) ? '' : '.35';
   }});
 
-  const rows = src.tf[chTf];
+  const rows = chData.tf[chTf];
   const closes = rows.map(r => r[4]);
   const has = k => chInd.has(k);
 
@@ -6137,8 +6029,7 @@ function renderChart(){{
 
   // ป้ายชื่อ + ค่าอินดิเคเตอร์ที่ตำแหน่งเมาส์ (ถ้าไม่ชี้ ใช้แท่งล่าสุด)
   function legend(i){{
-    const items = [{{t: (chView === 'rate' ? src.n + ' Treasury' : chCur) + ' · ' + chTf,
-                     c: 'var(--ink)'}}];
+    const items = [{{t: chCur + ' · ' + chTf, c: 'var(--ink)'}}];
     OVER.forEach(([k, s]) => {{
       if (!has(k) || !S[s] || s === 'bbl' || s === 'bbm' || s === 'dcl') return;
       const v = S[s][i];
@@ -6513,8 +6404,6 @@ if __name__ == "__main__":
         logos = fetch_logos()
         print("ดึงข้อมูลแท่งเทียน...")
         charts = build_charts(markets)
-        print("ดึงอัตราดอกเบี้ยพันธบัตร...")
-        fetch_rates()
         print("ดึงงบการเงิน...")
         fin_labels, fin_at = fetch_financials()
         for label in fin_labels:
