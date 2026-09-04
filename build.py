@@ -494,10 +494,11 @@ def universe_symbols():
     """(สัญลักษณ์ Yahoo, ชื่อที่แสดง, ตลาด) ของทุกตัวในเมนูค้นหา"""
     out = []
     seen = set()
+    # ใส่ครบทุกตัวรวมถึงตัวที่ไม่มีใน Yahoo (sym เป็น None) — ตัวเทียบ cache ใช้รายชื่อชุดนี้
+    # ถ้าเว้นตัวไหนไว้ การเพิ่มตัวนั้นเข้ามาจะไม่ทำให้ cache ถูกล้าง แล้วของใหม่จะไม่ขึ้นเว็บ
     for sym, label, _ in RATE_SYMS:
         seen.add(label)
-        if sym:                      # ตัวที่มีแต่ข้อมูล FRED ไม่ต้องเข้าคิวดึงจาก Yahoo
-            out.append((sym, label, "rate"))
+        out.append((sym, label, "rate"))
     for label, sym, group in TICKERS:          # ตัวที่อยู่ในแถบราคาอยู่แล้ว
         if sym != THAI_GOLD and label not in seen:
             seen.add(label)
@@ -718,7 +719,7 @@ def build_charts(markets=None):
         except Exception:
             pass
 
-    jobs = [(sym, label, tf, rng, iv) for sym, label, _ in uni
+    jobs = [(sym, label, tf, rng, iv) for sym, label, _ in uni if sym
             for tf, rng, iv in CHART_RANGES]
 
     def run(job):
@@ -800,10 +801,6 @@ def build_charts(markets=None):
         frames["GOLD THB"] = gold_thb
         notes["GOLD THB"] = GOLD_THB_NOTE
         uni = uni + [(THAI_GOLD, "GOLD THB", "th")]
-
-    # ชุดดอกเบี้ยที่มีแต่ข้อมูล FRED ไม่ได้ผ่านคิวดึงของ Yahoo จึงไม่อยู่ใน uni ต้องเติมเอง
-    uni = uni + [(None, label, "rate") for sym, label, _ in RATE_SYMS
-                 if not sym and label in frames]
 
     index = {}
     for sym, label, group in uni:
