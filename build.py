@@ -34,9 +34,10 @@ REBUILD_MIN = 30       # ต้องตรงกับ cron ใน .github/work
 CHART_FULL_HOURS = 6   # ดึงแท่งเทียนชุดเต็มทุกกี่ชั่วโมง (รอบอื่นอัปเดตแค่กราฟรายวัน)
 # ขยับเลขนี้ทุกครั้งที่เพิ่ม/เปลี่ยนช่วงเวลาใน CHART_RANGES เพื่อทิ้ง cache รุ่นเก่า —
 # ความสดอย่างเดียวจับไม่ได้ว่า cache "ครบชุดไหม" (ตอนเพิ่ม 10Y เจอปัญหานี้กับงบการเงินมาแล้ว)
-CHART_SCHEMA = 7      # 2=10Y · 3=ชื่อเต็ม · 4=ล้าง prefix ชื่อหุ้นไทย · 5=เก็บประวัติปันผล
+CHART_SCHEMA = 8      # 2=10Y · 3=ชื่อเต็ม · 4=ล้าง prefix ชื่อหุ้นไทย · 5=เก็บประวัติปันผล
                       # 6=ธง "d" ในดัชนี บอกว่ามีปันผล (ให้ ETF อย่าง JEPQ ที่ไม่มีงบเข้าเมนูได้)
                       # 7=ช่อง "y" อัตราปันผล TTM ไว้เรียงลำดับในแถบรายการโปรด
+                      # 8=ช่วง MAX ของชุดดอกเบี้ย ต่อประวัติยาวจาก FRED (ย้อนถึงปี 1919)
 PER_CATEGORY = 18
 PER_ROW = 14          # จำนวนการ์ดต่อแถว (แยกไทย/ต่างประเทศแล้วจึงลดลงจาก PER_CATEGORY)
 CACHE_FILE = "cache.json"
@@ -430,10 +431,61 @@ SCHD VYM DGRO HDV SPHD
 # อัตราดอกเบี้ยพันธบัตรสหรัฐ — อยู่ในจักรวาลเหมือนสินทรัพย์ตัวหนึ่ง ไม่ใช่กรณีพิเศษ
 # จะได้ใช้ท่อดึงข้อมูล/เขียนไฟล์กราฟ/ดัชนี ชุดเดียวกับหุ้นทุกตัวโดยไม่ต้องเขียนทางแยก
 # ชื่อเต็มกำหนดเองเพราะชื่อที่ Yahoo ส่งมาอ่านไม่รู้เรื่อง ("CBOE Interest Rate 10 Year T No")
+# (สัญลักษณ์ Yahoo หรือ None ถ้ามีแต่ข้อมูล FRED, ชื่อที่แสดง, ชื่อเต็ม)
 RATE_SYMS = [
     ("^IRX", "US 3M",  "US 3-Month Treasury Yield"),
     ("^TNX", "US 10Y", "US 10-Year Treasury Yield"),
+    # หุ้นกู้เอกชนเรตติ้ง Aaa — เป็นชุดดอกเบี้ยชุดเดียวที่ย้อนได้เกิน 100 ปีจริง (เริ่ม 1919)
+    # พันธบัตรรัฐบาลไม่มีชุดไหนยาวขนาดนั้น ตั๋วเงินคลัง 3 เดือนที่ยาวสุดเริ่มปี 1934
+    # ตัวนี้ไม่มีใน Yahoo จึงมีเฉพาะช่วงยาวที่ปั้นจากค่าเฉลี่ยรายเดือนของ FRED
+    (None,  "US AAA", "Moody's Aaa Corporate Bond Yield"),
 ]
+
+# ประวัติยาวจาก FRED ของธนาคารกลางสหรัฐ (ไฟล์ CSV เปิดสาธารณะ ไม่ต้องใช้คีย์)
+# Yahoo ให้ดอกเบี้ยย้อนได้แค่ปี 1985 (42 ปี) ซึ่งไม่พอสำหรับดูภาพยาวข้ามยุคดอกเบี้ยสูงปี 1980
+# FRED เป็นค่าเฉลี่ยรายเดือน ไม่มีราคาเปิด/สูง/ต่ำ จึงเก็บเป็นค่าเดียวทั้งแท่ง ไม่ใช่แท่งเทียนปลอม
+FRED_SERIES = {
+    "US 3M":  ("TB3MS", 1934),
+    "US 10Y": ("GS10", 1953),
+    "US AAA": ("AAA", 1919),
+}
+
+
+def fetch_fred_history(series_id, tries=4):
+    """ค่าเฉลี่ยรายเดือนย้อนหลังทั้งหมดของชุดข้อมูล FRED — คืน [[epoch, ค่า], ...]
+
+    FRED ตัดการเชื่อมต่อทิ้งเป็นพักๆ (ConnectionReset) แบบไม่มีรูปแบบแน่นอน
+    ยิงครั้งเดียวแล้วยอมแพ้จะพลาดบ่อยจนประวัติยาวหายไปเงียบๆ จึงลองซ้ำแบบถอยเวลา
+    """
+    text = None
+    for i in range(tries):
+        try:
+            r = requests.get("https://fred.stlouisfed.org/graph/fredgraph.csv",
+                             params={"id": series_id},
+                             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+                             timeout=40)
+            if r.status_code == 200 and r.text.strip():
+                text = r.text
+                break
+        except Exception:
+            pass
+        time.sleep(1.5 * (i + 1))
+    if not text:
+        return []
+    out = []
+    for line in text.strip().split("\n")[1:]:
+        parts = line.split(",")
+        if len(parts) < 2 or parts[1].strip() in (".", ""):
+            continue
+        try:
+            d = datetime.strptime(parts[0].strip(), "%Y-%m-%d")
+            # ต้องใช้ calendar.timegm ไม่ใช่ d.timestamp() — บน Windows ตัวหลังโยน OSError
+            # กับวันที่ก่อนปี 1970 ทำให้ประวัติก่อนปีนั้นถูกทิ้งเงียบๆ (เคยเหลือแค่ 56 ปีจาก 107)
+            # และพังเฉพาะบนเครื่อง Windows ส่วน CI ที่เป็น Linux จะผ่าน จับไม่ได้ถ้าไม่รันเอง
+            out.append([calendar.timegm(d.timetuple()), round(float(parts[1]), 2)])
+        except Exception:
+            continue
+    return out
 RATE_NAMES = {label: name for _, label, name in RATE_SYMS}
 
 
@@ -443,7 +495,8 @@ def universe_symbols():
     seen = set()
     for sym, label, _ in RATE_SYMS:
         seen.add(label)
-        out.append((sym, label, "rate"))
+        if sym:                      # ตัวที่มีแต่ข้อมูล FRED ไม่ต้องเข้าคิวดึงจาก Yahoo
+            out.append((sym, label, "rate"))
     for label, sym, group in TICKERS:          # ตัวที่อยู่ในแถบราคาอยู่แล้ว
         if sym != THAI_GOLD and label not in seen:
             seen.add(label)
@@ -685,6 +738,36 @@ def build_charts(markets=None):
             if "divs" in meta:
                 div_by_label[label] = meta["divs"]
 
+    # ต่อประวัติยาวจาก FRED ให้ชุดดอกเบี้ย — Yahoo ให้แค่ตั้งแต่ปี 1985
+    # ช่วงยาวปั้นจากค่าเฉลี่ยรายเดือน ค่าเดียวทั้งแท่ง (เปิด=สูง=ต่ำ=ปิด) เพราะแหล่งข้อมูล
+    # ไม่มีราคาระหว่างเดือนจริง จะแต่งเป็นแท่งเทียนก็เท่ากับสร้างข้อมูลที่ไม่มีอยู่
+    for label, (series_id, since) in FRED_SERIES.items():
+        try:
+            pts = fetch_fred_history(series_id)
+        except Exception:
+            pts = []
+        if len(pts) < 24:
+            print(f"  ⚠ ประวัติยาว {label} ดึงไม่สำเร็จ — ใช้เท่าที่ Yahoo มี")
+            continue
+        bars = [[t, v, v, v, v, 0] for t, v in pts]
+        tfs = frames.setdefault(label, {})
+        tfs["MAX"] = bars
+        # ช่วงที่ Yahoo ไม่มีให้ (เช่น US AAA) เติมจากรายเดือนชุดเดียวกัน พอให้ดูภาพรวมได้
+        cut = {"1Y": 12, "3Y": 36, "5Y": 60, "10Y": 120}
+        for tf, months in cut.items():
+            if tf not in tfs and len(bars) > months:
+                tfs[tf] = bars[-months:]
+        # ปีที่พิมพ์ต้องมาจากข้อมูลที่ได้จริง ไม่ใช่ค่าที่เขียนไว้ล่วงหน้า — ไม่งั้นเวลาข้อมูล
+        # ขาดหายไป log จะยังบอกปีเดิมอย่างมั่นใจ แล้วเราจะไม่มีทางรู้ว่าของหาย
+        # บวกจาก epoch ตรงๆ ไม่ใช้ fromtimestamp — บน Windows ตัวนั้นรับ timestamp ติดลบไม่ได้
+        # (ข้อจำกัดเดียวกับ .timestamp() ที่ทำให้ข้อมูลก่อนปี 1970 หายไปตอนแรก)
+        y0 = (datetime(1970, 1, 1, tzinfo=timezone.utc)
+              + timedelta(seconds=bars[0][0])).year
+        yrs = (bars[-1][0] - bars[0][0]) / 86400 / 365.25
+        if y0 > since:
+            print(f"  ⚠ ประวัติยาว {label} เริ่มที่ {y0} แต่ควรได้ถึง {since} — ข้อมูลขาด")
+        print(f"  ✓ ประวัติยาว {label} {len(bars)} เดือน ตั้งแต่ {y0} ({yrs:.0f} ปี)")
+
     # ทองไทยไม่มีให้ดึงย้อนหลัง ต้องประกอบจากทองโลก × ค่าเงิน
     spot = next((m.get("raw_price") for m in (markets or [])
                  if m["label"] == "GOLD THB"), None)
@@ -694,6 +777,10 @@ def build_charts(markets=None):
         frames["GOLD THB"] = gold_thb
         notes["GOLD THB"] = GOLD_THB_NOTE
         uni = uni + [(THAI_GOLD, "GOLD THB", "th")]
+
+    # ชุดดอกเบี้ยที่มีแต่ข้อมูล FRED ไม่ได้ผ่านคิวดึงของ Yahoo จึงไม่อยู่ใน uni ต้องเติมเอง
+    uni = uni + [(None, label, "rate") for sym, label, _ in RATE_SYMS
+                 if not sym and label in frames]
 
     index = {}
     for sym, label, group in uni:
@@ -3750,6 +3837,7 @@ const I18N = {{
   sortDiv:   ['by yield', 'ปันผล'],
   us3mFull:  ['US 3-Month Treasury Yield', 'ดอกเบี้ยสหรัฐ 3 เดือน (พันธบัตรระยะสั้น)'],
   us10yFull: ['US 10-Year Treasury Yield', 'ดอกเบี้ยสหรัฐ 10 ปี (พันธบัตรระยะยาว)'],
+  usaaaFull: ["Moody's Aaa Corporate Bond Yield", "ดอกเบี้ยหุ้นกู้เอกชนเรตติ้ง Aaa (Moody's)"],
   sortManual:['manual', 'ลากเอง'],
 }};
 let siteLang = 'en';
@@ -3780,8 +3868,14 @@ function setSiteLang(l){{
     renderAssetList(document.getElementById('csearch')?.value || '');
   if (typeof renderFinTable === 'function' && !document.getElementById('finmodal').hidden)
     renderFinTable();
+  // ชื่อเต็มของชุดดอกเบี้ยแปลได้ แต่มันถูกเขียนลงไปตอน pickChart ครั้งเดียว
+  // ถ้าไม่เขียนใหม่ตรงนี้ ชื่อจะค้างภาษาเดิมจนกว่าจะกดเลือกสินทรัพย์ใหม่
+  if (chCur && typeof setSymFull === 'function') {{
+    setSymFull('cmodal-full', chCur);
+    if (!document.getElementById('finmodal').hidden) setSymFull('fin-full', chCur);
+  }}
 }}
-const CH_TF = ['1D','1M','3M','6M','1Y','3Y','5Y','10Y'];
+const CH_TF = ['1D','1M','3M','6M','1Y','3Y','5Y','10Y','MAX'];
 const LOGOS = window.__LOGOS__ || {{}};
 
 // อักษรย่ออยู่ข้างหลังเสมอ ถ้าโลโก้โหลดไม่ขึ้นก็ยังเห็นตัวย่อ
@@ -4123,7 +4217,7 @@ function pickType(t){{
 
 // ชื่อเต็มบริษัทมาจาก meta ของกราฟที่ Yahoo แนบมาให้อยู่แล้ว — ดัชนี/ค่าเงิน/ทอง
 // ไม่มีชื่อเต็มที่ต่างจากตัวย่อ ก็ไม่ต้องโชว์บรรทัดเปล่า
-const SYM_I18N = {{'US 3M': 'us3mFull', 'US 10Y': 'us10yFull'}};
+const SYM_I18N = {{'US 3M': 'us3mFull', 'US 10Y': 'us10yFull', 'US AAA': 'usaaaFull'}};
 function symFull(label){{
   // ชื่อบริษัทมาจากแหล่งข้อมูลจึงแปลไม่ได้ แต่ชื่อชุดดอกเบี้ยเราตั้งเอง เลยสลับภาษาตามได้
   if (SYM_I18N[label]) return T(SYM_I18N[label]);
@@ -5830,6 +5924,13 @@ function renderChart(){{
   const avail = CH_TF.filter(t => (chData?.tf || {{}})[t]?.length);
   if (!avail.length) {{ host.innerHTML = '<div class="cempty">No chart data</div>'; return; }}
   if (!avail.includes(chTf)) chTf = avail.includes('3M') ? '3M' : avail[0];
+  // MAX มีเฉพาะชุดดอกเบี้ยที่ต่อประวัติยาวจาก FRED — ตัวอื่นไม่ต้องมีปุ่มจางค้างไว้
+  const tfBar = document.getElementById('cmodal-tf');
+  const want = CH_TF.filter(t => t !== 'MAX' || avail.includes('MAX'));
+  if (tfBar.childElementCount !== want.length) {{
+    tfBar.innerHTML = want.map(t =>
+      `<button class="tfbtn" type="button" data-tf="${{t}}" onclick="pickTf('${{t}}')">${{t}}</button>`).join('');
+  }}
   // เจาะเฉพาะปุ่มช่วงเวลา ไม่งั้นจะไปปิดปุ่มเลือกชนิดกราฟที่ใช้คลาสเดียวกัน
   document.querySelectorAll('#cmodal-tf .tfbtn').forEach(b => {{
     b.classList.toggle('on', b.dataset.tf === chTf);
@@ -5928,6 +6029,9 @@ function renderChart(){{
 
   const fmtT = ts => {{
     const dt = new Date(ts * 1000);
+    // ช่วง MAX เป็นค่าเฉลี่ยรายเดือน บอกวันที่ไปก็ไม่ตรงกับสิ่งที่ข้อมูลเป็นจริง
+    if (chTf === 'MAX')
+      return dt.toLocaleDateString('th-TH', {{month: 'short', year: 'numeric'}});
     return chTf === '1D'
       ? dt.toLocaleTimeString('th-TH', {{hour: '2-digit', minute: '2-digit'}})
       : dt.toLocaleDateString('th-TH', {{day: '2-digit', month: 'short',
@@ -5937,7 +6041,10 @@ function renderChart(){{
   // วันที่จึงเป็นสัญญาณรบกวน ตัดออกแล้วป้ายสั้นลงเกือบครึ่ง ใส่ป้ายได้มากขึ้นในความกว้างเท่าเดิม
   // (แถบอ่านค่าตอนชี้เมาส์ยังใช้ fmtT ที่มีวันที่เต็ม เพราะตรงนั้นต้องรู้ว่าแท่งไหนจริงๆ)
   const LONG_TF = ['1Y', '3Y', '5Y', '10Y'];
-  const fmtAxis = ts => LONG_TF.includes(chTf)
+  // ช่วง MAX กินเวลาหลายสิบปี ป้ายระดับเดือนไม่มีความหมาย ใช้ปีล้วนและกว้างพอสำหรับ 4 หลัก
+  const fmtAxis = ts => chTf === 'MAX'
+    ? String(new Date(ts * 1000).getUTCFullYear())
+    : LONG_TF.includes(chTf)
     ? new Date(ts * 1000).toLocaleDateString('th-TH', {{month: 'short', year: '2-digit'}})
     : fmtT(ts);
   const fmtP = n => d3.format(Math.abs(n) >= 1000 ? ',.0f' : ',.2f')(n);
@@ -6001,7 +6108,8 @@ function renderChart(){{
     // เคยทำให้ช่วง 10Y บนจอแคบป้ายซ้อนกัน 6 จาก 7 ป้ายจนอ่านไม่ออกเลย
     // ความกว้างป้ายวัดจากของจริง: "ก.ย. 69" ~46px · "04 มิ.ย." ~48px · "20:30" ~38px
     // บวกช่องไฟกันชนกันอีกราว 12px
-    const lblW = chTf === '1D' ? 50 : LONG_TF.includes(chTf) ? 58 : 60;
+    const lblW = chTf === '1D' ? 50 : chTf === 'MAX' ? 46
+      : LONG_TF.includes(chTf) ? 58 : 60;
     const seg = Math.max(1, Math.min(6, Math.floor(iw / lblW) - 1));
     const step = Math.max(1, Math.ceil((i1 - i0) / seg));
     const xt = [];
