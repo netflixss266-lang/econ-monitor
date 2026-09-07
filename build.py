@@ -796,6 +796,8 @@ def build_charts(markets=None):
         bars = [[t, v, v, v, v, 0] for t, v in pts]
         tfs = frames.setdefault(label, {})
         tfs["MAX"] = bars
+        # ผลทดสอบย้อนหลังว่าการเทียบทรงใช้ทำนายได้จริงไหม — คิดครั้งเดียวเก็บไว้ในไฟล์ประวัติ
+        # เพราะคิดใหม่ทุกรอบ build จะกินเวลานาน และผลแทบไม่ขยับเมื่อข้อมูลเพิ่มทีละเดือน
         # ช่วงที่ Yahoo ไม่มีให้ (US AAA) ตัดจากรายวันที่เก็บไว้ จะได้ความละเอียดระดับวัน
         # เท่ากับอีกสองตัว ถ้าไม่มีรายวันค่อยถอยไปใช้รายเดือนเท่าที่มี
         if dpts:
@@ -2478,6 +2480,8 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .echo-row{{display:flex;gap:9px;align-items:flex-start;padding:8px 13px;
   border-bottom:1px solid var(--line)}}
 .echo-note{{padding:11px 13px;font-size:.68rem;line-height:1.65;color:var(--dim)}}
+.echo-sub{{margin-top:6px;border-top:1px solid var(--line);padding-top:11px;color:var(--mute)}}
+.echo-row .score{{background:var(--panel2);color:var(--mute)}}
 .echo-note b{{color:var(--brass)}}
 /* ปุ่มสลับภาษาในหัวเมนู */
 .lang-sw{{display:flex;gap:3px;margin-left:auto;margin-right:10px}}
@@ -4323,24 +4327,46 @@ function renderRateEcho(label) {{
   const line = t => `<div class="echo-row"><span class="score ${{cls(t.r)}}">${{pct(t.r)}}</span>` +
     `<span class="cnews-t">${{t.from}}–${{t.to}}${{t.era ? ' · ' + esc(t.era) : ''}}` +
     `<span class="cnews-m">${{t.v0.toFixed(2)}}% → ${{t.v1.toFixed(2)}}%</span></span></div>`;
+  // สิ่งที่เกิดหลังช่วงคล้าย — แสดงช่วงกระจายเต็ม ไม่ใช่ค่ากลางตัวเดียว
+  const sgn = x => (x >= 0 ? '+' : '') + x.toFixed(2);
+  const afterRows = Object.keys(s.after).map(H => {{
+    const a = s.after[H];
+    return `<div class="echo-row"><span class="score">${{th ? '+' + H + ' ด.' : '+' + H + 'mo'}}</span>` +
+      `<span class="cnews-t">${{th ? 'ค่ากลาง ' : 'median '}}<b>${{sgn(a.med)}}</b>` +
+      `${{th ? ' จุด%' : ' pts'}}<span class="cnews-m">` +
+      `${{th ? 'กระจายตั้งแต่ ' : 'ranged '}}${{sgn(a.lo)}} ${{th ? 'ถึง ' : 'to '}}${{sgn(a.hi)}} · ` +
+      `${{th ? 'ขึ้น' : 'up'}} ${{a.up}}/${{a.n}} ${{th ? 'ลง' : 'down'}} ${{a.n - a.up}}/${{a.n}}` +
+      `</span></span></div>`;
+  }}).join('');
+  const afterBlock = !afterRows ? '' :
+    `<p class="echo-lead echo-sub">${{th
+      ? `แล้วหลังจากช่วงพวกนั้น ดอกเบี้ยไปทางไหนต่อ — นับจาก ${{s.evN}} เหตุการณ์ที่คล้ายเกิน 90%`
+      : `What the rate did next, counted across the ${{s.evN}} episodes matching above 90%`}}</p>` +
+    afterRows;
   box.innerHTML =
     `<p class="echo-lead">${{th
       ? `เทียบทรงของ ${{s.win}} เดือนล่าสุด (${{s.cur0.toFixed(2)}}% → ${{s.cur1.toFixed(2)}}%) `
         + `กับทุกช่วง ${{s.win}} เดือนตั้งแต่ปี ${{s.firstYear}} รวม ${{s.n.toLocaleString()}} ช่วง`
       : `Matching the last ${{s.win}} months (${{s.cur0.toFixed(2)}}% → ${{s.cur1.toFixed(2)}}%) `
         + `against every ${{s.win}}-month window since ${{s.firstYear}} — ${{s.n.toLocaleString()}} of them`}}</p>` +
-    s.top.map(line).join('') +
+    s.top.map(line).join('') + afterBlock +
     `<p class="echo-note">${{th
-      ? `<b>ตัวเลขนี้คือความคล้ายของรูปทรง ไม่ใช่โอกาสเกิดวิกฤต</b> — วิกฤตในข้อมูลมีไม่กี่ครั้ง `
-        + `น้อยเกินกว่าจะคิดเป็นความน่าจะเป็นของอะไรได้ · ช่วงที่ทรงเหมือนที่สุดจบที่ `
-        + `${{s.top[0].v1.toFixed(2)}}% ขณะที่ตอนนี้อยู่ที่ ${{s.cur1.toFixed(2)}}% ทรงเหมือนไม่ได้แปลว่าปลายทางเหมือน · `
-        + `เทียบให้เห็นภาพ: ทรงคล้ายระดับนี้ (90% ขึ้นไป) เกิดใน ${{s.p90.toFixed(1)}}% ของช่วงในอดีตทั้งหมด `
-        + `ค่ากลางอยู่ที่ ${{(s.med * 100).toFixed(0)}}%`
-      : `<b>This is shape similarity, not a probability of a crisis</b> — there are only a handful `
-        + `of crises in this data, far too few to derive odds from. The closest-matching window `
-        + `ended at ${{s.top[0].v1.toFixed(2)}}% while today sits at ${{s.cur1.toFixed(2)}}%; a matching `
-        + `shape does not mean a matching outcome. For scale: this level of similarity (90%+) occurs `
-        + `in ${{s.p90.toFixed(1)}}% of all past windows, and the median is ${{(s.med * 100).toFixed(0)}}%`}}</p>`;
+      ? `<b>ตารางบนคือสิ่งที่เคยเกิดจริง ไม่ใช่คำทำนาย</b> — ดูช่วงกระจายเป็นหลัก `
+        + `${{s.after[12] ? `อีก 12 เดือน ผลในอดีตกระจายตั้งแต่ ${{sgn(s.after[12].lo)}} ถึง `
+            + `${{sgn(s.after[12].hi)}} จุด% ซึ่งห่างกัน ${{(s.after[12].hi - s.after[12].lo).toFixed(1)}} จุด% `
+            + `จาก ${{s.after[12].n}} เหตุการณ์ ` : ''}}`
+        + `${{s.after[12] ? 'กลุ่มตัวอย่างเท่านี้เล็กเกินกว่าจะสรุปทิศทางได้ ต่อให้เอนไปทางใดทางหนึ่งก็อาจเป็นเรื่องบังเอิญ · ' : 'รอบนี้ไม่มีช่วงไหนในอดีตคล้ายถึง 90% เลย จึงไม่มีของจริงให้ยกมาเทียบ · '}}`
+        + `ช่วงที่ทรงเหมือนที่สุดจบที่ ${{s.top[0].v1.toFixed(2)}}% ขณะที่ตอนนี้อยู่ที่ ${{s.cur1.toFixed(2)}}% `
+        + `ทรงเหมือนไม่ได้แปลว่าปลายทางเหมือน · ทรงคล้ายระดับ 90% ขึ้นไปเกิดใน `
+        + `${{s.p90.toFixed(1)}}% ของช่วงในอดีตทั้งหมด ค่ากลางความคล้ายอยู่ที่ ${{(s.med * 100).toFixed(0)}}%`
+      : `<b>The table above is what happened, not a forecast</b> — read the spread first. `
+        + `${{s.after[12] ? `Twelve months on, past outcomes ranged from ${{sgn(s.after[12].lo)}} to `
+            + `${{sgn(s.after[12].hi)}} points — a ${{(s.after[12].hi - s.after[12].lo).toFixed(1)}} point `
+            + `gap across ${{s.after[12].n}} episodes. ` : ''}}`
+        + `${{s.after[12] ? 'A sample that size cannot establish a direction; any lean in it may be chance. ' : 'No past window matches today above 90%, so there is nothing close enough to line up against. '}}`
+        + `The closest match ended at ${{s.top[0].v1.toFixed(2)}}% while today sits at `
+        + `${{s.cur1.toFixed(2)}}% — a matching shape is not a matching outcome. A 90%+ match occurs `
+        + `in ${{s.p90.toFixed(1)}}% of all past windows; the median similarity is ${{(s.med * 100).toFixed(0)}}%`}}</p>`;
   return true;
 }}
 function zscore(v) {{
@@ -4376,11 +4402,30 @@ function rateSimilarity(rows, win) {{
     r: a.r, from: yrOf(a.i), to: yrOf(a.i + win - 1),
     v0: vals[a.i], v1: vals[a.i + win - 1], era: rateEraName(yrOf(a.i), yrOf(a.i + win - 1)),
   }});
+  // สิ่งที่เกิด "หลังจาก" ทุกช่วงที่ทรงคล้ายพอ — ไม่ใช่การทำนาย แต่เป็นการนับของจริงที่เคยเกิด
+  // จุดสำคัญคือช่วงกระจาย ไม่ใช่ค่ากลาง ถ้าผลในอดีตกระจายกว้างก็แปลว่ารูปทรงไม่ได้บอกอนาคต
+  const ev = [];
+  for (const a of all.slice().sort((x, y) => y.r - x.r)) {{
+    if (a.r < 0.9) break;
+    if (ev.every(b => Math.abs(a.i - b.i) > win * 0.7)) ev.push(a);
+  }}
+  const after = {{}};
+  for (const H of [3, 6, 12]) {{
+    const chg = ev.filter(a => a.i + win - 1 + H < vals.length)
+                  .map(a => vals[a.i + win - 1 + H] - vals[a.i + win - 1]);
+    if (chg.length < 3) continue;
+    const sorted = chg.slice().sort((x, y) => x - y);
+    after[H] = {{
+      n: chg.length, med: sorted[Math.floor(sorted.length / 2)],
+      lo: sorted[0], hi: sorted[sorted.length - 1],
+      up: chg.filter(x => x > 0).length,
+    }};
+  }}
   return {{
     win, top: top.map(info), med, p90: frac(0.9), p95: frac(0.95), n: all.length,
     curFrom: yrOf(vals.length - win), curTo: yrOf(vals.length - 1),
     cur0: vals[vals.length - win], cur1: vals[vals.length - 1],
-    firstYear: yrOf(0),
+    firstYear: yrOf(0), after, evN: ev.length,
   }};
 }}
 function symFull(label){{
