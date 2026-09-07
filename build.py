@@ -450,6 +450,13 @@ FRED_SERIES = {
     "US 10Y": ("GS10", 1953),
     "US AAA": ("AAA", 1919),
 }
+# ชุดรายวันคู่กัน — ใช้ต่อท้ายชุดรายเดือนตั้งแต่ปีที่รายวันเริ่มมี เพื่อให้ซูมเข้าไปแล้วเห็นรายละเอียด
+# รายเดือนซูมเข้าไปหนึ่งปีได้ 12 จุด ซึ่งหยาบเกินกว่าจะดูจังหวะภายในปีออก รายวันได้ ~250 จุด
+# ราคาไฟล์: ดิบราว 600 KB แต่หลัง gzip เหลือ ~100 KB และโหลดเฉพาะตอนกดเข้าไปดูชุดนั้น
+# เก็บรายวันเฉพาะตัวที่ Yahoo ไม่มีให้ (US AAA) — อีกสองตัวได้ช่วง 1D-10Y จาก Yahoo อยู่แล้ว
+# และเก็บแค่ราว 12 ปีล่าสุดพอ เพราะรายวันมีไว้ป้อนปุ่มช่วงสั้นเท่านั้น ไม่ได้ใช้ในช่วง MAX
+FRED_DAILY = {"US AAA": "DAAA"}
+FRED_DAILY_KEEP = 3200
 
 
 def fetch_fred_history(series_id, tries=4):
@@ -763,8 +770,25 @@ def build_charts(markets=None):
         if len(pts) < 24:
             print(f"  ⚠ ประวัติยาว {label} ไม่มีข้อมูล — ใช้เท่าที่ Yahoo มี")
             continue
-        # ต่อท้ายด้วยเดือนที่ใหม่กว่าชุดประวัติ โดยดึงจากกราฟรายเดือนของ Yahoo ที่มีอยู่แล้ว
-        # ตัวที่ไม่มีใน Yahoo (US AAA) จะจบที่เดือนล่าสุดของชุดประวัติตามจริง ไม่เดาต่อ
+
+        # ช่วง MAX ต้องเป็นรายเดือนล้วนตลอดทั้งเส้น — แกน x ของกราฟนี้เรียงตามลำดับแท่ง
+        # ไม่ใช่ตามเวลา เอารายวันมาต่อกับรายเดือนแล้วยุคเก่าจะถูกบีบจนหาย (วัดได้: ปี
+        # 1934-1954 คิดเป็น 21.7% ของเวลาจริง แต่เหลือความกว้างบนจอ 1.3%) รายละเอียด
+        # ระดับวันจึงไปอยู่ในปุ่มช่วงสั้นแทน ซึ่งเป็นวิธีเดียวกับที่ทั้งเว็บใช้อยู่
+        dsid = FRED_DAILY.get(label)
+        dpts = list((snap.get(label) or {}).get("daily") or [])
+        if dsid:
+            try:
+                dlive = fetch_fred_history(dsid)[-FRED_DAILY_KEEP:]
+            except Exception:
+                dlive = []
+            if len(dlive) > len(dpts):
+                dpts, hist_changed = dlive, True
+                snap.setdefault(label, {})["daily"] = dlive
+                snap[label]["daily_id"] = dsid
+
+        # ต่อท้ายด้วยงวดที่ใหม่กว่าชุดประวัติ จากกราฟของ Yahoo ที่ดึงมาแล้ว
+        # ตัวที่ไม่มีใน Yahoo (US AAA) จะจบที่งวดล่าสุดของชุดประวัติตามจริง ไม่เดาต่อ
         tail = (frames.get(label) or {}).get("10Y") or []
         for b in tail:
             if b[0] > pts[-1][0]:
@@ -772,9 +796,14 @@ def build_charts(markets=None):
         bars = [[t, v, v, v, v, 0] for t, v in pts]
         tfs = frames.setdefault(label, {})
         tfs["MAX"] = bars
-        # ช่วงที่ Yahoo ไม่มีให้ (เช่น US AAA) เติมจากรายเดือนชุดเดียวกัน พอให้ดูภาพรวมได้
-        cut = {"1Y": 12, "3Y": 36, "5Y": 60, "10Y": 120}
-        for tf, months in cut.items():
+        # ช่วงที่ Yahoo ไม่มีให้ (US AAA) ตัดจากรายวันที่เก็บไว้ จะได้ความละเอียดระดับวัน
+        # เท่ากับอีกสองตัว ถ้าไม่มีรายวันค่อยถอยไปใช้รายเดือนเท่าที่มี
+        if dpts:
+            dbars = [[t, v, v, v, v, 0] for t, v in dpts]
+            for tf, days in {"1Y": 252, "3Y": 756, "5Y": 1260, "10Y": 2520}.items():
+                if tf not in tfs and len(dbars) > 30:
+                    tfs[tf] = dbars[-days:]
+        for tf, months in {"1Y": 12, "3Y": 36, "5Y": 60, "10Y": 120}.items():
             if tf not in tfs and len(bars) > months:
                 tfs[tf] = bars[-months:]
         # ปีที่พิมพ์ต้องมาจากข้อมูลที่ได้จริง ไม่ใช่ค่าที่เขียนไว้ล่วงหน้า — ไม่งั้นเวลาข้อมูล
@@ -786,7 +815,12 @@ def build_charts(markets=None):
         yrs = (bars[-1][0] - bars[0][0]) / 86400 / 365.25
         if y0 > since:
             print(f"  ⚠ ประวัติยาว {label} เริ่มที่ {y0} แต่ควรได้ถึง {since} — ข้อมูลขาด")
-        print(f"  ✓ ประวัติยาว {label} {len(bars)} เดือน ตั้งแต่ {y0} ({yrs:.0f} ปี)")
+        dfrom = ""
+        if len(dpts) > 100:
+            dy = (datetime(1970, 1, 1, tzinfo=timezone.utc)
+                  + timedelta(seconds=dpts[0][0])).year
+            dfrom = f" · รายวันตั้งแต่ {dy}"
+        print(f"  ✓ ประวัติยาว {label} {len(bars)} จุด ตั้งแต่ {y0} ({yrs:.0f} ปี){dfrom}")
     if hist_changed:
         save_json(RATES_HIST_FILE, {"v": 1, "src": "FRED (fredgraph.csv)",
                                     "note": "monthly averages", "s": snap})
@@ -6057,11 +6091,20 @@ function renderChart(){{
   tagNow.append('text').attr('x', iw + 28).attr('y', 3.4).attr('text-anchor', 'middle')
       .attr('fill', 'var(--bg)');
 
-  const fmtT = ts => {{
+  // ช่วง MAX เป็นรายวันตั้งแต่ปีที่แหล่งข้อมูลเริ่มมีรายวัน ก่อนหน้านั้นเป็นค่าเฉลี่ยรายเดือน
+  // แถบอ่านค่าจึงบอกวันที่เต็มเฉพาะจุดที่เป็นรายวันจริง จุดเก่ากว่านั้นบอกแค่เดือน/ปี
+  // ดูจากระยะห่างของแท่งข้างเคียง ไม่ใช่เดาจากชื่อช่วงเวลา
+  const isDailyAt = i => {{
+    const a = rows[i - 1], b = rows[i], c = rows[i + 1];
+    const gap = (b && c) ? c[0] - b[0] : (a && b) ? b[0] - a[0] : 0;
+    return gap > 0 && gap < 20 * 86400;
+  }};
+  const fmtT = (ts, i) => {{
     const dt = new Date(ts * 1000);
-    // ช่วง MAX เป็นค่าเฉลี่ยรายเดือน บอกวันที่ไปก็ไม่ตรงกับสิ่งที่ข้อมูลเป็นจริง
     if (chTf === 'MAX')
-      return dt.toLocaleDateString('th-TH', {{month: 'short', year: 'numeric'}});
+      return (i != null && isDailyAt(i))
+        ? dt.toLocaleDateString('th-TH', {{day: '2-digit', month: 'short', year: 'numeric'}})
+        : dt.toLocaleDateString('th-TH', {{month: 'short', year: 'numeric'}});
     return chTf === '1D'
       ? dt.toLocaleTimeString('th-TH', {{hour: '2-digit', minute: '2-digit'}})
       : dt.toLocaleDateString('th-TH', {{day: '2-digit', month: 'short',
@@ -6071,12 +6114,19 @@ function renderChart(){{
   // วันที่จึงเป็นสัญญาณรบกวน ตัดออกแล้วป้ายสั้นลงเกือบครึ่ง ใส่ป้ายได้มากขึ้นในความกว้างเท่าเดิม
   // (แถบอ่านค่าตอนชี้เมาส์ยังใช้ fmtT ที่มีวันที่เต็ม เพราะตรงนั้นต้องรู้ว่าแท่งไหนจริงๆ)
   const LONG_TF = ['1Y', '3Y', '5Y', '10Y'];
-  // ช่วง MAX กินเวลาหลายสิบปี ป้ายระดับเดือนไม่มีความหมาย ใช้ปีล้วนและกว้างพอสำหรับ 4 หลัก
-  const fmtAxis = ts => chTf === 'MAX'
-    ? String(new Date(ts * 1000).getUTCFullYear())
-    : LONG_TF.includes(chTf)
-    ? new Date(ts * 1000).toLocaleDateString('th-TH', {{month: 'short', year: '2-digit'}})
-    : fmtT(ts);
+  // ช่วง MAX ซูมได้ตั้งแต่ร้อยปีลงไปถึงไม่กี่เดือน ป้ายจึงต้องละเอียดขึ้นตามที่ซูมเข้าไป
+  // ไม่ใช่ตรึงไว้ที่ระดับปีตามชื่อช่วง ไม่งั้นซูมเข้าไปหนึ่งปีจะขึ้นเลขปีเดิมซ้ำกันทุกป้าย
+  // spanDays คือช่วงเวลาที่ "มองเห็นอยู่จริง" ณ ขณะนั้น คำนวณใหม่ทุกครั้งที่วาด
+  let spanDays = 1e9;
+  const fmtAxis = ts => {{
+    const dt = new Date(ts * 1000);
+    if (chTf !== 'MAX') return LONG_TF.includes(chTf)
+      ? dt.toLocaleDateString('th-TH', {{month: 'short', year: '2-digit'}})
+      : fmtT(ts);
+    if (spanDays > 3650) return String(dt.getUTCFullYear());
+    if (spanDays > 420)  return dt.toLocaleDateString('th-TH', {{month: 'short', year: '2-digit'}});
+    return dt.toLocaleDateString('th-TH', {{day: '2-digit', month: 'short'}});
+  }};
   const fmtP = n => d3.format(Math.abs(n) >= 1000 ? ',.0f' : ',.2f')(n);
   const fmtV = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B'
     : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M'
@@ -6138,7 +6188,9 @@ function renderChart(){{
     // เคยทำให้ช่วง 10Y บนจอแคบป้ายซ้อนกัน 6 จาก 7 ป้ายจนอ่านไม่ออกเลย
     // ความกว้างป้ายวัดจากของจริง: "ก.ย. 69" ~46px · "04 มิ.ย." ~48px · "20:30" ~38px
     // บวกช่องไฟกันชนกันอีกราว 12px
-    const lblW = chTf === '1D' ? 50 : chTf === 'MAX' ? 46
+    spanDays = (rows[i1][0] - rows[i0][0]) / 86400;     // ให้ fmtAxis ใช้ตัดสินระดับป้าย
+    const lblW = chTf === '1D' ? 50
+      : chTf === 'MAX' ? (spanDays > 3650 ? 46 : spanDays > 420 ? 58 : 60)
       : LONG_TF.includes(chTf) ? 58 : 60;
     const seg = Math.max(1, Math.min(6, Math.floor(iw / lblW) - 1));
     const step = Math.max(1, Math.ceil((i1 - i0) / seg));
@@ -6412,7 +6464,11 @@ function renderChart(){{
       .attr('fill', 'var(--mute)').text(d => 'VOL  ' + (d ? fmtV(d) : '—'));
   }}
 
-  chZoom = d3.zoom().scaleExtent([1, 40])
+  // ระดับซูมสูงสุดต้องขึ้นกับจำนวนแท่งที่มี ไม่ใช่ตรึงไว้ที่ 40 เท่า — กราฟดอกเบี้ยช่วง MAX
+  // มีหมื่นแท่งข้ามร้อยปี ตรึงที่ 40 เท่าแปลว่าเจาะลึกสุดได้แค่ ~3 ปี เข้าไปดูรายปีไม่ได้เลย
+  // ทั้งที่ข้อมูลเป็นรายวัน คิดจาก "ให้เหลือราว 30 แท่งตอนซูมสุด" แล้วคงพื้นเดิมไว้ที่ 40
+  const maxZoom = Math.max(40, Math.min(2000, rows.length / 30));
+  chZoom = d3.zoom().scaleExtent([1, maxZoom])
     .translateExtent([[0, 0], [iw, innerH]]).extent([[0, 0], [iw, innerH]])
     .on('zoom', ev => draw(ev.transform));
   svg.call(chZoom).on('dblclick.zoom', null);
@@ -6435,7 +6491,7 @@ function renderChart(){{
     }} else {{ crossY.style('display', 'none'); tagY.style('display', 'none'); }}
     legend(i);
     const chg = ((r[4] / r[1] - 1) * 100);
-    out.innerHTML = `<span>${{fmtT(r[0])}}</span><span>O <b>${{fmtP(r[1])}}</b></span>` +
+    out.innerHTML = `<span>${{fmtT(r[0], i)}}</span><span>O <b>${{fmtP(r[1])}}</b></span>` +
       `<span>H <b>${{fmtP(r[2])}}</b></span><span>L <b>${{fmtP(r[3])}}</b></span>` +
       `<span>C <b>${{fmtP(r[4])}}</b></span>` +
       `<span class="${{chg >= 0 ? 'up' : 'down'}}">${{chg >= 0 ? '+' : ''}}${{chg.toFixed(2)}}%</span>` +
