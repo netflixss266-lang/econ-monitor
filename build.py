@@ -2480,6 +2480,15 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .echo-row{{display:flex;gap:9px;align-items:flex-start;padding:8px 13px;
   border-bottom:1px solid var(--line)}}
 .echo-note{{padding:11px 13px;font-size:.68rem;line-height:1.65;color:var(--dim)}}
+.echo-click{{cursor:pointer}}
+.echo-click:hover{{background:var(--hover)}}
+.echo-cta{{display:block;margin-bottom:7px;color:var(--brass);cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.05em}}
+.echo-cta:hover{{text-decoration:underline}}
+.echo-art{{padding:2px 16px 14px;font-size:.82rem;line-height:1.75;color:var(--mute)}}
+.echo-art ul{{margin:0;padding-left:18px}}
+.echo-art li{{margin:9px 0}}
+.echo-art b{{color:var(--ink);font-weight:600}}
 .echo-sub{{margin-top:6px;border-top:1px solid var(--line);padding-top:11px;color:var(--mute)}}
 .echo-row .score{{background:var(--panel2);color:var(--mute)}}
 .echo-note b{{color:var(--brass)}}
@@ -2491,6 +2500,8 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .lang-sw button:hover{{color:var(--brass);border-color:var(--brass)}}
 .lang-sw button.on{{background:var(--brass);border-color:var(--brass);color:var(--bg);font-weight:600}}
 /* ปุ่มสลับวิธีเรียงหุ้นไทย อยู่ในหัวข้อกลุ่มซึ่งกดพับได้ ต้องดูออกว่าเป็นปุ่มแยกอีกอัน */
+.cgrp-wrap.dragging{{opacity:.45}}
+.cgroup{{cursor:grab}}
 .th-sort{{float:right;margin:-1px 0 0;padding:1px 6px;border:1px solid var(--line);
   border-radius:2px;background:none;cursor:pointer;color:var(--dim);
   font-family:'IBM Plex Mono',monospace;font-size:.55rem;letter-spacing:.04em}}
@@ -3698,6 +3709,19 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
 </div>
 
 <!-- ฉบับเต็มของแต่ละหมวดงบ — กดที่การ์ดในหน้างบการเงินเพื่อเปิด -->
+<div id="echomodal" class="tmodal" hidden>
+  <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="Similarity analysis">
+    <div class="cmodal-head">
+      <button type="button" class="backbtn" onclick="closeEcho()" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="cmodal-title"><h3 id="echo-title">—</h3>
+        <div class="sym-full" id="echo-sub"></div></div>
+    </div>
+    <div class="fin-body" id="echo-body"></div>
+  </div>
+</div>
+
 <div id="metmodal" class="tmodal" hidden>
   <div class="cmodal-box" role="dialog" aria-modal="true" aria-label="Full metric detail">
     <div class="cmodal-head">
@@ -4313,6 +4337,147 @@ function rateEraName(y0, y1) {{
   const hit = RATE_ERAS.find(e => mid >= e[0] && mid <= e[1]);
   return hit ? (siteLang === 'th' ? hit[2] : hit[3]) : '';
 }}
+// บริบทของแต่ละยุค — เป็นข้อเท็จจริงทางประวัติศาสตร์ที่ผมเขียนไว้ล่วงหน้า ไม่ใช่ข้อความที่
+// สร้างสดตอนเปิดหน้า (build รันบนเครื่อง CI ไม่มีโมเดลคอยเขียนให้) ตัวเลขรอบๆ เป็นของสด
+const ERA_STORY = {{
+  2007: ['เฟดลดดอกเบี้ยจาก 5.25% ลงจนชนศูนย์ภายในสองปี หลังหนี้ซับไพรม์ลามเข้าระบบธนาคาร ' +
+         'จุดเริ่มคือดอกเบี้ยค้างสูงมานาน แล้วเศรษฐกิจสะดุดจนต้องลดแบบรีบและลึก',
+         'The Fed cut from 5.25% to zero within two years as subprime losses spread through the ' +
+         'banking system — a long plateau at a high rate, then a fast, deep easing cycle.'],
+  1990: ['ดอกเบี้ยลดต่อเนื่องสามปีจากวิกฤตสถาบันการเงิน S&L ที่ล้มไปกว่าพันแห่ง ' +
+         'พร้อมภาวะถดถอยปี 1990-91 ลดช้ากว่ารอบ 2008 และหยุดที่ราว 3% ไม่ได้ชนศูนย์',
+         'Three years of cuts through the S&L collapse and the 1990-91 recession — slower than ' +
+         '2008 and stopping near 3% rather than at zero.'],
+  2000: ['ฟองสบู่ดอตคอมแตก ตามด้วยเหตุการณ์ 11 กันยา ดอกเบี้ยลงจาก 5.7% เหลือราว 1% ' +
+         'เป็นรอบลดที่ยาวและจบด้วยดอกเบี้ยต่ำค้างอยู่หลายปี',
+         'The dot-com bust and 9/11 took the rate from 5.7% to about 1%, a long easing cycle ' +
+         'that ended with rates held low for years.'],
+  1984: ['ช่วงคลายตัวหลังยุค Volcker ดอกเบี้ยลงจากระดับสูงมากแต่ยังอยู่หลักห้าถึงเก้า ' +
+         'เป็นการลดเพราะเงินเฟ้อสงบลง ไม่ใช่เพราะระบบการเงินมีปัญหา',
+         'The unwind after Volcker: rates fell from very high levels but stayed between five and ' +
+         'nine percent — easing because inflation had cooled, not because anything broke.'],
+  1974: ['วิกฤตน้ำมันครั้งแรกและภาวะถดถอย 1973-75 ดอกเบี้ยแกว่งแรงทั้งขึ้นและลงในช่วงสั้น',
+         'The first oil shock and the 1973-75 recession, with the rate swinging hard in both ' +
+         'directions over a short span.'],
+  2019: ['ลดดอกเบี้ยเชิงป้องกันปี 2019 แล้วโควิดมาซ้ำจนลงชนศูนย์ในเดือนเดียว ' +
+         'เป็นรอบที่จุดจบถูกกำหนดโดยเหตุการณ์นอกระบบการเงินล้วนๆ',
+         'Precautionary cuts in 2019, then COVID drove the rate to zero within a month — an ' +
+         'ending set entirely by something outside the financial system.'],
+}};
+function eraStory(year) {{
+  const k = Object.keys(ERA_STORY).map(Number).filter(y => Math.abs(y - year) <= 2);
+  if (!k.length) return '';
+  return ERA_STORY[k[0]][siteLang === 'th' ? 0 : 1];
+}}
+
+let echoCache = null;
+function openEcho() {{
+  const s = echoCache;
+  if (!s) return;
+  const th = siteLang === 'th';
+  const sgn = x => (x >= 0 ? '+' : '') + x.toFixed(2);
+  const t = s.top[0];
+  document.getElementById('echo-title').textContent =
+    (th ? 'อ่านตัวเลขความคล้าย ' : 'Reading the ') + (t.r * 100).toFixed(0) +
+    (th ? '%' : '% match');
+  document.getElementById('echo-sub').textContent = s.symbol + ' · ' +
+    (th ? `${{s.win}} เดือนล่าสุด เทียบกับ ${{t.from}}–${{t.to}}`
+        : `last ${{s.win}} months against ${{t.from}}–${{t.to}}`);
+  const li = a => `<li>${{a}}</li>`;
+  const sec = (h, body) => `<div class="fin-section"><div class="fin-section-h"><b>${{h}}</b></div>` +
+    `<div class="echo-art">${{body}}</div></div>`;
+  const a12 = s.after[12], a3 = s.after[3];
+
+  const body = th ? [
+    sec('ตัวเลขนี้คำนวณมาอย่างไร', '<ul>' +
+      li(`ตัด ${{s.win}} เดือนล่าสุดของเส้นนี้ออกมาเป็นแบบ แล้วเลื่อนไปเทียบกับทุกช่วง ${{s.win}} เดือนในอดีต รวม ${{s.n.toLocaleString()}} ช่วง`) +
+      li('ก่อนเทียบ ปรับทั้งสองช่วงให้ค่าเฉลี่ยเป็นศูนย์และความผันผวนเท่ากัน — <b>ระดับดอกเบี้ยจึงไม่มีผล เหลือแต่ "ทรง"</b> ลงจาก 5% เหลือ 3.7% กับลงจาก 9% เหลือ 6% ถือว่าทรงเดียวกันถ้าจังหวะเหมือนกัน') +
+      li('ค่าที่ได้คือสหสัมพันธ์ แปลงเป็น % ตรงๆ · 100% คือทรงทับกันสนิท 0% คือไม่เกี่ยวกันเลย ติดลบคือทรงกลับด้าน') +
+      li(`ทรงคล้ายระดับ 90% ขึ้นไปเกิดเพียง <b>${{s.p90.toFixed(1)}}%</b> ของช่วงทั้งหมด ค่ากลางอยู่ที่ ${{(s.med*100).toFixed(0)}}% — ตัวเลขสูงจึงไม่ได้เกิดง่ายๆ`) +
+      '</ul>'),
+    sec(`ช่วงที่คล้ายที่สุด: ${{t.from}}–${{t.to}}`, '<ul>' +
+      (eraStory(t.from) ? li(eraStory(t.from)) : '') +
+      li(`ช่วงนั้นดอกเบี้ยเดินจาก <b>${{t.v0.toFixed(2)}}%</b> ไป <b>${{t.v1.toFixed(2)}}%</b>`) +
+      li(`ตอนนี้เดินจาก <b>${{s.cur0.toFixed(2)}}%</b> มา <b>${{s.cur1.toFixed(2)}}%</b>`) +
+      li(`<b>ทรงเหมือน แต่ระดับคนละที่</b> — ช่วงนั้นจบที่ ${{t.v1.toFixed(2)}}% ขณะที่ตอนนี้ยังอยู่ที่ ${{s.cur1.toFixed(2)}}% ` +
+         `ห่างกัน ${{Math.abs(s.cur1-t.v1).toFixed(2)}} จุด% ซึ่งเป็นระยะที่ใหญ่มากในโลกดอกเบี้ย`) +
+      '</ul>'),
+    sec('แล้วหลังจากช่วงพวกนั้น เกิดอะไรขึ้นจริง', '<ul>' +
+      (a12 ? li(`นับจาก ${{a12.n}} เหตุการณ์ที่คล้ายเกิน 90% อีก 12 เดือนต่อมาดอกเบี้ยเปลี่ยนไป ` +
+        `ตั้งแต่ <b>${{sgn(a12.lo)}}</b> ถึง <b>${{sgn(a12.hi)}}</b> จุด% — ห่างกัน ${{(a12.hi-a12.lo).toFixed(1)}} จุด%`) : '') +
+      (a3 ? li(`ระยะสั้นกว่านั้น (3 เดือน) กระจาย ${{sgn(a3.lo)}} ถึง ${{sgn(a3.hi)}} จุด%`) : '') +
+      li('<b>ความกว้างนี่แหละคือคำตอบ</b> — เหตุการณ์ที่ "ทรงเหมือนกันเกิน 90%" จบลงห่างกันได้ขนาดนั้น แปลว่าทรงที่เหมือนกันไม่ได้ผูกกับปลายทางที่เหมือนกัน') +
+      (a12 ? li(`และกลุ่มตัวอย่างมีแค่ ${{a12.n}} เหตุการณ์ ต่อให้เอนไปทางใดทางหนึ่งก็ยังอาจเป็นความบังเอิญ`) : '') +
+      '</ul>'),
+    sec('ทำไมผมถึงไม่ยอมแปลงตัวเลขนี้เป็นคำทำนาย', '<ul>' +
+      li('ผมเอาวิธีนี้ไปทดสอบย้อนหลังทุกเดือนในข้อมูลชุดตั๋วเงินคลัง 3 เดือน — ที่แต่ละเดือนหาช่วงคล้ายที่สุด*ที่จบก่อนหน้านั้น* แล้วใช้สิ่งที่เกิดต่อจากช่วงนั้นเป็นคำทำนาย') +
+      li('<b>ผลคือแพ้การเดาว่า "ดอกเบี้ยไม่เปลี่ยนเลย"</b> ทั้งที่ 1 เดือนและ 12 เดือน และทายทิศทางถูกราว 51% จากการทดสอบเกือบ 900 ครั้ง ซึ่งเท่ากับโยนเหรียญ') +
+      li('ผมวัดผลนี้เฉพาะเส้นตั๋วเงินคลัง 3 เดือน ยังไม่ได้วัดกับอีกสองเส้น จึงไม่เอาไปแปะเป็นตัวเลขบนหน้าอื่น') +
+      li('วิกฤตในข้อมูล 90 กว่าปีมีอยู่ไม่กี่ครั้ง น้อยเกินกว่าจะคิดเป็นความน่าจะเป็นได้ ถ้าผมเขียนว่า "โอกาสเกิดวิกฤต X%" นั่นคือเลขที่ผมแต่งขึ้น ไม่ใช่เลขที่คำนวณได้') +
+      '</ul>'),
+    sec('ข้อจำกัดของข้อมูลชุดนี้', '<ul>' +
+      li(`ชุดนี้เริ่มปี ${{s.firstYear}} — วิกฤตที่เก่ากว่านั้นไม่ได้อยู่ในการเปรียบเทียบเลย`) +
+      li('ช่วง MAX เป็นค่าเฉลี่ยรายเดือน จังหวะขึ้นลงภายในเดือนหายไปหมด') +
+      li('การเทียบใช้หน้าต่างยาวเท่ากันตายตัว วิกฤตที่กินเวลาสั้นหรือยาวกว่านั้นจะถูกจับได้ไม่ครบ') +
+      li('เส้นดอกเบี้ยเส้นเดียวไม่รู้เรื่องเงินเฟ้อ การจ้างงาน หนี้ครัวเรือน หรือใครเป็นคนคุมนโยบาย ซึ่งเป็นสิ่งที่ตัดสินว่ารอบนั้นจบยังไง') +
+      '</ul>'),
+    sec('ถ้าจะใช้ตัวเลขนี้ให้เป็นประโยชน์', '<ul>' +
+      li('ใช้เป็น<b>คำถาม</b> ไม่ใช่คำตอบ: ทรงเหมือน 2008 แล้วอะไรที่เหมือน อะไรที่ไม่เหมือน') +
+      li(`เทียบกับเส้นยาวด้วย — ถ้าสั้นลงแต่ยาวขึ้น เป็นคนละเรื่องกับตอนที่ลงพร้อมกัน`) +
+      li('ดูระดับ ไม่ใช่แค่ทรง — จบที่ 0% กับจบที่ 3.7% คือคนละสถานการณ์ ต่อให้ทางเดินเหมือนกัน') +
+      li('ถ้ามีเส้นไหนไม่มีช่วงคล้ายเกิน 90% เลย นั่นก็เป็นข้อมูล แปลว่าตอนนี้ไม่เหมือนอะไรในอดีตเป็นพิเศษ') +
+      '</ul>'),
+  ].join('') : [
+    sec('How the number is built', '<ul>' +
+      li(`The last ${{s.win}} months are taken as a template and slid against every ${{s.win}}-month window in the record — ${{s.n.toLocaleString()}} of them.`) +
+      li('Both windows are centred and scaled before comparing, so <b>the level drops out and only the shape remains</b>: 5%→3.7% and 9%→6% count as the same shape if the rhythm matches.') +
+      li('The result is a correlation shown as a percentage. 100% is an exact shape match, 0% unrelated, negative means inverted.') +
+      li(`A 90%-plus match occurs in only <b>${{s.p90.toFixed(1)}}%</b> of all windows, against a median of ${{(s.med*100).toFixed(0)}}% — high numbers are not the default.`) +
+      '</ul>'),
+    sec(`The closest match: ${{t.from}}–${{t.to}}`, '<ul>' +
+      (eraStory(t.from) ? li(eraStory(t.from)) : '') +
+      li(`That window ran from <b>${{t.v0.toFixed(2)}}%</b> to <b>${{t.v1.toFixed(2)}}%</b>.`) +
+      li(`Today runs from <b>${{s.cur0.toFixed(2)}}%</b> to <b>${{s.cur1.toFixed(2)}}%</b>.`) +
+      li(`<b>Same shape, different altitude</b> — that window ended at ${{t.v1.toFixed(2)}}% while today sits at ${{s.cur1.toFixed(2)}}%, ${{Math.abs(s.cur1-t.v1).toFixed(2)}} points apart, which is a wide gap in rate terms.`) +
+      '</ul>'),
+    sec('What actually followed those periods', '<ul>' +
+      (a12 ? li(`Across the ${{a12.n}} episodes matching above 90%, the rate twelve months later had moved between <b>${{sgn(a12.lo)}}</b> and <b>${{sgn(a12.hi)}}</b> points — a ${{(a12.hi-a12.lo).toFixed(1)}} point spread.`) : '') +
+      (a3 ? li(`Over three months the spread ran ${{sgn(a3.lo)}} to ${{sgn(a3.hi)}} points.`) : '') +
+      li('<b>That width is the finding</b> — episodes matching above 90% ended up that far apart, so a matching shape does not bind the outcome.') +
+      (a12 ? li(`And with only ${{a12.n}} episodes, any lean in them may still be chance.`) : '') +
+      '</ul>'),
+    sec('Why I will not turn this into a forecast', '<ul>' +
+      li('I backtested the obvious method on the 3-month bill: at every month, find the closest analogue <i>ending before that month</i>, and use what followed it as the forecast.') +
+      li('<b>It loses to assuming the rate simply does not change</b>, at both one month and twelve, and calls direction about 51% of the time across nearly 900 tests — a coin flip.') +
+      li('I ran that test on the 3-month series only, so I do not print the figure on the other two charts.') +
+      li('There are only a handful of crises in ninety years of data, far too few to derive odds from. A stated "X% chance of a crisis" would be a number I made up, not one I measured.') +
+      '</ul>'),
+    sec('Limits of this data', '<ul>' +
+      li(`The series starts in ${{s.firstYear}}, so anything older is simply not in the comparison.`) +
+      li('MAX is monthly averages, so movement within a month is invisible.') +
+      li('The comparison uses one fixed window length; episodes much shorter or longer are caught only partly.') +
+      li('A single rate line knows nothing about inflation, employment, household debt or who sets policy — the things that decide how a cycle ends.') +
+      '</ul>'),
+    sec('Using it well', '<ul>' +
+      li('Treat it as a <b>question</b>, not an answer: it looks like 2008 — so what is alike, and what is not?') +
+      li('Check the long rate too. Short falling while long rises is a different world from both falling together.') +
+      li('Watch the level, not just the shape: ending at 0% and ending at 3.7% are different situations even along the same path.') +
+      li('A series with no 90%-plus match is itself information — it says today resembles nothing in particular.') +
+      '</ul>'),
+  ].join('');
+  document.getElementById('echo-body').innerHTML = body;
+  document.getElementById('echomodal').hidden = false;
+  document.getElementById('echo-body').scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+}}
+function closeEcho() {{
+  document.getElementById('echomodal').hidden = true;
+  if (!document.querySelector('.tmodal:not([hidden])')) document.body.style.overflow = '';
+}}
+document.getElementById('echomodal').addEventListener('click', ev => {{
+  if (ev.target.id === 'echomodal') closeEcho();
+}});
+
 function renderRateEcho(label) {{
   const head = document.querySelector('.cnews-head');
   const box = document.getElementById('cnews-list');
@@ -4320,11 +4485,16 @@ function renderRateEcho(label) {{
   const rows = (chCache[label] || {{}}).tf?.MAX;
   const s = rows && rows.length ? rateSimilarity(rows, 36) : null;
   if (!s) return false;
+  s.symbol = label;
+  echoCache = s;
   const th = siteLang === 'th';
   if (head) head.textContent = th ? 'ช่วงในอดีตที่ทรงคล้ายกัน' : 'PAST PERIODS WITH A SIMILAR SHAPE';
   const pct = r => (r * 100).toFixed(0) + '%';
   const cls = r => r >= 0.9 ? 'up' : r <= 0 ? 'down' : '';
-  const line = t => `<div class="echo-row"><span class="score ${{cls(t.r)}}">${{pct(t.r)}}</span>` +
+  // กดที่ % เพื่ออ่านบทวิเคราะห์เต็ม — ตัวเลขลอยๆ ตีความผิดง่าย ต้องมีที่ให้อธิบายยาวๆ
+  const line = t => `<div class="echo-row echo-click" role="button" tabindex="0" onclick="openEcho()"`
+    + ` onkeydown="if(event.key==='Enter')openEcho()">`
+    + `<span class="score ${{cls(t.r)}}">${{pct(t.r)}}</span>` +
     `<span class="cnews-t">${{t.from}}–${{t.to}}${{t.era ? ' · ' + esc(t.era) : ''}}` +
     `<span class="cnews-m">${{t.v0.toFixed(2)}}% → ${{t.v1.toFixed(2)}}%</span></span></div>`;
   // สิ่งที่เกิดหลังช่วงคล้าย — แสดงช่วงกระจายเต็ม ไม่ใช่ค่ากลางตัวเดียว
@@ -4345,9 +4515,11 @@ function renderRateEcho(label) {{
     afterRows;
   box.innerHTML =
     `<p class="echo-lead">${{th
-      ? `เทียบทรงของ ${{s.win}} เดือนล่าสุด (${{s.cur0.toFixed(2)}}% → ${{s.cur1.toFixed(2)}}%) `
+      ? `<span class="echo-cta" role="button" tabindex="0" onclick="openEcho()">อ่านบทวิเคราะห์เต็ม →</span>`
+        + `เทียบทรงของ ${{s.win}} เดือนล่าสุด (${{s.cur0.toFixed(2)}}% → ${{s.cur1.toFixed(2)}}%) `
         + `กับทุกช่วง ${{s.win}} เดือนตั้งแต่ปี ${{s.firstYear}} รวม ${{s.n.toLocaleString()}} ช่วง`
-      : `Matching the last ${{s.win}} months (${{s.cur0.toFixed(2)}}% → ${{s.cur1.toFixed(2)}}%) `
+      : `<span class="echo-cta" role="button" tabindex="0" onclick="openEcho()">Read the full analysis →</span>`
+        + `Matching the last ${{s.win}} months (${{s.cur0.toFixed(2)}}% → ${{s.cur1.toFixed(2)}}%) `
         + `against every ${{s.win}}-month window since ${{s.firstYear}} — ${{s.n.toLocaleString()}} of them`}}</p>` +
     s.top.map(line).join('') + afterBlock +
     `<p class="echo-note">${{th
@@ -4652,6 +4824,17 @@ function saveFavOrder(){{
 }}
 
 // กลุ่ม THAILAND/GLOBAL พับเก็บได้ทีละกลุ่ม จำไว้ข้ามเซสชัน
+// ลำดับหมวดในลิสต์ (ดอกเบี้ย / ไทย / ต่างประเทศ) ลากสลับได้ จำไว้ข้ามเซสชัน
+let grpOrder = ['rate', 'th', 'intl'];
+try {{
+  const g = JSON.parse(localStorage.getItem('grpOrder') || 'null');
+  if (Array.isArray(g) && g.length) grpOrder = g;
+}} catch(e) {{}}
+function saveGrpOrder(){{
+  grpOrder = [...document.querySelectorAll('#cmodal-list .cgrp-wrap')].map(e => e.dataset.g);
+  try {{ localStorage.setItem('grpOrder', JSON.stringify(grpOrder)); }} catch(e) {{}}
+}}
+
 // วิธีเรียงหุ้นไทยในแท็บรายการโปรด: 'yield' เรียงตามปันผลอัตโนมัติ · 'manual' ลากจัดเอง
 // สองอย่างนี้อยู่ด้วยกันไม่ได้ เพราะการเรียงอัตโนมัติจะทับลำดับที่ลากไว้ทุกครั้งที่วาดใหม่
 // จึงให้เลือกเอาว่าจะใช้แบบไหน แล้วจำไว้ข้ามเซสชัน
@@ -4696,9 +4879,13 @@ function setAssetMode(m){{
 // เรียงตัวที่อยู่ในแถบราคาก่อน แล้วค่อยเรียง % มากไปน้อย
 function renderAssetList(q){{
   const term = (q || '').trim().toLowerCase();
-  const groups = {{th: T('grpTh'), intl: T('grpIntl'), rate: T('grpRate')}};
+  const groups = {{rate: T('grpRate'), th: T('grpTh'), intl: T('grpIntl')}};
+  // ลำดับหมวดลากสลับได้ จำไว้ข้ามเซสชัน — หมวดที่ไม่รู้จักต่อท้ายไว้ กันลำดับเก่าค้างแล้วของใหม่หาย
+  const order = grpOrder.filter(g => g in groups)
+    .concat(Object.keys(groups).filter(g => !grpOrder.includes(g)));
   let html = '', shown = 0;
-  for (const [g, title] of Object.entries(groups)) {{
+  for (const g of order) {{
+    const title = groups[g];
     const rows = Object.entries(CHARTS)
       // กลุ่มดอกเบี้ยมีแค่สองตัวและไม่ได้อยู่ในรายการโปรดของใครโดยปริยาย — ถ้าให้ซ่อนตาม
       // โหมด FAVORITES ก็จะไม่มีใครหาเจอ จึงโชว์ตลอดทั้งสองโหมด (ยังค้นหาได้ตามปกติ)
@@ -4743,7 +4930,8 @@ function renderAssetList(q){{
     const draggable = chMode === 'fav' && !thAuto && g !== 'rate';
     const showYld = chMode === 'fav' && thAuto;
     const folded = favFolded.has(g) ? ' folded' : '';
-    html += `<div class="cgroup${{folded}}" data-g="${{g}}" role="button" tabindex="0"
+    html += `<div class="cgrp-wrap" data-g="${{g}}" draggable="true">` +
+      `<div class="cgroup${{folded}}" data-g="${{g}}" role="button" tabindex="0"
         onclick="toggleFavFold('${{g}}')" onkeydown="if(event.key==='Enter')toggleFavFold('${{g}}')">
         <svg class="fold-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
         ${{title}} · ${{rows.length}}${{
@@ -4767,7 +4955,7 @@ function renderAssetList(q){{
           <span class="cfav${{f ? ' on' : ''}}" role="button" tabindex="-1"
             title="${{f ? 'Remove from favorites' : 'Add to favorites'}}"
             onclick="toggleFav(event,'${{esc(l)}}')">${{f ? '★' : '☆'}}</span></div>`;
-      }}).join('') + `</div>`;
+      }}).join('') + `</div></div>`;
   }}
   if (!shown) {{
     html = term ? `<p class="cnone">${{T('noSym')}}</p>`
@@ -6831,8 +7019,19 @@ document.getElementById('mmodal').addEventListener('click', ev => {{
 (() => {{
   const list = document.getElementById('cmodal-list');
   if (!list) return;
-  let src = null;
+  let src = null, grp = null;
   list.addEventListener('dragstart', ev => {{
+    // ลากทั้งหมวดได้ด้วย — จับที่หัวข้อหมวด ไม่ใช่ที่แถวสินทรัพย์ข้างใน
+    const head = ev.target.closest('.cgroup');
+    if (head) {{
+      grp = head.closest('.cgrp-wrap');
+      if (grp) {{
+        grp.classList.add('dragging');
+        ev.dataTransfer.effectAllowed = 'move';
+        try {{ ev.dataTransfer.setData('text/plain', grp.dataset.g); }} catch(e) {{}}
+        return;
+      }}
+    }}
     src = ev.target.closest('.citem[draggable="true"]');
     if (!src) return;
     src.classList.add('dragging');
@@ -6840,10 +7039,20 @@ document.getElementById('mmodal').addEventListener('click', ev => {{
     try {{ ev.dataTransfer.setData('text/plain', src.dataset.label); }} catch(e) {{}}
   }});
   list.addEventListener('dragend', () => {{
+    if (grp) {{ grp.classList.remove('dragging'); saveGrpOrder(); }}
     if (src) {{ src.classList.remove('dragging'); saveFavOrder(); }}
-    src = null;
+    src = null; grp = null;
   }});
   list.addEventListener('dragover', ev => {{
+    if (grp) {{
+      const overG = ev.target.closest('.cgrp-wrap');
+      if (!overG || overG === grp) return;
+      ev.preventDefault();
+      const r = overG.getBoundingClientRect();
+      overG.parentNode.insertBefore(grp,
+        ev.clientY > r.top + r.height / 2 ? overG.nextSibling : overG);
+      return;
+    }}
     const over = ev.target.closest('.citem');
     if (!over || !src || over === src) return;
     // ห้ามลากข้ามกลุ่ม THAILAND/GLOBAL — กลุ่มของแต่ละตัวมาจากข้อมูลจริง ลากข้ามแล้ว
