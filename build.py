@@ -2473,6 +2473,12 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .ctag{{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-family:'IBM Plex Mono',monospace;font-size:.58rem;color:var(--dim);letter-spacing:.02em}}
 .citem .cname:has(+ .ctag){{flex:none}}
+/* แผงเทียบทรงดอกเบี้ยกับอดีต — ใช้พื้นที่เดียวกับข่าวที่เกี่ยวข้อง */
+.echo-lead{{padding:10px 13px 4px;font-size:.72rem;line-height:1.55;color:var(--dim)}}
+.echo-row{{display:flex;gap:9px;align-items:flex-start;padding:8px 13px;
+  border-bottom:1px solid var(--line)}}
+.echo-note{{padding:11px 13px;font-size:.68rem;line-height:1.65;color:var(--dim)}}
+.echo-note b{{color:var(--brass)}}
 /* ปุ่มสลับภาษาในหัวเมนู */
 .lang-sw{{display:flex;gap:3px;margin-left:auto;margin-right:10px}}
 .lang-sw button{{padding:2px 8px;border:1px solid var(--line);border-radius:2px;
@@ -3931,6 +3937,7 @@ function setSiteLang(l){{
     renderFinTable();
   // ชื่อเต็มของชุดดอกเบี้ยแปลได้ แต่มันถูกเขียนลงไปตอน pickChart ครั้งเดียว
   // ถ้าไม่เขียนใหม่ตรงนี้ ชื่อจะค้างภาษาเดิมจนกว่าจะกดเลือกสินทรัพย์ใหม่
+  if (chCur && SYM_TAG[chCur] && typeof renderRateEcho === 'function') renderRateEcho(chCur);
   if (chCur && typeof setSymFull === 'function') {{
     setSymFull('cmodal-full', chCur);
     if (!document.getElementById('finmodal').hidden) setSymFull('fin-full', chCur);
@@ -4281,6 +4288,101 @@ function pickType(t){{
 const SYM_I18N = {{'US 3M': 'us3mFull', 'US 10Y': 'us10yFull', 'US AAA': 'usaaaFull'}};
 // คำอธิบายสั้นข้างชื่อในลิสต์ — ลำพัง "US 3M" ไม่บอกว่าสั้นหรือยาว ต้องกดเข้าไปถึงจะรู้
 const SYM_TAG = {{'US 3M': 'us3mTag', 'US 10Y': 'us10yTag', 'US AAA': 'usaaaTag'}};
+
+// ── เทียบรูปทรงดอกเบี้ยปัจจุบันกับอดีต ────────────────────
+// สิ่งที่คำนวณคือ "รูปทรงของเส้นเหมือนกันแค่ไหน" (correlation หลังปรับให้ระดับไม่มีผล)
+// ไม่ใช่ "โอกาสเกิดวิกฤต" — วิกฤตในข้อมูลมีไม่กี่ครั้ง ไม่พอจะเป็นความน่าจะเป็นของอะไรทั้งสิ้น
+// ตัวเลขนี้ตรวจสอบได้: หยิบสองช่วงมาวางทับกันแล้วดูเองได้ว่าเหมือนจริงไหม
+const RATE_ERAS = [
+  [1937, 1939, 'ถดถอยซ้ำในยุคเศรษฐกิจตกต่ำ', 'Depression double-dip'],
+  [1948, 1950, 'ถดถอยหลังสงคราม', 'post-war recession'],
+  [1957, 1959, 'ถดถอยปี 1958', '1958 recession'],
+  [1973, 1976, 'วิกฤตน้ำมันครั้งแรก', 'first oil shock'],
+  [1979, 1983, 'ยุค Volcker ปราบเงินเฟ้อ', 'Volcker inflation fight'],
+  [1989, 1993, 'วิกฤตสถาบันการเงิน S&L', 'S&L crisis'],
+  [1999, 2003, 'ฟองสบู่ดอตคอมแตก', 'dot-com bust'],
+  [2006, 2010, 'วิกฤตซับไพรม์ 2008', '2008 financial crisis'],
+  [2019, 2021, 'โควิด-19', 'COVID-19'],
+];
+function rateEraName(y0, y1) {{
+  const mid = (y0 + y1) / 2;
+  const hit = RATE_ERAS.find(e => mid >= e[0] && mid <= e[1]);
+  return hit ? (siteLang === 'th' ? hit[2] : hit[3]) : '';
+}}
+function renderRateEcho(label) {{
+  const head = document.querySelector('.cnews-head');
+  const box = document.getElementById('cnews-list');
+  if (!box) return false;
+  const rows = (chCache[label] || {{}}).tf?.MAX;
+  const s = rows && rows.length ? rateSimilarity(rows, 36) : null;
+  if (!s) return false;
+  const th = siteLang === 'th';
+  if (head) head.textContent = th ? 'ช่วงในอดีตที่ทรงคล้ายกัน' : 'PAST PERIODS WITH A SIMILAR SHAPE';
+  const pct = r => (r * 100).toFixed(0) + '%';
+  const cls = r => r >= 0.9 ? 'up' : r <= 0 ? 'down' : '';
+  const line = t => `<div class="echo-row"><span class="score ${{cls(t.r)}}">${{pct(t.r)}}</span>` +
+    `<span class="cnews-t">${{t.from}}–${{t.to}}${{t.era ? ' · ' + esc(t.era) : ''}}` +
+    `<span class="cnews-m">${{t.v0.toFixed(2)}}% → ${{t.v1.toFixed(2)}}%</span></span></div>`;
+  box.innerHTML =
+    `<p class="echo-lead">${{th
+      ? `เทียบทรงของ ${{s.win}} เดือนล่าสุด (${{s.cur0.toFixed(2)}}% → ${{s.cur1.toFixed(2)}}%) `
+        + `กับทุกช่วง ${{s.win}} เดือนตั้งแต่ปี ${{s.firstYear}} รวม ${{s.n.toLocaleString()}} ช่วง`
+      : `Matching the last ${{s.win}} months (${{s.cur0.toFixed(2)}}% → ${{s.cur1.toFixed(2)}}%) `
+        + `against every ${{s.win}}-month window since ${{s.firstYear}} — ${{s.n.toLocaleString()}} of them`}}</p>` +
+    s.top.map(line).join('') +
+    `<p class="echo-note">${{th
+      ? `<b>ตัวเลขนี้คือความคล้ายของรูปทรง ไม่ใช่โอกาสเกิดวิกฤต</b> — วิกฤตในข้อมูลมีไม่กี่ครั้ง `
+        + `น้อยเกินกว่าจะคิดเป็นความน่าจะเป็นของอะไรได้ · ช่วงที่ทรงเหมือนที่สุดจบที่ `
+        + `${{s.top[0].v1.toFixed(2)}}% ขณะที่ตอนนี้อยู่ที่ ${{s.cur1.toFixed(2)}}% ทรงเหมือนไม่ได้แปลว่าปลายทางเหมือน · `
+        + `เทียบให้เห็นภาพ: ทรงคล้ายระดับนี้ (90% ขึ้นไป) เกิดใน ${{s.p90.toFixed(1)}}% ของช่วงในอดีตทั้งหมด `
+        + `ค่ากลางอยู่ที่ ${{(s.med * 100).toFixed(0)}}%`
+      : `<b>This is shape similarity, not a probability of a crisis</b> — there are only a handful `
+        + `of crises in this data, far too few to derive odds from. The closest-matching window `
+        + `ended at ${{s.top[0].v1.toFixed(2)}}% while today sits at ${{s.cur1.toFixed(2)}}%; a matching `
+        + `shape does not mean a matching outcome. For scale: this level of similarity (90%+) occurs `
+        + `in ${{s.p90.toFixed(1)}}% of all past windows, and the median is ${{(s.med * 100).toFixed(0)}}%`}}</p>`;
+  return true;
+}}
+function zscore(v) {{
+  const m = v.reduce((a, b) => a + b, 0) / v.length;
+  const sd = Math.sqrt(v.reduce((a, b) => a + (b - m) * (b - m), 0) / v.length);
+  return sd > 1e-9 ? v.map(x => (x - m) / sd) : v.map(() => 0);
+}}
+function rateSimilarity(rows, win) {{
+  // ปรับทั้งสองช่วงให้ค่าเฉลี่ยเป็น 0 ส่วนเบี่ยงเบนเป็น 1 ก่อนเทียบ จึงเทียบ "ทรง" ล้วนๆ
+  // ระดับดอกเบี้ยสูงต่ำไม่มีผล — 5%→3.7% กับ 9%→6% ถือว่าทรงเดียวกันถ้าลงในจังหวะเดียวกัน
+  const vals = rows.map(r => r[4]);
+  if (vals.length < win * 2 + 12) return null;
+  const cur = zscore(vals.slice(-win));
+  const yrOf = i => new Date(rows[i][0] * 1000).getUTCFullYear();
+  const all = [];
+  for (let i = 0; i + win <= vals.length - win; i++) {{
+    const seg = zscore(vals.slice(i, i + win));
+    let r = 0;
+    for (let k = 0; k < win; k++) r += cur[k] * seg[k];
+    all.push({{r: r / win, i}});
+  }}
+  if (!all.length) return null;
+  const sorted = all.map(a => a.r).sort((a, b) => a - b);
+  const med = sorted[Math.floor(sorted.length / 2)];
+  const frac = t => all.filter(a => a.r >= t).length / all.length * 100;
+  // รวมหน้าต่างที่ทับกันให้เหลือเหตุการณ์ละรายการ ไม่งั้นจะได้ช่วงเดียวกันซ้ำห้าบรรทัด
+  const top = [];
+  for (const a of all.slice().sort((x, y) => y.r - x.r)) {{
+    if (top.every(b => Math.abs(a.i - b.i) > win * 0.7)) top.push(a);
+    if (top.length >= 4) break;
+  }}
+  const info = a => ({{
+    r: a.r, from: yrOf(a.i), to: yrOf(a.i + win - 1),
+    v0: vals[a.i], v1: vals[a.i + win - 1], era: rateEraName(yrOf(a.i), yrOf(a.i + win - 1)),
+  }});
+  return {{
+    win, top: top.map(info), med, p90: frac(0.9), p95: frac(0.95), n: all.length,
+    curFrom: yrOf(vals.length - win), curTo: yrOf(vals.length - 1),
+    cur0: vals[vals.length - win], cur1: vals[vals.length - 1],
+    firstYear: yrOf(0),
+  }};
+}}
 function symFull(label){{
   // ชื่อบริษัทมาจากแหล่งข้อมูลจึงแปลไม่ได้ แต่ชื่อชุดดอกเบี้ยเราตั้งเอง เลยสลับภาษาตามได้
   if (SYM_I18N[label]) return T(SYM_I18N[label]);
@@ -4680,6 +4782,8 @@ async function pickChart(label){{
   document.getElementById('cmodal-p').textContent = d ? d.price : '';
   c.textContent = d ? d.pct : '';
   c.className = d ? d.dir : '';
+  const nhead = document.querySelector('.cnews-head');
+  if (nhead && !SYM_TAG[label]) nhead.textContent = T('relNews');
   document.getElementById('cnews-list').innerHTML = (d?.news || []).length
     ? d.news.map(n => `<a class="cnews-row" href="${{esc(n.link)}}" target="_blank" rel="noopener">
         <span class="score ${{scoreClass(n.score)}}">${{n.score}}%</span>
@@ -4693,6 +4797,8 @@ async function pickChart(label){{
     }} catch (e) {{ chCache[label] = {{tf: {{}}}}; }}
   }}
   if (chCur !== label) return;        // ผู้ใช้กดตัวอื่นระหว่างรอไฟล์กราฟ
+  // ชุดดอกเบี้ยไม่มีข่าวจับคู่ ใช้พื้นที่นั้นเทียบทรงกับอดีตแทน — ต้องเรียกหลังไฟล์กราฟมาแล้ว
+  if (SYM_TAG[label]) renderRateEcho(label);
   chData = chCache[label];
   // สินทรัพย์บางตัว (เช่นทองไทย) ต้องบอกที่มาของตัวเลขไว้ด้วย
   const note = document.getElementById('cnote');
