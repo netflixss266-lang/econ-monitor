@@ -2507,7 +2507,9 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   transition:top .3s cubic-bezier(.4,0,.2,1),left .3s cubic-bezier(.4,0,.2,1)}}
 .coach-bar{{height:3px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:12px}}
 .coach-bar i{{display:block;height:100%;background:var(--brass);width:0;transition:width .35s}}
-.coach-top{{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px}}
+.coach-top{{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}}
+.coach-head-r{{display:flex;align-items:center;gap:9px}}
+.coach-lang button{{padding:1px 6px;font-size:.56rem}}
 .coach-kick{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.16em;
   text-transform:uppercase;color:var(--brass)}}
 .coach-count{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim)}}
@@ -3818,7 +3820,13 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
     <div class="coach-bar"><i id="coachBar"></i></div>
     <div class="coach-top">
       <span class="coach-kick" id="coachKick"></span>
-      <span class="coach-count" id="coachCount"></span>
+      <span class="coach-head-r">
+        <span class="lang-sw coach-lang">
+          <button type="button" data-lang="en" onclick="coachLang('en')">EN</button>
+          <button type="button" data-lang="th" onclick="coachLang('th')">ไทย</button>
+        </span>
+        <span class="coach-count" id="coachCount"></span>
+      </span>
     </div>
     <h3 id="coachTitle"></h3>
     <p id="coachText"></p>
@@ -7359,9 +7367,19 @@ function coachGo(step){{
   COACH_I = Math.max(0, Math.min(COACH.length - 1, COACH_I + step));
   coachShow();
 }}
+function coachLang(l){{
+  setSiteLang(l);          // เปลี่ยนทั้งเว็บ ไม่ใช่เฉพาะการ์ด จะได้เห็นผลจริงทันที
+  coachSyncLang();
+  coachShow();             // วาดขั้นเดิมด้วยภาษาใหม่ ไม่กระโดดกลับไปขั้นแรก
+}}
+function coachSyncLang(){{
+  document.querySelectorAll('.coach-lang button').forEach(b =>
+    b.classList.toggle('on', b.dataset.lang === siteLang));
+}}
 function openCoach(){{
   COACH_I = 0; COACH_DIR = 1;
   document.getElementById('coach').hidden = false;
+  coachSyncLang();
   coachShow();
 }}
 function closeCoach(){{
