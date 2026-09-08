@@ -2492,6 +2492,15 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .echo-sub{{margin-top:6px;border-top:1px solid var(--line);padding-top:11px;color:var(--mute)}}
 .echo-row .score{{background:var(--panel2);color:var(--mute)}}
 .echo-note b{{color:var(--brass)}}
+/* ป้ายบอกว่าหัวข้อนี้เป็นคำแปลของเครื่อง ไม่ใช่ของสำนักข่าว — ต้องเห็นชัดพอที่จะไม่เข้าใจผิด */
+.tr-tag{{display:inline-block;margin-left:6px;padding:1px 5px;border:1px solid var(--line);
+  border-radius:2px;vertical-align:middle;cursor:help;
+  font-family:'IBM Plex Mono',monospace;font-size:.52rem;letter-spacing:.05em;
+  color:var(--dim);text-transform:uppercase;font-weight:400}}
+.tr-note{{margin:0 0 14px;padding:8px 12px;border-left:2px solid var(--brass);
+  background:var(--panel2);color:var(--mute);font-size:.72rem;line-height:1.55}}
+.tr-sw button.on[data-tr="1"]{{background:var(--brass);border-color:var(--brass);color:var(--bg)}}
+
 /* ═══ คู่มือเปิดใช้งาน — coachmark ชี้ปุ่มจริงบนหน้าจอจริง ═══
    ทำแบบเดียวกับ Creator Finder: เจาะรูให้เห็นปุ่มจริง ไม่ใช่สไลด์ป๊อปอัพลอยๆ
    มืดทั้งจอด้วยเงาที่พุ่งออกจากกรอบ (box-shadow กว้างมาก) แทนการวางแผ่นทึบสี่ด้าน */
@@ -3811,6 +3820,10 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
     <button type="button" data-lang="en" class="on" onclick="setSiteLang('en')">EN</button>
     <button type="button" data-lang="th" onclick="setSiteLang('th')">ไทย</button>
   </span>
+  <span class="lang-sw tr-sw" title="แปลหัวข้อข่าวข้ามภาษาด้วยเครื่อง (เบต้า)">
+    <button type="button" data-tr="1" onclick="setTranslate(true)" data-i18n="trOn">TRANSLATE</button>
+    <button type="button" data-tr="0" class="on" onclick="setTranslate(false)" data-i18n="trOff">OFF</button>
+  </span>
 </div>
 
 <div class="coach" id="coach" hidden>
@@ -3859,6 +3872,8 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 013.9-2 2.2 2.2 0 01.1 3.6c-.9.6-1.5 1-1.5 2M12 17h.01"/></svg><span data-i18n="guide">GUIDE</span></button>
   <div class="nav-foot" data-i18n="dragOrder">drag to reorder</div>
 </aside>
+
+<div class="tr-note" id="tr-note" hidden data-i18n="trNote">Headlines in the other language are machine-translated — not the publisher's words. Hover one to read the original.</div>
 
 <div class="gsearch-empty" id="gsearch-empty" data-i18n="noMatch" hidden>No stories match your search.</div>
 
@@ -4008,6 +4023,10 @@ const I18N = {{
   sortDiv:   ['by yield', 'ปันผล'],
   pickSym:   ['SYMBOL', 'เลือกหุ้น'],
   guide:     ['GUIDE', 'คู่มือ'],
+  trOn:      ['TRANSLATE', 'แปลข่าว'],
+  trOff:     ['OFF', 'ปิด'],
+  trNote:    ["Headlines in the other language are machine-translated — not the publisher's words. Hover one to read the original.",
+              'หัวข้อข่าวภาษาอื่นถูกแปลด้วยเครื่อง ไม่ใช่คำที่สำนักข่าวเขียน — ชี้ที่หัวข้อเพื่ออ่านต้นฉบับ'],
   us3mFull:  ['US 3-Month Treasury Yield', 'ดอกเบี้ยสหรัฐ 3 เดือน (พันธบัตรระยะสั้น)'],
   us10yFull: ['US 10-Year Treasury Yield', 'ดอกเบี้ยสหรัฐ 10 ปี (พันธบัตรระยะยาว)'],
   usaaaFull: ["Moody's Aaa Corporate Bond Yield", "ดอกเบี้ยหุ้นกู้เอกชนเรตติ้ง Aaa (Moody's)"],
@@ -4047,6 +4066,7 @@ function setSiteLang(l){{
   }}
   // ชื่อเต็มของชุดดอกเบี้ยแปลได้ แต่มันถูกเขียนลงไปตอน pickChart ครั้งเดียว
   // ถ้าไม่เขียนใหม่ตรงนี้ ชื่อจะค้างภาษาเดิมจนกว่าจะกดเลือกสินทรัพย์ใหม่
+  if (typeof trRestore === 'function') {{ trRestore(); if (TR_ON) trRun(); }}
   if (chCur && SYM_TAG[chCur] && typeof renderRateEcho === 'function') renderRateEcho(chCur);
   if (chCur && typeof setSymFull === 'function') {{
     setSymFull('cmodal-full', chCur);
@@ -6994,6 +7014,9 @@ addEventListener('keydown', ev => {{
 }});
 
 function setScope(s){{
+  // เช็คที่ฟังก์ชันซึ่ง hoist ได้ ไม่ใช่ที่ตัวแปร let (typeof ก็ยังโยน error ถ้าอยู่ใน TDZ)
+  // setScope ถูกเรียกตอนโหลดหน้าก่อนบล็อกแปลจะประกาศตัวแปรเสร็จ
+  if (typeof trRun === 'function') setTimeout(() => {{ if (TR_ON) trRun(); }}, 300);
   document.querySelectorAll('.tab').forEach(t => {{
     const on = t.dataset.scope === s;
     t.classList.toggle('active', on);
@@ -7211,6 +7234,108 @@ document.getElementById('mmodal').addEventListener('click', ev => {{
 // ใช้ภาษาที่จำไว้ตั้งแต่ตอนโหลดหน้า ก่อนที่ผู้ใช้จะทันเห็นป้ายภาษาเดิม
 applyLang();
 
+// ═══ แปลหัวข้อข่าวด้วยเครื่อง (เบต้า) ═══
+// แปลฝั่งเบราว์เซอร์ ไม่ใช่ตอน build — เพราะโควตาฟรีของบริการแปลคิดต่อผู้ใช้
+// ถ้าแปลตอน build ทั้งเว็บใช้โควตาก้อนเดียวกันแล้วเต็มตั้งแต่ยังไม่ถึงเที่ยง
+// และแบบนี้จะแปลเฉพาะหัวข้อที่ "ถูกเปิดดูจริง" ตามที่ตั้งใจไว้
+//
+// ⚠️ คำแปลมาจากเครื่อง ไม่ใช่คำที่สำนักข่าวเขียน — คุณภาพไม่เท่ากันสองทิศทาง
+// อังกฤษ→ไทยใช้ได้ ส่วนไทย→อังกฤษเพี้ยนบ่อย จึงต้องติดป้ายเสมอและเก็บต้นฉบับไว้ให้กดดูได้
+// ห้ามแทนที่หัวข้อจริงแบบเงียบๆ เด็ดขาด คนอ่านจะเข้าใจว่าสำนักข่าวเขียนแบบนั้น
+const TR_SEL = '.fp-lead-t,.fp-sub-t,.fp-brief-t,.lcard-t,.cnews-t';
+const TR_BATCH = 20;              // ต่อรอบ กันยิงรัวจนโดนตัดโควตา
+let TR_ON = false, TR_BUSY = false;
+let TR_CACHE = {{}};
+try {{ TR_CACHE = JSON.parse(localStorage.getItem('trCache') || '{{}}') || {{}}; }} catch(e) {{}}
+try {{ TR_ON = localStorage.getItem('trOn') === '1'; }} catch(e) {{}}
+const isThaiText = t => /[฀-๿]/.test(t);
+
+// หัวข้อบางอันมี <span> ซ้อนอยู่ข้างใน (แหล่งข่าว/เวลา) แตะได้เฉพาะ text node แรก
+// ถ้าเขียนทับทั้ง element ข้อมูลแหล่งข่าวจะหายไปด้วย
+function trNode(el){{
+  for (const n of el.childNodes) if (n.nodeType === 3 && n.nodeValue.trim().length > 3) return n;
+  return null;
+}}
+async function trFetch(text, pair){{
+  const k = pair + '|' + text;
+  if (TR_CACHE[k]) return TR_CACHE[k];
+  const r = await fetch('https://api.mymemory.translated.net/get?' +
+    new URLSearchParams({{q: text, langpair: pair}}));
+  const d = await r.json();
+  const out = d && d.responseData && d.responseData.translatedText;
+  if (!out || d.responseStatus !== 200 || d.quotaFinished) throw new Error('no');
+  TR_CACHE[k] = out;
+  try {{ localStorage.setItem('trCache', JSON.stringify(TR_CACHE)); }} catch(e) {{}}
+  return out;
+}}
+function trRestore(){{
+  document.querySelectorAll('[data-orig]').forEach(el => {{
+    const n = trNode(el);
+    if (n) n.nodeValue = el.dataset.orig;
+    el.removeAttribute('data-orig');
+    el.removeAttribute('title');
+    el.querySelector('.tr-tag')?.remove();
+  }});
+}}
+async function trRun(){{
+  if (!TR_ON || TR_BUSY) return;
+  TR_BUSY = true;
+  try {{
+    const want = siteLang === 'th' ? 'th' : 'en';
+    const jobs = [];
+    for (const el of document.querySelectorAll(TR_SEL)) {{
+      if (el.dataset.orig) continue;
+      const n = trNode(el);
+      if (!n) continue;
+      const text = n.nodeValue.trim();
+      const src = isThaiText(text) ? 'th' : 'en';
+      if (src === want) continue;
+      jobs.push({{el, n, text, pair: src + '|' + want}});
+      if (jobs.length >= TR_BATCH) break;
+    }}
+    let failed = 0;
+    for (const j of jobs) {{
+      let out;
+      try {{ out = await trFetch(j.text, j.pair); }} catch(e) {{
+        if (++failed >= 3) break;              // โดนตัดโควตา/เน็ตล่ม อย่ายิงต่อให้เปลืองเปล่า
+        continue;
+      }}
+      await new Promise(r => setTimeout(r, 220));   // เว้นจังหวะ ไม่ยิงรัวจนโดนปฏิเสธ
+      if (!TR_ON) break;                       // ผู้ใช้ปิดระหว่างทาง
+      j.el.dataset.orig = j.text;
+      j.el.title = (siteLang === 'th' ? 'ต้นฉบับ: ' : 'Original: ') + j.text;
+      j.n.nodeValue = out + ' ';
+      const tag = document.createElement('span');
+      tag.className = 'tr-tag';
+      tag.textContent = siteLang === 'th' ? 'แปลด้วยเครื่อง' : 'machine-translated';
+      tag.title = j.el.title;
+      j.el.appendChild(tag);
+    }}
+  }} finally {{ TR_BUSY = false; }}
+  // ยังเหลือหัวข้อที่ยังไม่ได้แปล ค่อยๆ ทยอยทำต่อ ไม่ยัดทีเดียวจนโดนตัดโควตา
+  if (TR_ON && trPending() > 0) setTimeout(trRun, 1200);
+}}
+// นับหัวข้อที่ภาษาไม่ตรงกับที่เลือกไว้และยังไม่ได้แปล
+function trPending(){{
+  const want = siteLang === 'th' ? 'th' : 'en';
+  let n = 0;
+  for (const el of document.querySelectorAll(TR_SEL)) {{
+    if (el.dataset.orig) continue;
+    const t = trNode(el);
+    if (t && (isThaiText(t.nodeValue.trim()) ? 'th' : 'en') !== want) n++;
+  }}
+  return n;
+}}
+function setTranslate(on){{
+  TR_ON = !!on;
+  try {{ localStorage.setItem('trOn', TR_ON ? '1' : '0'); }} catch(e) {{}}
+  document.querySelectorAll('.tr-sw button').forEach(b =>
+    b.classList.toggle('on', (b.dataset.tr === '1') === TR_ON));
+  document.getElementById('tr-note').hidden = !TR_ON;
+  trRestore();
+  if (TR_ON) trRun();
+}}
+
 // ═══ คู่มือเปิดใช้งาน — coachmark ชี้ปุ่มจริง ═══
 // เว็บนี้มีของซ่อนอยู่เยอะ (กราฟดอกเบี้ยร้อยปี เครื่องคำนวณปันผล ปุ่มสลับภาษา)
 // คนเปิดครั้งแรกไม่มีทางรู้ว่ามีอะไรบ้าง จึงพาเดินทีละจุดบนหน้าจอจริง
@@ -7312,13 +7437,21 @@ TOURS.fin = [
            'fund with no statements to show.',
            'รายการโปรดอยู่กลุ่มบนสุด ตัวที่เขียนว่า <b>ปันผลอย่างเดียว</b> คือกองทุนที่ไม่มีงบให้ดู'],
     target: () => document.getElementById('fin-sel')}},
-  {{kick: ['DIVIDENDS', 'เงินปันผล'],
-    t: ['Type a budget, read the income', 'ใส่เงินที่จะลงทุน แล้วดูรายได้'],
-    text: ['Shares, income per year and per month all fill in as you type. ' +
-           'USD figures carry a THB conversion underneath.',
-           'จำนวนหุ้น รายได้ต่อปีและต่อเดือน คำนวณให้ทันทีที่พิมพ์ ' +
-           'ตัวเลข USD มีบาทกำกับอยู่ข้างล่าง'],
-    target: () => document.querySelector('.div-calc') || document.getElementById('fin-sec-div')}},
+  {{kick: ['YIELD', 'ผลตอบแทน'],
+    t: ['What this pays right now', 'ตอนนี้จ่ายเท่าไร'],
+    text: ['Annual yield, the monthly equivalent, and how many payments actually landed in ' +
+           'the last twelve months — every figure from dividends already paid.',
+           'อัตราผลตอบแทนต่อปี เทียบเป็นต่อเดือน และจ่ายจริงกี่ครั้งใน 12 เดือนที่ผ่านมา ' +
+           'ทุกตัวเลขมาจากปันผลที่จ่ายไปแล้วจริง'],
+    target: () => document.querySelector('#fin-sec-div .fin-kpis')}},
+  {{kick: ['CALCULATOR', 'เครื่องคำนวณ'],
+    t: ['Type an amount in this box', 'ใส่จำนวนเงินในช่องนี้'],
+    text: ['Put in what you would invest and the shares, yearly and monthly income fill in ' +
+           'below as you type. USD figures carry a THB conversion underneath.',
+           'ใส่เงินที่คิดจะลงทุน แล้วจำนวนหุ้น รายได้ต่อปีและต่อเดือนจะคำนวณให้ข้างล่างทันทีที่พิมพ์ ' +
+           'ตัวเลข USD มีบาทกำกับอยู่ด้วย'],
+    target: () => document.getElementById('dcalc-budget') ||
+                  document.querySelector('.div-calc-row')}},
   {{kick: ['SECTIONS', 'หมวด'],
     t: ['Jump between sections', 'กระโดดข้ามหมวดได้'],
     text: ['Growth, profitability, balance sheet and the full statements — five reported ' +
@@ -7433,6 +7566,11 @@ function coachShow(){{
   if (!el) return coachPlace(null);
   // วางทันทีด้วยตำแหน่งปัจจุบันก่อน แล้วค่อยตามไปแก้เมื่อนิ่ง — ห้ามรอเฉยๆ เพราะถ้ารอด้วย
   // requestAnimationFrame แล้วหน้าไม่ได้ถูกวาด (สลับแท็บไป) เฟรมจะไม่มาเลย วงแสงค้างที่ 0,0
+  // เลื่อนให้เห็นเป้าหมายก่อน — ในหน้างบการเงินเนื้อหาอยู่ในกล่องที่เลื่อนได้ของตัวเอง
+  // ถ้าไม่เลื่อนให้ วงแสงจะไปล้อมของที่อยู่นอกจอ แล้วดูเหมือนคู่มือชี้ไปที่ว่างเปล่า
+  // เลื่อนแบบทันที ไม่ใช่ smooth — วงแสงจะได้ไม่ต้องวิ่งไล่เป้าที่ยังเลื่อนอยู่
+  // และการเลื่อนแบบ smooth จะไม่ทำงานเลยถ้าแท็บไม่ได้ถูกวาด ทำให้เป้าค้างอยู่นอกจอ
+  try {{ el.scrollIntoView({{block: 'center', inline: 'nearest'}}); }} catch(e) {{}}
   coachPlace(el.getBoundingClientRect());
   const t0 = Date.now();
   let last = '', stable = 0, mine = 0;
@@ -7505,15 +7643,18 @@ addEventListener('resize', () => {{
   if (!document.getElementById('coach')?.hidden) coachShow();
 }});
 
+setTranslate(TR_ON);   // คืนสถานะการแปลที่จำไว้ — ต้องเรียกหลังประกาศตัวแปรด้านบนครบแล้ว
+
 // เปิดอัตโนมัติ: ไม่เคยเปิด หรือทิ้งช่วงนานเกิน 30 วัน
 (() => {{
   let last = null;
   try {{ last = localStorage.getItem('tourSeen'); }} catch(e) {{}}
   const stale = !last || (Date.now() - Number(last)) > TOUR_GAP_DAYS * 864e5;
   if (!stale) return;
-  // รออินโทรเล่นจบก่อน ไม่งั้นคู่มือจะไปซ้อนกับ overlay เปิดเว็บ
-  const wait = document.documentElement.classList.contains('no-intro') ? 400 : 2900;
-  setTimeout(() => openCoach('home'), wait);
+  // ไม่ต้องรออินโทรเล่นจบ — คนที่ยังไม่รู้จักเว็บควรได้คู่มือทันที ไม่ใช่นั่งดู overlay ก่อน
+  // เอาอินโทรออกเลยแล้วเปิดคู่มือ (หน่วงสั้นๆ พอให้หน้าวาดเสร็จ วงแสงจะได้วางถูกที่)
+  document.getElementById('intro')?.remove();
+  setTimeout(() => openCoach('home'), 250);
 }})();
 
 // เอา overlay อินโทรออกจาก DOM หลังเล่นจบ
