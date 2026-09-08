@@ -2525,7 +2525,7 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   .coach-mask,.coach-ring,.coach-card{{transition:none}}
 }}
 /* ปุ่มสลับภาษาในหัวเมนู */
-.lang-sw{{display:flex;gap:3px;margin-left:auto;margin-right:10px}}
+.lang-sw{{display:flex;gap:3px;flex:none}}
 .lang-sw button{{padding:2px 8px;border:1px solid var(--line);border-radius:2px;
   background:none;cursor:pointer;color:var(--dim);
   font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.06em}}
@@ -3466,11 +3466,7 @@ body.searching .scope-group[hidden]{{display:block!important}}
   .navpanel{{position:static;transform:none;visibility:visible;width:auto;max-width:none;
     height:auto;box-shadow:none;border:0;background:transparent;
     border-bottom:1px solid var(--line);margin-bottom:20px}}
-  /* จอกว้างไม่มีแผงเมนูให้ปิด หัวแผงจึงไม่ต้องมี — แต่ปุ่มสลับภาษาอยู่ในนั้น
-     ซ่อนทั้งหัวแผงเลยทำให้กดเปลี่ยนภาษาไม่ได้บนจอใหญ่ ซ่อนเฉพาะที่ไม่ใช้แทน */
-  .nav-foot{{display:none}}
-  .nav-head{{border-bottom:0;padding:0 0 8px;justify-content:flex-end}}
-  .nav-head > span:not(.lang-sw),.nav-head .nav-x{{display:none}}
+  .nav-head,.nav-foot{{display:none}}
   .tabs{{flex-direction:row;flex-wrap:wrap;overflow:visible;padding:0 0 12px}}
   .tab{{width:auto;padding:9px 15px;border-radius:2px}}
   .tab .tab-n{{margin-left:8px}}
@@ -3809,6 +3805,10 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
             onclick="document.getElementById('gsearch').value='';globalSearch('');"
             aria-label="Clear search">×</button>
   </div>
+  <span class="lang-sw">
+    <button type="button" data-lang="en" class="on" onclick="setSiteLang('en')">EN</button>
+    <button type="button" data-lang="th" onclick="setSiteLang('th')">ไทย</button>
+  </span>
 </div>
 
 <div class="coach" id="coach" hidden>
@@ -3834,10 +3834,6 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
 <aside class="navpanel" id="navpanel" aria-label="Menu">
   <div class="nav-head">
     <span data-i18n="menu">MENU</span>
-    <span class="lang-sw">
-      <button type="button" data-lang="en" class="on" onclick="setSiteLang('en')">EN</button>
-      <button type="button" data-lang="th" onclick="setSiteLang('th')">ไทย</button>
-    </span>
     <button class="nav-x" type="button" onclick="toggleNav(false)" aria-label="Close">×</button>
   </div>
   <nav class="tabs" id="tabs" role="tablist" title="Drag to reorder">
@@ -7229,7 +7225,8 @@ const COACH = [
            'ปุ่มนี้สลับภาษาของตัวเว็บ <b>ส่วนหัวข้อข่าวยังเป็นภาษาต้นทาง</b> ' +
            'ไม่ได้แปลด้วยเครื่อง'],
     target: () => document.querySelector('.lang-sw'),
-    onEnter: () => {{ if (innerWidth < 861) toggleNav(true); }}}},
+    // ปุ่มภาษาอยู่บนแถบบนสุดแล้ว เห็นตลอดทุกความกว้าง ไม่ต้องเปิดเมนูให้
+    onEnter: () => toggleNav(false)}},
   {{kick: ['CHARTS', 'กราฟ'],
     t: ['Prices, and rates going back a century', 'ราคาหุ้น และดอกเบี้ยย้อนร้อยปี'],
     text: ['284 assets. The <b>Interest Rate</b> group at the top holds US yields back to ' +
@@ -7355,8 +7352,11 @@ function coachShow(){{
 }}
 function coachGo(step){{
   COACH_DIR = step >= 0 ? 1 : -1;
+  // อยู่ขั้นสุดท้ายแล้วกดเดินหน้า = จบคู่มือ ต้องปิดจริง ไม่ใช่วาดขั้นเดิมซ้ำ
+  // (ของเดิมเช็ค COACH[i].done ซึ่งไม่เคยถูกกำหนดไว้เลย เงื่อนไขจึงเป็นเท็จตลอด
+  //  กด "เริ่มใช้งาน" แล้วจอมืดค้าง กดไม่ลง)
+  if (step > 0 && COACH_I >= COACH.length - 1) return closeCoach();
   COACH_I = Math.max(0, Math.min(COACH.length - 1, COACH_I + step));
-  if (COACH_I === COACH.length - 1 && step > 0 && COACH[COACH_I].done) return closeCoach();
   coachShow();
 }}
 function openCoach(){{
