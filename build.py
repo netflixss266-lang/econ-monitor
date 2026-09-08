@@ -5073,6 +5073,7 @@ function openCharts(){{
   modal.hidden = false;
   document.body.style.overflow = 'hidden';
   pickChart(chCur || [...chFavs].find(l => CHARTS[l]) || Object.keys(CHARTS)[0]);
+  maybeTour('chart', 1400);
 }}
 
 function closeCharts(){{
@@ -6281,6 +6282,7 @@ async function openFinancials(){{
     if (chCur !== sym) return;        // เปลี่ยนตัวไปแล้ว ปล่อยให้รอบของตัวใหม่วาดเอง
   }}
   if (chCur && (hasFin || hasDiv)) {{
+    maybeTour('fin', 1100);
     renderFinTable();
     document.getElementById('fin-body').scrollTop = 0;   // เปลี่ยนหุ้น = เริ่มอ่านจากบนสุดใหม่
   }}
@@ -7087,6 +7089,7 @@ function openMap(){{
   document.body.style.overflow = 'hidden';
   paintTension();
   draw();                       // แผนที่เพิ่งมีขนาดตอนนี้ ต้องวาดใหม่
+  maybeTour('map', 900);
 }}
 function closeMap(){{
   document.getElementById('mmodal').hidden = true;
@@ -7212,9 +7215,12 @@ applyLang();
 // เว็บนี้มีของซ่อนอยู่เยอะ (กราฟดอกเบี้ยร้อยปี เครื่องคำนวณปันผล ปุ่มสลับภาษา)
 // คนเปิดครั้งแรกไม่มีทางรู้ว่ามีอะไรบ้าง จึงพาเดินทีละจุดบนหน้าจอจริง
 // โผล่เมื่อ: ไม่เคยเปิด หรือหายไปเกิน 30 วัน — คนที่เข้าบ่อยจะไม่โดนกวน
-const LS_TOUR = 'tourSeen';
 const TOUR_GAP_DAYS = 30;
-const COACH = [
+// คู่มือแยกชุดตามหน้าจอ — จำแยกกัน เปิดหน้าไหนครั้งแรกก็ได้คู่มือของหน้านั้น
+// ไม่ใช่ยัดทุกอย่างไว้ในชุดเดียวตอนเปิดเว็บ ซึ่งไม่มีใครจำได้หมด
+let COACH = [], COACH_KEY = 'tourSeen';
+const TOURS = {{}};
+TOURS.home = [
   {{kick: ['START', 'เริ่มต้น'],
     t: ['A quick tour of what is here', 'พาดูว่าในเว็บมีอะไรบ้าง'],
     text: ['This walks you through the real buttons, one at a time. Skip any time — ' +
@@ -7259,10 +7265,97 @@ const COACH = [
     onEnter: () => toggleNav(false)}},
   {{kick: ['DONE', 'จบแล้ว'],
     t: ['That is the tour', 'จบคู่มือแล้ว'],
-    text: ['Reopen it any time from <b>Menu → Guide</b>. The page rebuilds itself every ' +
-           '30 minutes, so it is worth coming back.',
-           'เปิดซ้ำได้ที่ <b>เมนู → คู่มือ</b> เว็บอัปเดตตัวเองทุก 30 นาที แวะมาดูได้เรื่อยๆ']}},
+    text: ['Reopen it any time from <b>Menu → Guide</b>. Each screen has its own short ' +
+           'guide the first time you open it.',
+           'เปิดซ้ำได้ที่ <b>เมนู → คู่มือ</b> และแต่ละหน้าจะมีคู่มือสั้นๆ ของตัวเองตอนเปิดครั้งแรก']}},
 ];
+
+TOURS.chart = [
+  {{kick: ['LIST', 'รายการ'],
+    t: ['Your list, and everything else', 'รายการโปรด กับของทั้งหมด'],
+    text: ['<b>Favourites</b> is your own short list; <b>All</b> is all 284. Drag a row to ' +
+           'reorder it, or a group heading to move the whole group.',
+           '<b>รายการโปรด</b> คือลิสต์สั้นๆ ของคุณเอง ส่วน <b>ทั้งหมด</b> คือครบ 284 ตัว ' +
+           'ลากแถวเพื่อสลับลำดับ หรือลากหัวข้อหมวดเพื่อย้ายทั้งหมวด'],
+    target: () => document.querySelector('.cfav-bar')}},
+  {{kick: ['RATES', 'ดอกเบี้ย'],
+    t: ['Interest rates sit at the top', 'อัตราดอกเบี้ยอยู่บนสุด'],
+    text: ['Three US yields, one back to <b>1919</b>. Open one and press <b>MAX</b> to see ' +
+           'the whole century.',
+           'ดอกเบี้ยสหรัฐ 3 เส้น เส้นที่ยาวสุดย้อนถึง <b>ปี 1919</b> ' +
+           'กดเข้าไปแล้วกดปุ่ม <b>MAX</b> เพื่อดูทั้งร้อยปี'],
+    target: () => document.querySelector('.cgrp-wrap[data-g="rate"] .cgroup')}},
+  {{kick: ['YIELD', 'ปันผล'],
+    t: ['Thai stocks sort by dividend', 'หุ้นไทยเรียงตามปันผล'],
+    text: ['Highest yield first, with the figure beside each ticker. Press this to switch ' +
+           'back to your own dragged order.',
+           'ปันผลสูงอยู่บน พร้อมตัวเลขข้างชื่อหุ้น กดปุ่มนี้เพื่อสลับกลับไปใช้ลำดับที่ลากเอง'],
+    target: () => document.querySelector('.th-sort')}},
+  {{kick: ['RANGE', 'ช่วงเวลา'],
+    t: ['One day to a century', 'ตั้งแต่วันเดียวถึงร้อยปี'],
+    text: ['<b>MAX</b> appears only on the rate charts, since only they go back that far. ' +
+           'Scroll to zoom; double-click to reset.',
+           'ปุ่ม <b>MAX</b> จะโผล่เฉพาะกราฟดอกเบี้ย เพราะมีแค่พวกนั้นที่ย้อนได้ไกลขนาดนั้น ' +
+           'เลื่อนล้อเมาส์เพื่อซูม ดับเบิลคลิกเพื่อรีเซ็ต'],
+    target: () => document.getElementById('cmodal-tf')}},
+  {{kick: ['TOOLS', 'เครื่องมือ'],
+    t: ['Indicators live here', 'เส้นอินดิเคเตอร์อยู่ตรงนี้'],
+    text: ['Moving averages, RSI, MACD and more — each one explains itself when you hover it.',
+           'เส้นค่าเฉลี่ย RSI MACD และอื่นๆ แต่ละตัวมีคำอธิบายตอนเอาเมาส์ไปชี้'],
+    target: () => document.getElementById('crail')}},
+];
+
+TOURS.fin = [
+  {{kick: ['SYMBOL', 'เลือกหุ้น'],
+    t: ['Jump to any of 274', 'กระโดดไปตัวไหนก็ได้ใน 274 ตัว'],
+    text: ['Favourites are grouped at the top. Anything marked <b>dividends only</b> is a ' +
+           'fund with no statements to show.',
+           'รายการโปรดอยู่กลุ่มบนสุด ตัวที่เขียนว่า <b>ปันผลอย่างเดียว</b> คือกองทุนที่ไม่มีงบให้ดู'],
+    target: () => document.getElementById('fin-sel')}},
+  {{kick: ['DIVIDENDS', 'เงินปันผล'],
+    t: ['Type a budget, read the income', 'ใส่เงินที่จะลงทุน แล้วดูรายได้'],
+    text: ['Shares, income per year and per month all fill in as you type. ' +
+           'USD figures carry a THB conversion underneath.',
+           'จำนวนหุ้น รายได้ต่อปีและต่อเดือน คำนวณให้ทันทีที่พิมพ์ ' +
+           'ตัวเลข USD มีบาทกำกับอยู่ข้างล่าง'],
+    target: () => document.querySelector('.div-calc') || document.getElementById('fin-sec-div')}},
+  {{kick: ['SECTIONS', 'หมวด'],
+    t: ['Jump between sections', 'กระโดดข้ามหมวดได้'],
+    text: ['Growth, profitability, balance sheet and the full statements — five reported ' +
+           'years, as filed.',
+           'การเติบโต ความสามารถทำกำไร ฐานะการเงิน และงบเต็ม — ย้อนหลัง 5 ปีตามที่บริษัทรายงาน'],
+    target: () => document.querySelector('.fin-jump')}},
+  {{kick: ['COMPARE', 'เทียบ'],
+    t: ['Put two companies side by side', 'วางสองบริษัทเทียบกัน'],
+    text: ['Every chart then draws both on the same scale, so the bars can be read against ' +
+           'each other directly.',
+           'ทุกกราฟจะวาดทั้งคู่บนสเกลเดียวกัน แท่งกราฟจึงเทียบกันได้ตรงๆ'],
+    target: () => document.querySelector('.fin-cmp')}},
+];
+
+TOURS.map = [
+  {{kick: ['MAP', 'แผนที่'],
+    t: ['Where the news is happening', 'ข่าวเกิดขึ้นที่ไหนบ้าง'],
+    text: ['Every dot is a place named in a story today, coloured by topic. Hover one to ' +
+           'read the headlines from there.',
+           'จุดแต่ละจุดคือสถานที่ที่ถูกพูดถึงในข่าววันนี้ สีบอกหมวด เอาเมาส์ชี้เพื่ออ่านหัวข้อข่าวจากที่นั่น'],
+    target: () => document.querySelector('.map-wrap')}},
+  {{kick: ['CONFLICT', 'ความขัดแย้ง'],
+    t: ['How much of today is conflict', 'วันนี้เป็นข่าวขัดแย้งกี่เปอร์เซ็นต์'],
+    text: ["The share of today's stories that mention conflict. <b>It is a measure of " +
+           'coverage, not of risk</b> — it says what the wires are writing about, ' +
+           'not what is likely to happen.',
+           'สัดส่วนข่าววันนี้ที่พูดถึงความขัดแย้ง <b>เป็นการวัดปริมาณข่าว ไม่ใช่ความเสี่ยง</b> — ' +
+           'บอกว่าสำนักข่าวกำลังเขียนเรื่องอะไร ไม่ได้บอกว่าอะไรจะเกิดขึ้น'],
+    target: () => document.querySelector('.tension-btn') ||
+                  document.getElementById('tension-n')?.parentElement}},
+  {{kick: ['ZOOM', 'ซูม'],
+    t: ['Zoom and reset', 'ซูมและรีเซ็ต'],
+    text: ['Drag the map to pan. The third button puts it back where it started.',
+           'ลากแผนที่เพื่อเลื่อน ปุ่มที่สามคือกลับไปมุมมองเริ่มต้น'],
+    target: () => document.querySelector('.zoom-ctl')}},
+];
+COACH = TOURS.home;
 
 let COACH_I = 0, COACH_DIR = 1, COACH_SETTLE = null;
 const coachTxt = a => a[siteLang === 'th' ? 1 : 0];
@@ -7376,17 +7469,31 @@ function coachSyncLang(){{
   document.querySelectorAll('.coach-lang button').forEach(b =>
     b.classList.toggle('on', b.dataset.lang === siteLang));
 }}
-function openCoach(){{
+function openCoach(name){{
+  const key = name && TOURS[name] ? name : 'home';
+  COACH = TOURS[key];
+  COACH_KEY = 'tourSeen' + (key === 'home' ? '' : '_' + key);
   COACH_I = 0; COACH_DIR = 1;
   document.getElementById('coach').hidden = false;
   coachSyncLang();
   coachShow();
 }}
+// เปิดคู่มือของหน้านั้นให้เอง ถ้ายังไม่เคยดู หรือทิ้งช่วงเกิน 30 วัน
+// รอให้หน้าจอวาดเสร็จก่อน ไม่งั้นวงแสงไปวางบนของที่ยังไม่มีตัวตน
+function maybeTour(name, delay){{
+  if (!TOURS[name]) return;
+  const k = 'tourSeen_' + name;
+  let last = null;
+  try {{ last = localStorage.getItem(k); }} catch(e) {{}}
+  if (last && (Date.now() - Number(last)) <= TOUR_GAP_DAYS * 864e5) return;
+  if (!document.getElementById('coach').hidden) return;   // มีคู่มืออื่นเปิดค้างอยู่
+  setTimeout(() => openCoach(name), delay || 700);
+}}
 function closeCoach(){{
   if (COACH_SETTLE) {{ clearInterval(COACH_SETTLE); COACH_SETTLE = null; }}
   document.getElementById('coach').hidden = true;
   toggleNav(false);
-  try {{ localStorage.setItem(LS_TOUR, String(Date.now())); }} catch(e) {{}}
+  try {{ localStorage.setItem(COACH_KEY, String(Date.now())); }} catch(e) {{}}
 }}
 addEventListener('keydown', ev => {{
   if (document.getElementById('coach')?.hidden) return;
@@ -7401,12 +7508,12 @@ addEventListener('resize', () => {{
 // เปิดอัตโนมัติ: ไม่เคยเปิด หรือทิ้งช่วงนานเกิน 30 วัน
 (() => {{
   let last = null;
-  try {{ last = localStorage.getItem(LS_TOUR); }} catch(e) {{}}
+  try {{ last = localStorage.getItem('tourSeen'); }} catch(e) {{}}
   const stale = !last || (Date.now() - Number(last)) > TOUR_GAP_DAYS * 864e5;
   if (!stale) return;
   // รออินโทรเล่นจบก่อน ไม่งั้นคู่มือจะไปซ้อนกับ overlay เปิดเว็บ
   const wait = document.documentElement.classList.contains('no-intro') ? 400 : 2900;
-  setTimeout(openCoach, wait);
+  setTimeout(() => openCoach('home'), wait);
 }})();
 
 // เอา overlay อินโทรออกจาก DOM หลังเล่นจบ
