@@ -2636,6 +2636,16 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .cfull-note{{margin-left:auto;align-self:center;font-size:.76rem;color:var(--dim);
   max-width:420px;line-height:1.5}}
 .fin-tabs{{display:flex;gap:4px;flex:none;margin-left:12px}}
+/* ตัวเลือกหุ้นในหัวหน้าต่างงบ — เลือกตรงๆ ได้ ไม่ต้องกดลูกศรไล่ทีละตัว */
+.fin-pick{{display:flex;align-items:center;gap:7px;flex:none;margin-left:12px}}
+.fin-pick label{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.08em;
+  color:var(--mute)}}
+/* min-width:0 จำเป็น — ไม่งั้น select จะกว้างตามตัวเลือกที่ยาวที่สุด (ชื่อบริษัทเต็ม)
+   แล้วดันหัวหน้าต่างล้นจอมือถือ วัดได้ 448px บนจอ 375px */
+.fin-pick select{{padding:5px 8px;border:1px solid var(--line);border-radius:2px;
+  background:var(--panel);color:var(--ink);font-family:'IBM Plex Mono',monospace;
+  font-size:.68rem;width:190px;min-width:0;cursor:pointer}}
+.fin-pick select:focus{{outline:none;border-color:var(--brass)}}
 .fin-tab{{padding:9px 16px;border-radius:2px;cursor:pointer;
   font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.08em;
   color:var(--mute);background:transparent;border:1px solid var(--line)}}
@@ -2947,6 +2957,8 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
   .cmodal-head{{position:relative;flex-wrap:wrap}}
   .fin-btn{{margin-left:0}}
   .fin-tabs{{width:100%;order:3;margin-left:0}}
+  .fin-pick{{width:100%;order:2;margin-left:0;min-width:0}}
+  .fin-pick select{{flex:1;width:auto;min-width:0}}
   .fin-toolbar{{padding:12px 0 10px}}
   .fin-cmp{{margin-left:0;width:100%}}
   .fin-cmp select{{flex:1;max-width:none}}
@@ -3690,6 +3702,10 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
       </div>
       <button class="row-nav fin-nav" type="button" onclick="finNav(1)"
               aria-label="Next symbol">›</button>
+      <div class="fin-pick">
+        <label for="fin-sel" data-i18n="pickSym">SYMBOL</label>
+        <select id="fin-sel" onchange="pickFinSym(this.value)"></select>
+      </div>
       <div class="fin-tabs" role="tablist">
         <button class="fin-tab on" type="button" data-span="annual"
                 onclick="pickFinSpan('annual')" data-i18n="annual">ANNUAL</button>
@@ -3774,6 +3790,8 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
     {''.join(f'''<button class="tab" type="button" role="tab" draggable="true" data-id="{sc}" data-scope="{sc}" onclick="setScope('{sc}')">{lb}<span class="tab-n">{groups[sc]["n"]}</span></button>''' for sc, lb in SCOPES)}
     <button class="tab tab-icon" type="button" draggable="true" data-id="chart" onclick="openCharts()">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span data-i18n="charts">CHARTS</span></button>
+    <button class="tab tab-icon" type="button" draggable="true" data-id="fin" onclick="openFinHome()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M7 19V9M12 19V5M17 19v-7"/></svg><span data-i18n="financials">FINANCIALS</span></button>
     <button class="tab tab-icon" type="button" draggable="true" data-id="map" onclick="openMap()">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg><span data-i18n="newsmap">NEWS MAP</span></button>
     {live_tab}
@@ -3927,6 +3945,7 @@ const I18N = {{
   noFavs:    ['No favorites yet.', 'ยังไม่มีรายการโปรด'],
   noSym:     ['No symbol matches', 'ไม่พบชื่อหุ้นที่ตรงกับคำค้น'],
   sortDiv:   ['by yield', 'ปันผล'],
+  pickSym:   ['SYMBOL', 'เลือกหุ้น'],
   us3mFull:  ['US 3-Month Treasury Yield', 'ดอกเบี้ยสหรัฐ 3 เดือน (พันธบัตรระยะสั้น)'],
   us10yFull: ['US 10-Year Treasury Yield', 'ดอกเบี้ยสหรัฐ 10 ปี (พันธบัตรระยะยาว)'],
   usaaaFull: ["Moody's Aaa Corporate Bond Yield", "ดอกเบี้ยหุ้นกู้เอกชนเรตติ้ง Aaa (Moody's)"],
@@ -3961,8 +3980,9 @@ function setSiteLang(l){{
   // ป้ายที่ JS วาดเองต้องวาดใหม่ ไม่งั้นจะค้างภาษาเดิมจนกว่าจะเปิดปิดหน้าต่างใหม่
   if (typeof renderAssetList === 'function' && document.getElementById('cmodal-list'))
     renderAssetList(document.getElementById('csearch')?.value || '');
-  if (typeof renderFinTable === 'function' && !document.getElementById('finmodal').hidden)
-    renderFinTable();
+  if (typeof renderFinTable === 'function' && !document.getElementById('finmodal').hidden) {{
+    renderFinTable(); fillFinPicker();
+  }}
   // ชื่อเต็มของชุดดอกเบี้ยแปลได้ แต่มันถูกเขียนลงไปตอน pickChart ครั้งเดียว
   // ถ้าไม่เขียนใหม่ตรงนี้ ชื่อจะค้างภาษาเดิมจนกว่าจะกดเลือกสินทรัพย์ใหม่
   if (chCur && SYM_TAG[chCur] && typeof renderRateEcho === 'function') renderRateEcho(chCur);
@@ -6188,6 +6208,7 @@ async function openFinancials(){{
   document.getElementById('fin-note-stmt').hidden = !hasFin;
   document.querySelector('.fin-tabs').hidden = !hasFin;
   document.getElementById('finmodal').hidden = false;
+  fillFinPicker();
   document.body.style.overflow = 'hidden';
   // จับชื่อตัวที่กำลังเปิดไว้ก่อน — ถ้าผู้ใช้กดลูกศรเปลี่ยนตัวระหว่างที่ยังโหลดไม่เสร็จ
   // ของที่โหลดมาต้องไม่ไปตกใส่ตัวใหม่ (ของเดิมเขียน finCache[chCur] หลัง await จึงสลับกันได้)
@@ -6202,6 +6223,46 @@ async function openFinancials(){{
     document.getElementById('fin-body').scrollTop = 0;   // เปลี่ยนหุ้น = เริ่มอ่านจากบนสุดใหม่
   }}
 }}
+// เติมรายชื่อในตัวเลือกหุ้นของหน้างบ — เอาทั้งตัวที่มีงบและตัวที่มีแต่ปันผล เหมือนลูกศร ‹ ›
+// จัดกลุ่มให้เห็นว่าตัวไหนมีงบเต็ม ตัวไหนมีแค่ปันผล จะได้ไม่กดเข้าไปแล้วงงว่าทำไมไม่มีตาราง
+function fillFinPicker(){{
+  const sel = document.getElementById('fin-sel');
+  if (!sel) return;
+  const th = siteLang === 'th';
+  // ดรอปดาวน์ต้องเลือกได้ "ทุกตัวที่มีข้อมูล" ไม่ใช่แค่รายการโปรดแบบลูกศร ‹ ›
+  // ไม่งั้นก็ไม่ได้ทำอะไรต่างจากลูกศร — แต่ยกรายการโปรดขึ้นกลุ่มแรกไว้ให้หยิบง่าย
+  const all = Object.keys(CHARTS)
+    .filter(l => CHARTS[l].f || CHARTS[l].d)
+    .sort((a, b) => a.localeCompare(b));
+  const fav = all.filter(l => chFavs.has(l));
+  const rest = all.filter(l => !chFavs.has(l));
+  const opt = l => `<option value="${{esc(l)}}"${{l === chCur ? ' selected' : ''}}>${{esc(l)}}` +
+    `${{CHARTS[l].f ? '' : (th ? ' · ปันผลอย่างเดียว' : ' · dividends only')}}` +
+    `${{symFull(l) ? ' · ' + esc(symFull(l).slice(0, 34)) : ''}}</option>`;
+  const grp = (lbl, arr) => arr.length
+    ? `<optgroup label="${{lbl}} (${{arr.length}})">${{arr.map(opt).join('')}}</optgroup>` : '';
+  sel.innerHTML = grp(th ? 'รายการโปรด' : 'Favorites', fav) +
+    grp(th ? 'ทั้งหมด' : 'All symbols', rest);
+  sel.value = chCur || '';
+}}
+// เลือกหุ้นจากดรอปดาวน์ — ต้องโหลดไฟล์กราฟด้วย เพราะหมวดปันผลอ่านข้อมูลจากไฟล์นั้น
+async function pickFinSym(label){{
+  if (!label || !CHARTS[label]) return;
+  await pickChart(label);
+  await openFinancials();
+}}
+// เข้าหน้างบตรงๆ จากเมนูหน้าแรก — ไม่ต้องเข้ากราฟแล้วค่อยกดปุ่ม FINANCIALS
+// เลือกตัวที่เปิดค้างไว้ก่อน ถ้ายังไม่เคยเปิดก็หยิบรายการโปรดตัวแรกที่มีข้อมูลให้ดู
+async function openFinHome(){{
+  toggleNav(false);
+  const list = finNavList(true);
+  if (!list.length) return;
+  const pick = (chCur && list.includes(chCur)) ? chCur
+    : (list.find(l => chFavs.has(l)) || list[0]);
+  openCharts();
+  await pickFinSym(pick);
+}}
+
 function closeFinancials(){{
   document.getElementById('metmodal').hidden = true;   // ปิดชั้นฉบับเต็มที่ซ้อนอยู่ไปด้วย
   document.getElementById('finmodal').hidden = true;
