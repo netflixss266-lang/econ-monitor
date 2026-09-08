@@ -7242,7 +7242,10 @@ applyLang();
 // ⚠️ คำแปลมาจากเครื่อง ไม่ใช่คำที่สำนักข่าวเขียน — คุณภาพไม่เท่ากันสองทิศทาง
 // อังกฤษ→ไทยใช้ได้ ส่วนไทย→อังกฤษเพี้ยนบ่อย จึงต้องติดป้ายเสมอและเก็บต้นฉบับไว้ให้กดดูได้
 // ห้ามแทนที่หัวข้อจริงแบบเงียบๆ เด็ดขาด คนอ่านจะเข้าใจว่าสำนักข่าวเขียนแบบนั้น
-const TR_SEL = '.fp-lead-t,.fp-sub-t,.fp-brief-t,.lcard-t,.cnews-t';
+// ไม่รวม .lcard-t เพราะนั่นคือชื่อช่องถ่ายทอดสด (Thai PBS, Sky News) เป็นชื่อเฉพาะ
+// แปลแล้วได้ "(Thai PBS)" ซึ่งไม่มีประโยชน์และเปลืองโควตาไปกับของที่ไม่ควรแตะ
+const TR_SEL = '.fp-lead-t,.fp-sub-t,.fp-brief-t,.cnews-t';
+const TR_MIN_LEN = 25;        // หัวข้อข่าวเป็นประโยค อะไรที่สั้นกว่านี้มักเป็นชื่อ/ป้าย
 const TR_BATCH = 20;              // ต่อรอบ กันยิงรัวจนโดนตัดโควตา
 let TR_ON = false, TR_BUSY = false;
 let TR_CACHE = {{}};
@@ -7288,6 +7291,7 @@ async function trRun(){{
       const n = trNode(el);
       if (!n) continue;
       const text = n.nodeValue.trim();
+      if (text.length < TR_MIN_LEN) continue;      // สั้นเกินกว่าจะเป็นหัวข้อข่าว
       const src = isThaiText(text) ? 'th' : 'en';
       if (src === want) continue;
       jobs.push({{el, n, text, pair: src + '|' + want}});
@@ -7322,7 +7326,9 @@ function trPending(){{
   for (const el of document.querySelectorAll(TR_SEL)) {{
     if (el.dataset.orig) continue;
     const t = trNode(el);
-    if (t && (isThaiText(t.nodeValue.trim()) ? 'th' : 'en') !== want) n++;
+    if (!t) continue;
+    const txt = t.nodeValue.trim();
+    if (txt.length >= TR_MIN_LEN && (isThaiText(txt) ? 'th' : 'en') !== want) n++;
   }}
   return n;
 }}
