@@ -2492,6 +2492,38 @@ header{{display:flex;flex-direction:column;align-items:center;text-align:center;
 .echo-sub{{margin-top:6px;border-top:1px solid var(--line);padding-top:11px;color:var(--mute)}}
 .echo-row .score{{background:var(--panel2);color:var(--mute)}}
 .echo-note b{{color:var(--brass)}}
+/* ═══ คู่มือเปิดใช้งาน — coachmark ชี้ปุ่มจริงบนหน้าจอจริง ═══
+   ทำแบบเดียวกับ Creator Finder: เจาะรูให้เห็นปุ่มจริง ไม่ใช่สไลด์ป๊อปอัพลอยๆ
+   มืดทั้งจอด้วยเงาที่พุ่งออกจากกรอบ (box-shadow กว้างมาก) แทนการวางแผ่นทึบสี่ด้าน */
+.coach{{position:fixed;inset:0;z-index:200}}
+.coach[hidden]{{display:none}}
+.coach-mask{{position:fixed;pointer-events:none;border-radius:6px;
+  box-shadow:0 0 0 9999px rgba(3,6,16,.82);transition:all .3s cubic-bezier(.4,0,.2,1)}}
+.coach-ring{{position:fixed;pointer-events:none;border:2px solid var(--brass);border-radius:8px;
+  box-shadow:0 0 0 3px rgba(198,169,97,.22);transition:all .3s cubic-bezier(.4,0,.2,1)}}
+.coach-card{{position:fixed;z-index:2;width:min(340px,88vw);
+  background:var(--panel2);border:1px solid var(--brass);border-radius:4px;
+  padding:15px 17px 14px;box-shadow:0 18px 50px rgba(0,0,0,.6);
+  transition:top .3s cubic-bezier(.4,0,.2,1),left .3s cubic-bezier(.4,0,.2,1)}}
+.coach-bar{{height:3px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:12px}}
+.coach-bar i{{display:block;height:100%;background:var(--brass);width:0;transition:width .35s}}
+.coach-top{{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px}}
+.coach-kick{{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--brass)}}
+.coach-count{{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--dim)}}
+.coach-card h3{{font-size:1rem;line-height:1.35;margin:0 0 6px;color:var(--ink)}}
+.coach-card p{{color:var(--mute);font-size:.82rem;line-height:1.6;margin:0}}
+.coach-card b{{color:var(--ink);font-weight:600}}
+.coach-foot{{display:flex;align-items:center;gap:8px;margin-top:14px}}
+.coachbtn{{background:none;border:1px solid var(--line);color:var(--mute);
+  padding:6px 13px;border-radius:2px;cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.05em}}
+.coachbtn:hover{{color:var(--ink);border-color:var(--brass)}}
+.coachbtn.go{{background:var(--brass);border-color:var(--brass);color:var(--bg);font-weight:600}}
+.coachbtn.skip{{margin-left:auto;border-color:transparent;font-size:.62rem}}
+@media(prefers-reduced-motion:reduce){{
+  .coach-mask,.coach-ring,.coach-card{{transition:none}}
+}}
 /* ปุ่มสลับภาษาในหัวเมนู */
 .lang-sw{{display:flex;gap:3px;margin-left:auto;margin-right:10px}}
 .lang-sw button{{padding:2px 8px;border:1px solid var(--line);border-radius:2px;
@@ -3434,7 +3466,11 @@ body.searching .scope-group[hidden]{{display:block!important}}
   .navpanel{{position:static;transform:none;visibility:visible;width:auto;max-width:none;
     height:auto;box-shadow:none;border:0;background:transparent;
     border-bottom:1px solid var(--line);margin-bottom:20px}}
-  .nav-head,.nav-foot{{display:none}}
+  /* จอกว้างไม่มีแผงเมนูให้ปิด หัวแผงจึงไม่ต้องมี — แต่ปุ่มสลับภาษาอยู่ในนั้น
+     ซ่อนทั้งหัวแผงเลยทำให้กดเปลี่ยนภาษาไม่ได้บนจอใหญ่ ซ่อนเฉพาะที่ไม่ใช้แทน */
+  .nav-foot{{display:none}}
+  .nav-head{{border-bottom:0;padding:0 0 8px;justify-content:flex-end}}
+  .nav-head > span:not(.lang-sw),.nav-head .nav-x{{display:none}}
   .tabs{{flex-direction:row;flex-wrap:wrap;overflow:visible;padding:0 0 12px}}
   .tab{{width:auto;padding:9px 15px;border-radius:2px}}
   .tab .tab-n{{margin-left:8px}}
@@ -3775,6 +3811,25 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
   </div>
 </div>
 
+<div class="coach" id="coach" hidden>
+  <div class="coach-mask" id="coachMask"></div>
+  <div class="coach-ring" id="coachRing"></div>
+  <div class="coach-card" id="coachCard" role="dialog" aria-modal="true" aria-labelledby="coachTitle">
+    <div class="coach-bar"><i id="coachBar"></i></div>
+    <div class="coach-top">
+      <span class="coach-kick" id="coachKick"></span>
+      <span class="coach-count" id="coachCount"></span>
+    </div>
+    <h3 id="coachTitle"></h3>
+    <p id="coachText"></p>
+    <div class="coach-foot">
+      <button class="coachbtn" type="button" id="coachBack" onclick="coachGo(-1)"></button>
+      <button class="coachbtn go" type="button" id="coachNext" onclick="coachGo(1)"></button>
+      <button class="coachbtn skip" type="button" id="coachSkip" onclick="closeCoach()"></button>
+    </div>
+  </div>
+</div>
+
 <div class="navdim" id="navdim" onclick="toggleNav(false)"></div>
 <aside class="navpanel" id="navpanel" aria-label="Menu">
   <div class="nav-head">
@@ -3796,6 +3851,8 @@ try {{ localStorage.removeItem('layoutVariant'); }} catch(e) {{}}
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg><span data-i18n="newsmap">NEWS MAP</span></button>
     {live_tab}
   </nav>
+  <button class="tab tab-icon" type="button" onclick="openCoach()" data-id="guide">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 013.9-2 2.2 2.2 0 01.1 3.6c-.9.6-1.5 1-1.5 2M12 17h.01"/></svg><span data-i18n="guide">GUIDE</span></button>
   <div class="nav-foot" data-i18n="dragOrder">drag to reorder</div>
 </aside>
 
@@ -3946,6 +4003,7 @@ const I18N = {{
   noSym:     ['No symbol matches', 'ไม่พบชื่อหุ้นที่ตรงกับคำค้น'],
   sortDiv:   ['by yield', 'ปันผล'],
   pickSym:   ['SYMBOL', 'เลือกหุ้น'],
+  guide:     ['GUIDE', 'คู่มือ'],
   us3mFull:  ['US 3-Month Treasury Yield', 'ดอกเบี้ยสหรัฐ 3 เดือน (พันธบัตรระยะสั้น)'],
   us10yFull: ['US 10-Year Treasury Yield', 'ดอกเบี้ยสหรัฐ 10 ปี (พันธบัตรระยะยาว)'],
   usaaaFull: ["Moody's Aaa Corporate Bond Yield", "ดอกเบี้ยหุ้นกู้เอกชนเรตติ้ง Aaa (Moody's)"],
@@ -7145,6 +7203,193 @@ document.getElementById('mmodal').addEventListener('click', ev => {{
 
 // ใช้ภาษาที่จำไว้ตั้งแต่ตอนโหลดหน้า ก่อนที่ผู้ใช้จะทันเห็นป้ายภาษาเดิม
 applyLang();
+
+// ═══ คู่มือเปิดใช้งาน — coachmark ชี้ปุ่มจริง ═══
+// เว็บนี้มีของซ่อนอยู่เยอะ (กราฟดอกเบี้ยร้อยปี เครื่องคำนวณปันผล ปุ่มสลับภาษา)
+// คนเปิดครั้งแรกไม่มีทางรู้ว่ามีอะไรบ้าง จึงพาเดินทีละจุดบนหน้าจอจริง
+// โผล่เมื่อ: ไม่เคยเปิด หรือหายไปเกิน 30 วัน — คนที่เข้าบ่อยจะไม่โดนกวน
+const LS_TOUR = 'tourSeen';
+const TOUR_GAP_DAYS = 30;
+const COACH = [
+  {{kick: ['START', 'เริ่มต้น'],
+    t: ['A quick tour of what is here', 'พาดูว่าในเว็บมีอะไรบ้าง'],
+    text: ['This walks you through the real buttons, one at a time. Skip any time — ' +
+           'you can reopen it from the menu.',
+           'คู่มือนี้จะชี้ปุ่มจริงบนหน้าจอทีละจุด ข้ามได้ตลอด และเปิดซ้ำได้จากเมนู']}},
+  {{kick: ['MENU', 'เมนู'],
+    t: ['Everything starts here', 'ทุกอย่างเริ่มจากปุ่มนี้'],
+    text: ['News sections, charts, financials and the map all live behind this button.',
+           'หมวดข่าว กราฟ งบการเงิน และแผนที่ อยู่หลังปุ่มนี้ทั้งหมด'],
+    target: () => document.querySelector('.burger'),
+    onEnter: () => {{ if (innerWidth < 861) toggleNav(true); }}}},
+  {{kick: ['LANGUAGE', 'ภาษา'],
+    t: ['Read it in Thai or English', 'อ่านไทยหรืออังกฤษก็ได้'],
+    text: ['This switches the interface. <b>Headlines stay in the language they were ' +
+           'published in</b> — they are not machine-translated.',
+           'ปุ่มนี้สลับภาษาของตัวเว็บ <b>ส่วนหัวข้อข่าวยังเป็นภาษาต้นทาง</b> ' +
+           'ไม่ได้แปลด้วยเครื่อง'],
+    target: () => document.querySelector('.lang-sw'),
+    onEnter: () => {{ if (innerWidth < 861) toggleNav(true); }}}},
+  {{kick: ['CHARTS', 'กราฟ'],
+    t: ['Prices, and rates going back a century', 'ราคาหุ้น และดอกเบี้ยย้อนร้อยปี'],
+    text: ['284 assets. The <b>Interest Rate</b> group at the top holds US yields back to ' +
+           '1919 — press <b>MAX</b> on those to see the whole span.',
+           'สินทรัพย์ 284 ตัว กลุ่ม <b>อัตราดอกเบี้ย</b> ที่อยู่บนสุดมีข้อมูลย้อนถึงปี 1919 ' +
+           'กดปุ่ม <b>MAX</b> เพื่อดูทั้งช่วง'],
+    target: () => document.querySelector('.tab[data-id="chart"]'),
+    onEnter: () => {{ if (innerWidth < 861) toggleNav(true); }}}},
+  {{kick: ['FINANCIALS', 'งบการเงิน'],
+    t: ['Dividends, and a yield calculator', 'เงินปันผล และเครื่องคำนวณผลตอบแทน'],
+    text: ['Type an amount and it works out shares, income per year and per month. ' +
+           'USD figures carry a THB conversion underneath.',
+           'ใส่จำนวนเงินแล้วมันคำนวณจำนวนหุ้น รายได้ต่อปีและต่อเดือนให้ ' +
+           'ตัวเลขที่เป็น USD จะมีบาทกำกับข้างล่าง'],
+    target: () => document.querySelector('.tab[data-id="fin"]'),
+    onEnter: () => {{ if (innerWidth < 861) toggleNav(true); }}}},
+  {{kick: ['SEARCH', 'ค้นหา'],
+    t: ['Search every story at once', 'ค้นข่าวทั้งเว็บพร้อมกัน'],
+    text: ['Searches all sections together, not just the one you are looking at.',
+           'ค้นทุกหมวดพร้อมกัน ไม่ใช่เฉพาะหมวดที่เปิดอยู่'],
+    target: () => document.getElementById('gsearch'),
+    onEnter: () => toggleNav(false)}},
+  {{kick: ['DONE', 'จบแล้ว'],
+    t: ['That is the tour', 'จบคู่มือแล้ว'],
+    text: ['Reopen it any time from <b>Menu → Guide</b>. The page rebuilds itself every ' +
+           '30 minutes, so it is worth coming back.',
+           'เปิดซ้ำได้ที่ <b>เมนู → คู่มือ</b> เว็บอัปเดตตัวเองทุก 30 นาที แวะมาดูได้เรื่อยๆ']}},
+];
+
+let COACH_I = 0, COACH_DIR = 1, COACH_SETTLE = null;
+const coachTxt = a => a[siteLang === 'th' ? 1 : 0];
+
+function coachPlace(rect){{
+  const mask = document.getElementById('coachMask');
+  const ring = document.getElementById('coachRing');
+  const card = document.getElementById('coachCard');
+  if (!rect) {{                       // ขั้นที่ไม่มีเป้าหมาย — มืดทั้งจอ การ์ดอยู่กลาง
+    [mask, ring].forEach(el => {{
+      el.style.top = (innerHeight / 2) + 'px'; el.style.left = (innerWidth / 2) + 'px';
+      el.style.width = '0px'; el.style.height = '0px';
+    }});
+    ring.style.display = 'none';
+    card.style.top = '50%'; card.style.left = '50%';
+    card.style.transform = 'translate(-50%,-50%)';
+    return;
+  }}
+  const pad = 7;
+  const r = {{top: rect.top - pad, left: rect.left - pad,
+             width: rect.width + pad * 2, height: rect.height + pad * 2}};
+  [mask, ring].forEach(el => {{
+    el.style.top = r.top + 'px'; el.style.left = r.left + 'px';
+    el.style.width = r.width + 'px'; el.style.height = r.height + 'px';
+  }});
+  ring.style.display = '';
+  card.style.transform = 'none';
+  // การ์ดอยู่ใต้เป้าหมาย ถ้าที่ไม่พอย้ายไปอยู่บน แล้วหนีบให้อยู่ในจอเสมอ
+  const cw = card.offsetWidth || 340, ch = card.offsetHeight || 170, gap = 14;
+  const below = innerHeight - rect.bottom;
+  let top = (below > ch + gap || below > rect.top) ? rect.bottom + gap : rect.top - ch - gap;
+  let left = rect.left + rect.width / 2 - cw / 2;
+  card.style.top = Math.max(10, Math.min(top, innerHeight - ch - 10)) + 'px';
+  card.style.left = Math.max(10, Math.min(left, innerWidth - cw - 10)) + 'px';
+}}
+
+// เป้าหมายที่มองไม่เห็นจริง (เช่นปุ่มแฮมเบอร์เกอร์ที่ display:none บนจอกว้าง) ต้องข้ามไป
+// ไม่ใช่วางวงแสงขนาดศูนย์ลอยอยู่กลางจอแล้วบอกว่า "กดปุ่มนี้"
+const coachVisible = el => {{
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 1 && r.height > 1;
+}};
+function coachShow(){{
+  let s = COACH[COACH_I];
+  if (!s) return closeCoach();
+  if (s.onEnter) {{ try {{ s.onEnter(); }} catch(e) {{}} }}
+  // ถ้าเป้าหมายของขั้นนี้ไม่มีตัวตนบนจอขนาดนี้ ให้ข้ามไปขั้นถัดไปตามทิศที่กำลังเดิน
+  if (s.target && !coachVisible(s.target())) {{
+    const dir = COACH_DIR || 1;
+    const nx = COACH_I + dir;
+    if (nx >= 0 && nx < COACH.length) {{ COACH_I = nx; return coachShow(); }}
+    return closeCoach();
+  }}
+  const th = siteLang === 'th';
+  document.getElementById('coachKick').textContent = coachTxt(s.kick);
+  document.getElementById('coachTitle').textContent = coachTxt(s.t);
+  document.getElementById('coachText').innerHTML = coachTxt(s.text);
+  document.getElementById('coachCount').textContent = (COACH_I + 1) + ' / ' + COACH.length;
+  document.getElementById('coachBar').style.width =
+    ((COACH_I + 1) / COACH.length * 100) + '%';
+  const back = document.getElementById('coachBack');
+  back.textContent = th ? 'ย้อนกลับ' : 'Back';
+  back.hidden = COACH_I === 0;
+  document.getElementById('coachNext').textContent = COACH_I === COACH.length - 1
+    ? (th ? 'เริ่มใช้งาน' : 'Start reading') : (th ? 'ถัดไป' : 'Next');
+  document.getElementById('coachSkip').textContent = th ? 'ข้ามคู่มือ' : 'Skip';
+  // ต้องรอจนกรอบของเป้าหมาย "นิ่ง" ก่อนวางวงแสง ไม่ใช่รอเวลาคงที่ — แผงเมนูมี transition
+  // ระหว่างที่มันยังเลื่อนอยู่ getBoundingClientRect คืนตำแหน่งนอกจอ (วัดได้ -720px)
+  // ถ้าวางตามนั้นวงแสงจะไปโผล่นอกจอ เลยรอจนค่าไม่เปลี่ยนสามเฟรมติด หรือครบ 1.2 วินาที
+  const el = s.target ? s.target() : null;
+  // ต้องหยุดตัวตามของขั้นก่อนเสมอ แม้ขั้นนี้จะไม่มีเป้าหมาย ไม่งั้นมันจะวิ่งต่อแล้ว
+  // ลากวงแสงกลับไปที่ปุ่มของขั้นก่อนหน้า ทั้งที่ตอนนี้ควรมืดทั้งจอ
+  if (COACH_SETTLE) {{ clearInterval(COACH_SETTLE); COACH_SETTLE = null; }}
+  if (!el) return coachPlace(null);
+  // วางทันทีด้วยตำแหน่งปัจจุบันก่อน แล้วค่อยตามไปแก้เมื่อนิ่ง — ห้ามรอเฉยๆ เพราะถ้ารอด้วย
+  // requestAnimationFrame แล้วหน้าไม่ได้ถูกวาด (สลับแท็บไป) เฟรมจะไม่มาเลย วงแสงค้างที่ 0,0
+  coachPlace(el.getBoundingClientRect());
+  const t0 = Date.now();
+  let last = '', stable = 0, mine = 0;
+  // ต้องเก็บ id ของตัวเองไว้แล้วเคลียร์ "ตัวเอง" — ถ้าอ้าง COACH_SETTLE ตรงๆ callback ของ
+  // ขั้นก่อนหน้าที่ยังค้างอยู่จะไปเคลียร์ interval ของขั้นใหม่ แล้ววางวงแสงกลับไปที่เป้าเก่า
+  // (อาการที่เจอ: กดถัดไปแล้ววงแสงค้างอยู่ที่ปุ่มเดิมทุกขั้น)
+  mine = setInterval(() => {{
+    if (COACH_SETTLE !== mine) return clearInterval(mine);   // มีขั้นใหม่มาแทนแล้ว เลิกยุ่ง
+    const r = el.getBoundingClientRect();
+    const key = [r.top, r.left, r.width, r.height].map(Math.round).join(',');
+    stable = key === last ? stable + 1 : 0;
+    last = key;
+    if (stable >= 2 || Date.now() - t0 > 1200) {{
+      clearInterval(mine); COACH_SETTLE = null; coachPlace(r);
+    }}
+  }}, 60);
+  COACH_SETTLE = mine;
+}}
+function coachGo(step){{
+  COACH_DIR = step >= 0 ? 1 : -1;
+  COACH_I = Math.max(0, Math.min(COACH.length - 1, COACH_I + step));
+  if (COACH_I === COACH.length - 1 && step > 0 && COACH[COACH_I].done) return closeCoach();
+  coachShow();
+}}
+function openCoach(){{
+  COACH_I = 0; COACH_DIR = 1;
+  document.getElementById('coach').hidden = false;
+  coachShow();
+}}
+function closeCoach(){{
+  if (COACH_SETTLE) {{ clearInterval(COACH_SETTLE); COACH_SETTLE = null; }}
+  document.getElementById('coach').hidden = true;
+  toggleNav(false);
+  try {{ localStorage.setItem(LS_TOUR, String(Date.now())); }} catch(e) {{}}
+}}
+addEventListener('keydown', ev => {{
+  if (document.getElementById('coach')?.hidden) return;
+  if (ev.key === 'Escape') closeCoach();
+  if (ev.key === 'ArrowRight') coachGo(1);
+  if (ev.key === 'ArrowLeft') coachGo(-1);
+}});
+addEventListener('resize', () => {{
+  if (!document.getElementById('coach')?.hidden) coachShow();
+}});
+
+// เปิดอัตโนมัติ: ไม่เคยเปิด หรือทิ้งช่วงนานเกิน 30 วัน
+(() => {{
+  let last = null;
+  try {{ last = localStorage.getItem(LS_TOUR); }} catch(e) {{}}
+  const stale = !last || (Date.now() - Number(last)) > TOUR_GAP_DAYS * 864e5;
+  if (!stale) return;
+  // รออินโทรเล่นจบก่อน ไม่งั้นคู่มือจะไปซ้อนกับ overlay เปิดเว็บ
+  const wait = document.documentElement.classList.contains('no-intro') ? 400 : 2900;
+  setTimeout(openCoach, wait);
+}})();
 
 // เอา overlay อินโทรออกจาก DOM หลังเล่นจบ
 (() => {{
